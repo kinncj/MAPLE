@@ -51,19 +51,28 @@ func (t Tools) PreferredAI() string {
 	return ""
 }
 
-// Summary returns a human-readable list of detected tools.
+// Summary returns compact tool status: found tools as pills, missing as a note.
 func (t Tools) Summary() []string {
-	var lines []string
-	mark := func(ok bool, label string) string {
+	var found, missing []string
+	check := func(ok bool, label string) {
 		if ok {
-			return "  ✓  " + label
+			found = append(found, label)
+		} else {
+			missing = append(missing, label)
 		}
-		return "  ✗  " + label + " (not found)"
 	}
-	lines = append(lines, mark(t.Claude != "", "claude"))
-	lines = append(lines, mark(t.OpenCode != "", "opencode"))
-	lines = append(lines, mark(t.GHCopilot, "gh copilot"))
-	lines = append(lines, mark(t.GH != "", "gh CLI"))
-	lines = append(lines, mark(t.Lefthook != "", "lefthook"))
+	check(t.Claude != "", "claude")
+	check(t.OpenCode != "", "opencode")
+	check(t.GHCopilot, "copilot")
+	check(t.GH != "", "gh")
+	check(t.Lefthook != "", "lefthook")
+
+	var lines []string
+	if len(found) > 0 {
+		lines = append(lines, "✓ "+strings.Join(found, " · "))
+	}
+	if len(missing) > 0 {
+		lines = append(lines, "✗ "+strings.Join(missing, " · ")+" (not found)")
+	}
 	return lines
 }

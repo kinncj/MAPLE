@@ -18,8 +18,15 @@ import (
 // ─── Init command ─────────────────────────────────────────────────────────────
 
 func runInit(tools Tools, templateDir string, force bool) error {
-	m := newInitModel(tools, templateDir, force)
-	p := tea.NewProgram(m)
+	m := newInitModel(tools, templateDir, force, false)
+	p := tea.NewProgram(m, tea.WithAltScreen())
+	_, err := p.Run()
+	return err
+}
+
+func runInitFromMenu(tools Tools, templateDir string, force bool) error {
+	m := newInitModel(tools, templateDir, force, true)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }
@@ -39,6 +46,7 @@ type initModel struct {
 	tools       Tools
 	templateDir string
 	force       bool
+	fromMenu    bool // skip welcome step; jump straight to confirm
 	step        initStep
 	spinner     spinner.Model
 	logs        []string
@@ -50,15 +58,20 @@ type initModel struct {
 
 type initDoneMsg struct{ logs []string; err error }
 
-func newInitModel(tools Tools, templateDir string, force bool) *initModel {
+func newInitModel(tools Tools, templateDir string, force bool, fromMenu bool) *initModel {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#7aa2f7"))
+	initialStep := stepWelcome
+	if fromMenu {
+		initialStep = stepConfirm
+	}
 	return &initModel{
 		tools:       tools,
 		templateDir: templateDir,
 		force:       force,
-		step:        stepWelcome,
+		fromMenu:    fromMenu,
+		step:        initialStep,
 		spinner:     s,
 	}
 }

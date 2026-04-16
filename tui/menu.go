@@ -69,7 +69,7 @@ func runMenu(tools Tools, templateDir string) menuResult {
 		cwd:         cwd,
 	}
 
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, runErr := p.Run()
 	if runErr != nil {
 		return menuResult{action: menuQuit}
@@ -245,16 +245,19 @@ func (m *menuModel) menuView(t Theme) string {
 	if len(cwdStr) > 50 {
 		cwdStr = "…" + cwdStr[len(cwdStr)-49:]
 	}
-	var status string
+	var initStatus string
 	if m.initialized {
-		status = lipgloss.NewStyle().Foreground(t.Success).Render("● Initialized")
+		initStatus = lipgloss.NewStyle().Foreground(t.Success).Render("● Initialized")
 	} else {
-		status = lipgloss.NewStyle().Foreground(t.Muted).Render("○ Not initialized")
+		initStatus = lipgloss.NewStyle().Foreground(t.Muted).Render("○ Not initialized")
 	}
-	toolSummary := lipgloss.NewStyle().Foreground(t.Muted).Render(
-		strings.Join(m.tools.Summary(), "  "))
-	sb.WriteString("  " + lipgloss.NewStyle().Foreground(t.Muted).Render(cwdStr) + "\n")
-	sb.WriteString("  " + status + "   " + toolSummary + "\n")
+
+	summaryLines := m.tools.Summary()
+	toolLine := strings.Join(summaryLines, "  ")
+	toolStr := lipgloss.NewStyle().Foreground(t.Muted).Render(toolLine)
+
+	sb.WriteString("  " + lipgloss.NewStyle().Foreground(t.Muted).Render(cwdStr) + "  " + initStatus + "\n")
+	sb.WriteString("  " + toolStr + "\n")
 
 	return sb.String()
 }

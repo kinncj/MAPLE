@@ -19,11 +19,11 @@ func main() {
 		result := runMenu(tools, tplDir)
 		switch result.action {
 		case menuInit:
-			if err := runInit(tools, tplDir, false); err != nil {
+			if err := runInitFromMenu(tools, tplDir, false); err != nil {
 				fatalf("init: %v", err)
 			}
 		case menuUpdate:
-			if err := runInit(tools, tplDir, true); err != nil {
+			if err := runInitFromMenu(tools, tplDir, true); err != nil {
 				fatalf("update: %v", err)
 			}
 		case menuReq:
