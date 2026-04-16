@@ -17,8 +17,8 @@ import (
 
 // ─── Init command ─────────────────────────────────────────────────────────────
 
-func runInit(tools Tools, templateDir string) error {
-	m := newInitModel(tools, templateDir)
+func runInit(tools Tools, templateDir string, force bool) error {
+	m := newInitModel(tools, templateDir, force)
 	p := tea.NewProgram(m)
 	_, err := p.Run()
 	return err
@@ -38,6 +38,7 @@ const (
 type initModel struct {
 	tools       Tools
 	templateDir string
+	force       bool
 	step        initStep
 	spinner     spinner.Model
 	logs        []string
@@ -49,13 +50,14 @@ type initModel struct {
 
 type initDoneMsg struct{ logs []string; err error }
 
-func newInitModel(tools Tools, templateDir string) *initModel {
+func newInitModel(tools Tools, templateDir string, force bool) *initModel {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#7aa2f7"))
 	return &initModel{
 		tools:       tools,
 		templateDir: templateDir,
+		force:       force,
 		step:        stepWelcome,
 		spinner:     s,
 	}
@@ -80,7 +82,11 @@ func (m *initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	// Suppress Enter until logo is done
 	case tea.KeyMsg:
+		if !m.logoDone {
+			return m, nil
+		}
 		switch m.step {
 		case stepWelcome:
 			if msg.String() == "enter" || msg.String() == "y" {
@@ -185,15 +191,16 @@ func (m *initModel) platformList() string {
 }
 
 func (m *initModel) runSetup() tea.Cmd {
+	force := m.force
 	return func() tea.Msg {
-		logs, err := doInit(m.tools, m.templateDir)
+		logs, err := doInit(m.tools, m.templateDir, force)
 		return initDoneMsg{logs: logs, err: err}
 	}
 }
 
 // ─── Actual setup logic ───────────────────────────────────────────────────────
 
-func doInit(tools Tools, templateDir string) ([]string, error) {
+func doInit(tools Tools, templateDir string, force bool) ([]string, error) {
 	var logs []string
 	log := func(s string) { logs = append(logs, s) }
 
@@ -229,10 +236,14 @@ func doInit(tools Tools, templateDir string) ([]string, error) {
 	for _, p := range pairs {
 		src := filepath.Join(templateDir, p.src)
 		dst := filepath.Join(cwd, p.dst)
-		if err := copyPath(src, dst); err != nil {
+		if err := copyPath(src, dst, force); err != nil {
 			log("✗ " + p.dst + ": " + err.Error())
 		} else {
-			log("✓ " + p.dst)
+			if force {
+				log("↺ " + p.dst + " (updated)")
+			} else {
+				log("✓ " + p.dst)
+			}
 		}
 	}
 
@@ -262,18 +273,18 @@ func doInit(tools Tools, templateDir string) ([]string, error) {
 	return logs, nil
 }
 
-func copyPath(src, dst string) error {
+func copyPath(src, dst string, force bool) error {
 	info, err := os.Stat(src)
 	if err != nil {
-		return err // source doesn't exist — skip silently if optional
+		return err
 	}
 	if info.IsDir() {
-		return copyDir(src, dst)
+		return copyDir(src, dst, force)
 	}
-	return copyFile(src, dst)
+	return copyFile(src, dst, force)
 }
 
-func copyDir(src, dst string) error {
+func copyDir(src, dst string, force bool) error {
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -283,17 +294,18 @@ func copyDir(src, dst string) error {
 		if d.IsDir() {
 			return os.MkdirAll(target, 0755)
 		}
-		return copyFile(path, target)
+		return copyFile(path, target, force)
 	})
 }
 
-func copyFile(src, dst string) error {
+func copyFile(src, dst string, force bool) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return err
 	}
-	// Don't overwrite existing files
-	if _, err := os.Stat(dst); err == nil {
-		return nil
+	if !force {
+		if _, err := os.Stat(dst); err == nil {
+			return nil // skip existing
+		}
 	}
 	in, err := os.Open(src)
 	if err != nil {

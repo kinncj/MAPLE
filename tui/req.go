@@ -17,6 +17,27 @@ import (
 
 // ─── Requirements command ─────────────────────────────────────────────────────
 
+// aiOption represents one available AI tool the user can choose.
+type aiOption struct {
+	label string // display name
+	kind  string // "claude" | "opencode" | "gh-copilot"
+	path  string // binary path
+}
+
+func availableAITools(tools Tools) []aiOption {
+	var opts []aiOption
+	if tools.Claude != "" {
+		opts = append(opts, aiOption{"Claude Code", "claude", tools.Claude})
+	}
+	if tools.OpenCode != "" {
+		opts = append(opts, aiOption{"OpenCode", "opencode", tools.OpenCode})
+	}
+	if tools.GHCopilot && tools.GH != "" {
+		opts = append(opts, aiOption{"GitHub Copilot", "gh-copilot", tools.GH})
+	}
+	return opts
+}
+
 func runReq(tools Tools) error {
 	if !tools.HasAI() {
 		return fmt.Errorf("no AI tool found (need claude, opencode, or gh copilot)")
@@ -32,22 +53,26 @@ func runReq(tools Tools) error {
 type reqStep int
 
 const (
-	reqStepEdit reqStep = iota
-	reqStepSending
-	reqStepDone
+	reqStepPickAI  reqStep = iota // shown only when >1 AI tool available
+	reqStepEdit                   // textarea for requirements
+	reqStepSending                // waiting for AI
+	reqStepDone                   // result shown
 )
 
 type reqModel struct {
-	tools     Tools
-	textarea  textarea.Model
-	step      reqStep
-	result    string
-	savedTo   string
-	err       error
-	width     int
-	height    int
-	logoFrame int
-	logoDone  bool
+	tools      Tools
+	aiOptions  []aiOption
+	selectedAI aiOption
+	aiCursor   int
+	textarea   textarea.Model
+	step       reqStep
+	result     string
+	savedTo    string
+	err        error
+	width      int
+	height     int
+	logoFrame  int
+	logoDone   bool
 }
 
 type reqDoneMsg struct {
@@ -63,10 +88,24 @@ func newReqModel(tools Tools) *reqModel {
 	ta.SetWidth(80)
 	ta.SetHeight(20)
 	ta.ShowLineNumbers = false
+
+	opts := availableAITools(tools)
+	firstStep := reqStepEdit
+	if len(opts) > 1 {
+		firstStep = reqStepPickAI
+	}
+
+	var selected aiOption
+	if len(opts) > 0 {
+		selected = opts[0]
+	}
+
 	return &reqModel{
-		tools:    tools,
-		textarea: ta,
-		step:     reqStepEdit,
+		tools:      tools,
+		aiOptions:  opts,
+		selectedAI: selected,
+		textarea:   ta,
+		step:       firstStep,
 	}
 }
 
@@ -93,7 +132,30 @@ func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		if !m.logoDone {
+			return m, nil
+		}
+
 		switch m.step {
+		case reqStepPickAI:
+			switch msg.String() {
+			case "up", "k":
+				if m.aiCursor > 0 {
+					m.aiCursor--
+				}
+			case "down", "j":
+				if m.aiCursor < len(m.aiOptions)-1 {
+					m.aiCursor++
+				}
+			case "enter", " ":
+				m.selectedAI = m.aiOptions[m.aiCursor]
+				m.step = reqStepEdit
+				return m, textarea.Blink
+			case "ctrl+c", "q":
+				return m, tea.Quit
+			}
+			return m, nil
+
 		case reqStepEdit:
 			switch msg.Type {
 			case tea.KeyCtrlD:
@@ -133,10 +195,30 @@ func (m *reqModel) View() string {
 	} else {
 		header = logoAnimFrame(m.logoFrame)
 	}
-	ai := lipgloss.NewStyle().Foreground(t.Muted).Render("  AI: " + m.tools.PreferredAI())
+
+	cursor := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("❯")
 
 	switch m.step {
+	case reqStepPickAI:
+		var sb strings.Builder
+		title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Select AI tool")
+		sb.WriteString("  " + title + "\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 40)) + "\n\n")
+		for i, opt := range m.aiOptions {
+			kind := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + opt.kind)
+			if i == m.aiCursor {
+				label := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(fmt.Sprintf("%-18s", opt.label))
+				sb.WriteString("  " + cursor + " " + label + kind + "\n")
+			} else {
+				label := lipgloss.NewStyle().Foreground(t.Foreground).Render(fmt.Sprintf("%-18s", opt.label))
+				sb.WriteString("     " + label + kind + "\n")
+			}
+		}
+		sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("  ↑/↓ Navigate   Enter Select   q Quit") + "\n")
+		return header + sb.String()
+
 	case reqStepEdit:
+		ai := lipgloss.NewStyle().Foreground(t.Muted).Render("  AI: " + m.selectedAI.label)
 		help := lipgloss.NewStyle().Foreground(t.Muted).Render(
 			"Type your requirements below. Ctrl+D to convert, Ctrl+C to quit.")
 		box := lipgloss.NewStyle().
@@ -144,10 +226,11 @@ func (m *reqModel) View() string {
 			BorderForeground(t.Primary).
 			Padding(0, 1).
 			Render(m.textarea.View())
-		return header + "  " + ai + "\n\n" + help + "\n\n" + box + "\n"
+		return header + ai + "\n\n" + help + "\n\n" + box + "\n"
 
 	case reqStepSending:
-		return header + "  " + ai + "\n\n" +
+		ai := lipgloss.NewStyle().Foreground(t.Muted).Render("  AI: " + m.selectedAI.label)
+		return header + ai + "\n\n" +
 			lipgloss.NewStyle().Foreground(t.Accent).Render("  Converting to Gherkin...") + "\n"
 
 	case reqStepDone:
@@ -169,9 +252,9 @@ func (m *reqModel) View() string {
 }
 
 func (m *reqModel) convert(requirements string) tea.Cmd {
-	tools := m.tools
+	ai := m.selectedAI
 	return func() tea.Msg {
-		gherkin, err := convertToGherkin(requirements, tools)
+		gherkin, err := convertToGherkin(requirements, ai)
 		if err != nil {
 			return reqDoneMsg{err: err}
 		}
@@ -195,36 +278,35 @@ Rules:
 Requirements:
 %s`
 
-func convertToGherkin(requirements string, tools Tools) (string, error) {
+func convertToGherkin(requirements string, ai aiOption) (string, error) {
 	prompt := fmt.Sprintf(gherkinPrompt, requirements)
 
 	var cmd *exec.Cmd
-	switch {
-	case tools.Claude != "":
-		cmd = exec.Command(tools.Claude, "--print", prompt)
-	case tools.OpenCode != "":
-		cmd = exec.Command(tools.OpenCode, "run", prompt)
-	case tools.GHCopilot:
-		cmd = exec.Command(tools.GH, "copilot", "explain", prompt)
+	switch ai.kind {
+	case "claude":
+		cmd = exec.Command(ai.path, "--print", prompt)
+	case "opencode":
+		cmd = exec.Command(ai.path, "run", prompt)
+	case "gh-copilot":
+		cmd = exec.Command(ai.path, "copilot", "explain", prompt)
 	default:
-		return "", fmt.Errorf("no AI tool available")
+		return "", fmt.Errorf("unknown AI tool: %s", ai.kind)
 	}
 
 	out, err := cmd.Output()
 	if err != nil {
 		// Fallback: try piping via stdin for claude
-		if tools.Claude != "" {
-			cmd2 := exec.Command(tools.Claude, "--print")
+		if ai.kind == "claude" {
+			cmd2 := exec.Command(ai.path, "--print")
 			cmd2.Stdin = strings.NewReader(prompt)
 			out, err = cmd2.Output()
 		}
 		if err != nil {
-			return "", fmt.Errorf("%s: %w", tools.PreferredAI(), err)
+			return "", fmt.Errorf("%s: %w", ai.label, err)
 		}
 	}
 
 	result := strings.TrimSpace(string(out))
-	// Strip markdown code fences if the AI wrapped the output
 	result = stripFences(result)
 	return result, nil
 }
