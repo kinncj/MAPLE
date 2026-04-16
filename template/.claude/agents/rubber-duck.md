@@ -79,6 +79,12 @@ Focus on:
 - Missing test cases for: null/empty input, network failure, auth failure, boundary values
 - Tests that will pass regardless of the outcome (no real assertion)
 - Gherkin scenarios that duplicate each other or miss a key scenario from the story
+- **Playwright antipatterns** — flag any of these as CRITICAL:
+  - `add_init_script` overriding `window.fetch` or any API Playwright covers natively
+  - `page.evaluate()` calling internal app functions or resolving internal promises (e.g. `window._resolve()`)
+  - JS-level mock state injected into the app (`window.__mock`, `window._data`)
+  - Route interception done at JS level instead of `page.route()`
+  - Geolocation mocked via `add_init_script` when `browser.new_context(geolocation=...)` works
 
 Output format:
 ```

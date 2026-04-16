@@ -1,115 +1,269 @@
 ---
 name: github-cli
-description: "Orchestrate the full GitHub workflow — issues, PRs, labels, and project board — using the gh CLI. Use when automating GitHub operations."
+description: "Comprehensive gh CLI reference — issues, tasks, PRs, repos, branches, Actions, search, and project board. Use whenever interacting with GitHub."
 ---
 
 # SKILL: GitHub CLI
 
-## Issue Lifecycle
+## Repo Context (always run first)
 
-```
-PO creates issues → Orchestrator assigns & labels → Agents update status → QA closes on pass
-```
-
-## Key Commands by Agent Role
-
-### Product Owner
 ```bash
-# Create issue for each story
+# Who am I, what repo am I in
+gh auth status
+gh repo view --json name,owner,defaultBranchRef,url,isPrivate
+
+# Open issues + PRs at a glance
+gh issue list --state open --limit 20 --json number,title,labels,assignees
+gh pr list --state open --json number,title,headRefName,statusCheckRollup
+```
+
+---
+
+## Issues as Tasks
+
+### Create
+```bash
+# Feature story
 gh issue create \
-  --title "Story: {title}" \
-  --body-file docs/specs/{slug}/stories.md \
-  --label "story,must-have" \
-  --milestone "v1.0"
+  --title "feat: {title}" \
+  --body-file docs/stories/{slug}/Story.md \
+  --label "type:feature,priority:high,phase:discover" \
+  --milestone "v1.0" \
+  --assignee "@me"
+
+# Bug
+gh issue create \
+  --title "fix: {title}" \
+  --body "## Steps to reproduce\n{steps}\n\n## Expected\n{expected}\n\n## Actual\n{actual}" \
+  --label "type:bug,priority:high"
+
+# Task (sub-work, no story file)
+gh issue create \
+  --title "task: {title}" \
+  --body "{description}" \
+  --label "type:task" \
+  --assignee "@me"
 ```
 
-### Orchestrator
+### Read
 ```bash
-# Assign and label
-gh issue edit {number} --add-label "in-progress" --add-assignee "@me"
-gh issue edit {number} --add-label "phase:architect" --remove-label "phase:discover"
-gh issue comment {number} --body "Phase 2 ARCHITECT: design complete. Artifacts in docs/specs/{slug}/"
-
-# Block on failure
-gh issue edit {number} --add-label "blocked"
-gh issue comment {number} --body "BLOCKED: {agent} failed 3 times on {task}. Human needed."
-```
-
-### QA Agent
-```bash
-# After writing failing test
-gh issue edit {number} --add-label "tdd:red"
-gh issue comment {number} --body "RED: Failing test at tests/unit/{File}.ts — message: {failure}"
-
-# After full validation passes
-gh issue close {number} --comment "All acceptance criteria passing. Validation: {summary}"
-```
-
-### Any Agent
-```bash
-# View issue
 gh issue view {number}
+gh issue view {number} --json number,title,state,body,labels,assignees,comments,milestone
 
-# List in-progress issues
-gh issue list --label "in-progress" --assignee "@me"
-
-# Comment with progress
-gh issue comment {number} --body "Task 3/7 GREEN: tests/unit/UserTests.ts passing."
+# Search
+gh issue list --search "label:blocked" --state open
+gh issue list --search "assignee:@me is:open"
+gh issue list --search "phase:implement" --label "tdd:red"
+gh issue list --state open --label "type:feature" --milestone "v1.0"
 ```
 
-## PR Workflow
+### Update
 ```bash
-# Create feature branch
-git checkout -b feat/{slug}
+# Phase transition
+gh issue edit {number} \
+  --add-label "phase:architect" \
+  --remove-label "phase:discover"
 
-# Create draft PR
+# Assign / unassign
+gh issue edit {number} --add-assignee "@me"
+gh issue edit {number} --remove-assignee "{login}"
+
+# Change milestone
+gh issue edit {number} --milestone "v2.0"
+
+# Block / unblock
+gh issue edit {number} --add-label "blocked"
+gh issue edit {number} --remove-label "blocked"
+```
+
+### Comment
+```bash
+gh issue comment {number} --body "{message}"
+
+# Phase lifecycle comments (standard format)
+gh issue comment {number} --body "Phase {N} {NAME}: starting. Target artifacts: {paths}"
+gh issue comment {number} --body "Phase {N} {NAME}: complete. Artifacts: {paths}"
+gh issue comment {number} --body "RED: Failing test at {path} — {message}"
+gh issue comment {number} --body "GREEN: {count} tests passing."
+gh issue comment {number} --body "BLOCKED: {agent} failed 3x on {task}. Human required."
+```
+
+### Close
+```bash
+gh issue close {number} --comment "Acceptance criteria passing. Validation: {summary}"
+gh issue close {number} --reason "not planned"
+```
+
+---
+
+## Pull Requests
+
+```bash
+# Create PR (always draft first)
 gh pr create \
   --title "feat: {description}" \
-  --body "Closes #{number}" \
+  --body "## Summary\n{summary}\n\nCloses #{issue_number}" \
   --base main \
   --draft
 
-# Mark ready
-gh pr ready
+# Mark ready when all gates pass
+gh pr ready {number}
 
-# Merge (squash)
-gh pr merge --squash --subject "feat: {description} (#{number})"
+# View PR + CI status
+gh pr view {number} --json number,title,state,reviews,statusCheckRollup,files
+
+# Request review
+gh pr edit {number} --add-reviewer "{login}"
+
+# Check CI on PR
+gh pr checks {number}
+
+# Merge (squash — preferred)
+gh pr merge {number} --squash --subject "feat: {description} (#{issue_number})" --delete-branch
+
+# Review
+gh pr review {number} --approve --body "LGTM"
+gh pr review {number} --request-changes --body "{feedback}"
 ```
 
-## Label Conventions
+---
 
-| Label | Applied by | Meaning |
-|-------|-----------|---------|
-| `story` | PO | User story |
-| `bug` | PO/Human | Bug report |
-| `must-have` | PO | MoSCoW: Must |
-| `should-have` | PO | MoSCoW: Should |
-| `could-have` | PO | MoSCoW: Could |
-| `phase:discover` | Orchestrator | Phase 1 active |
-| `phase:architect` | Orchestrator | Phase 2 active |
-| `phase:plan` | Orchestrator | Phase 3 active |
-| `phase:infra` | Orchestrator | Phase 4 active |
-| `phase:implement` | Orchestrator | Phase 5 active |
-| `phase:validate` | Orchestrator | Phase 6 active |
-| `phase:document` | Orchestrator | Phase 7 active |
-| `phase:done` | Orchestrator | Phase 8 complete |
-| `in-progress` | Orchestrator | Work started |
-| `blocked` | Any agent | Needs human |
-| `validated` | QA | All tests pass |
-| `ready-for-review` | Orchestrator | PR ready |
-| `tdd:red` | QA | Failing test written |
-| `tdd:green` | QA | Tests passing |
+## Branches
 
-## CI Monitoring
 ```bash
-gh run list --workflow=ci.yml --limit 5
+# List branches
+gh api repos/{owner}/{repo}/branches --jq '.[].name'
+
+# Create via API (when not in git context)
+gh api repos/{owner}/{repo}/git/refs \
+  -f ref="refs/heads/feat/{slug}" \
+  -f sha="$(gh api repos/{owner}/{repo}/git/ref/heads/main --jq '.object.sha')"
+
+# Delete remote branch
+gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/feat/{slug}
+
+# Branch protection status
+gh api repos/{owner}/{repo}/branches/main/protection
+```
+
+---
+
+## Actions / CI
+
+```bash
+# List recent runs
+gh run list --limit 10
+gh run list --workflow ci.yml --branch main --limit 5
+
+# Watch a run live
 gh run watch {run-id}
-gh pr checks {pr-number}
+
+# View failed run details
+gh run view {run-id} --log-failed
+
+# Trigger workflow manually
+gh workflow run {workflow-file} --ref main
+
+# Re-run failed jobs only
+gh run rerun {run-id} --failed
+
+# Download artifact
+gh run download {run-id} --name {artifact-name} --dir ./artifacts
 ```
 
-## Bootstrap Labels (one-time per repo)
+---
+
+## Repo Inspection
+
 ```bash
-./scripts/bootstrap-labels.sh
-# or with specific repo:
-./scripts/bootstrap-labels.sh owner/repo
+# Full repo metadata
+gh repo view --json name,owner,description,topics,visibility,defaultBranchRef,\
+licenseInfo,stargazerCount,forkCount,createdAt,updatedAt
+
+# Collaborators
+gh api repos/{owner}/{repo}/collaborators --jq '.[].login'
+
+# Repo settings
+gh api repos/{owner}/{repo} --jq '{private:.private,hasIssues:.has_issues,hasWiki:.has_wiki}'
+
+# Topics
+gh repo edit --add-topic "{topic}"
+
+# Clone URL
+gh repo view --json sshUrl,url
+
+# Releases
+gh release list --limit 5
+gh release view {tag}
 ```
+
+---
+
+## Labels & Milestones
+
+```bash
+# Bootstrap AI-Squad labels (idempotent)
+bash scripts/bootstrap-labels.sh
+
+# List labels
+gh label list
+
+# Create label
+gh label create "type:task" --color "0075ca" --description "Work item"
+
+# Create milestone
+gh api repos/{owner}/{repo}/milestones \
+  -f title="v1.0" \
+  -f description="First release" \
+  -f due_on="2026-06-01T00:00:00Z"
+
+# List milestones
+gh api repos/{owner}/{repo}/milestones --jq '.[] | {number:.number,title:.title,open:.open_issues}'
+```
+
+---
+
+## Search
+
+```bash
+# Search code in repo
+gh search code "{query}" --repo {owner}/{repo} --json path,url
+
+# Search issues across GitHub
+gh search issues "{query}" --repo {owner}/{repo} --json number,title,state
+
+# Search PRs
+gh search prs "{query}" --repo {owner}/{repo} --state open
+```
+
+---
+
+## Issue Lifecycle (AI Squad Standard)
+
+| Event | Label added | Label removed | Comment |
+|---|---|---|---|
+| Story created | `phase:discover` | — | "Phase 1 DISCOVER: story created." |
+| Architect done | `phase:architect` | `phase:discover` | "Phase 2 ARCHITECT: design complete." |
+| Plan done | `phase:plan` | `phase:architect` | "Phase 3 PLAN: plan.md ready." |
+| Infra done | `phase:infra` | `phase:plan` | "Phase 4 INFRA: containers healthy." |
+| Implement start | `phase:implement,in-progress` | `phase:infra` | "Phase 5 IMPLEMENT: TDD loop starting." |
+| TDD red | `tdd:red` | — | "RED: failing test at {path}" |
+| TDD green | `tdd:green` | `tdd:red` | "GREEN: {n} tests passing." |
+| Validate pass | `phase:validate,validated` | `phase:implement` | "Phase 6 VALIDATE: 100% pass." |
+| Document done | `phase:document` | `phase:validate` | "Phase 7 DOCUMENT: docs complete." |
+| PR created | `ready-for-review` | `phase:document` | "Phase 8: PR #{pr} created." |
+| Blocked | `blocked` | — | "BLOCKED: {agent} failed 3x. Human needed." |
+| Unblocked | — | `blocked` | "Unblocked: {resolution}" |
+
+---
+
+## Failure Modes
+
+| Condition | Action |
+|---|---|
+| Not authenticated | `gh auth login` — do not retry ops |
+| Label missing | Create via `gh label create` before using |
+| Milestone missing | Create via `gh api milestones` before using |
+| Rate limited | Wait 60s, retry once; if fails again, stop |
+| Issue already exists | `gh issue list --search "{title}" --state all` — return existing number |
+| `gh` not found | Stop. Output: "gh CLI not available. Install from https://cli.github.com" |

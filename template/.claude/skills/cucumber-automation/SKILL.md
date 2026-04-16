@@ -211,6 +211,126 @@ print(m.group(1) if m else 'unknown')
 done
 ```
 
+## Playwright + behave Integration
+
+When the stack includes Playwright (`requirements.txt` contains `playwright` or `behave`), step definitions must follow these patterns. Read the QA agent's BDD section for the full antipatterns list.
+
+### `environment.py` template
+
+```python
+import json
+import threading
+from playwright.sync_api import sync_playwright
+
+BASE_URL = "http://localhost:3000"
+DEFAULT_GEO = {"latitude": 40.7128, "longitude": -74.0060}
+
+MOCK_FORECAST = {
+    "daily": {
+        "time": ["2025-01-01","2025-01-02","2025-01-03",
+                 "2025-01-04","2025-01-05","2025-01-06","2025-01-07"],
+        "temperature_2m_max": [22.1, 18.3, 15.0, 20.5, 25.2, 19.8, 17.4],
+        "temperature_2m_min": [12.0, 10.5,  9.3, 13.2, 16.1, 11.4, 10.9],
+        "weathercode":        [0,    3,     61,   0,    1,    80,   71 ],
+        "precipitation_probability_max": [5, 30, 85, 10, 20, 70, 60],
+        "windspeed_10m_max":  [12.0, 20.5, 35.2, 8.4, 15.6, 28.9, 22.3],
+        "relative_humidity_2m_max": [55, 72, 90, 48, 62, 85, 78],
+    }
+}
+
+def before_all(context):
+    context.playwright = sync_playwright().start()
+    context.browser = context.playwright.chromium.launch()
+
+def after_all(context):
+    context.browser.close()
+    context.playwright.stop()
+
+def before_scenario(context, scenario):
+    context.browser_context = context.browser.new_context(
+        permissions=["geolocation"],
+        geolocation=DEFAULT_GEO,
+    )
+    context.page = context.browser_context.new_page()
+    context._forecast_event = None
+
+def after_scenario(context, scenario):
+    context.page.close()
+    context.browser_context.close()
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def setup_forecast_route(page, error=False, delay_event=None):
+    """Network-level Open-Meteo intercept. NEVER overrides window.fetch."""
+    def handle(route):
+        if delay_event is not None:
+            delay_event.wait(timeout=30)
+        if error:
+            route.fulfill(status=500, content_type="application/json",
+                          body='{"error":"service unavailable"}')
+        else:
+            route.fulfill(status=200, content_type="application/json",
+                          body=json.dumps(MOCK_FORECAST))
+    page.route("**/api.open-meteo.com/**", handle)
+
+def navigate_and_wait(page):
+    page.goto(BASE_URL, wait_until="domcontentloaded")
+    page.wait_for_selector(".forecast-card", timeout=10_000)
+```
+
+### Browser capability scenarios
+
+```python
+# Geolocation granted — default, handled by before_scenario
+
+# Geolocation denied — create context without the permission
+context.browser_context = context.browser.new_context()  # no geolocation permission
+
+# Geolocation unsupported — NO Playwright native API; add_init_script is acceptable HERE ONLY
+context.page.add_init_script(
+    "Object.defineProperty(navigator,'geolocation',{value:undefined,configurable:true});"
+)
+
+# Geolocation timeout — NO Playwright native API; add_init_script acceptable HERE ONLY
+context.page.add_init_script(
+    "navigator.geolocation.getCurrentPosition = function(){};"  # never calls back
+)
+```
+
+### Loading state (route with threading.Event)
+
+```python
+# Setup step — route stays blocked until event is set
+event = threading.Event()
+setup_forecast_route(context.page, delay_event=event)
+context._forecast_event = event
+
+# Assert spinner visible while blocked
+spinner = context.page.locator('[role="status"]')
+spinner.wait_for(state="visible", timeout=3000)
+
+# Unblock route → cards should appear
+context._forecast_event.set()
+context.page.wait_for_selector(".forecast-card", timeout=5000)
+```
+
+### API error state
+
+```python
+setup_forecast_route(context.page, error=True)
+# route returns HTTP 500 — app must handle gracefully
+```
+
+### Antipatterns checklist (rubber duck will flag these)
+
+| Antipattern | Why it's wrong |
+|---|---|
+| `add_init_script("window.fetch = ...")` | Bypasses all app network code; test passes regardless of implementation |
+| `page.evaluate("window._appResolve()")` | Reaches into app internals; not observable behaviour |
+| `add_init_script(GEO_SUCCESS_SCRIPT)` for geolocation | Playwright's context API exists — use it |
+| `page.evaluate("window.__mock = ...")` | Same as window.fetch override — leaks test state into app |
+| Assertions checking internal state (`data-*` set by test, not app) | Test the rendered output, not the test's own injected data |
+
 ## Failure Modes
 
 | Condition | Action |
