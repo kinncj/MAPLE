@@ -23,7 +23,8 @@ npm-debug.log*
 /tmp/
 
 # Claude Code local settings (generated at runtime, not template content)
-.claude/settings.local.json
+# Leading / anchors to repo root so template/.claude/settings.local.json is unaffected
+/.claude/settings.local.json
 var/*
 
 # Swarm v2 session data (worktrees, status files, result.md)
