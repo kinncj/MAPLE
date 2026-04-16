@@ -236,14 +236,16 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 		{".github", ".github"},
 	}
 
-	// Platform-specific copies
-	if tools.Claude != "" {
+	// Platform-specific copies. In CI copy everything so the smoke test can
+	// verify the embedded template is intact regardless of installed tools.
+	ciMode := os.Getenv("CI") != ""
+	if tools.Claude != "" || ciMode {
 		pairs = append(pairs,
 			struct{ src, dst string }{".claude", ".claude"},
 			struct{ src, dst string }{"CLAUDE.md", "CLAUDE.md"},
 		)
 	}
-	if tools.OpenCode != "" {
+	if tools.OpenCode != "" || ciMode {
 		pairs = append(pairs,
 			struct{ src, dst string }{".opencode", ".opencode"},
 			struct{ src, dst string }{"AGENTS.md", "AGENTS.md"},
