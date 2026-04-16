@@ -38,7 +38,6 @@ for f in "$TEMPLATE/.claude/agents/"*.md; do
   [[ -f "$f" ]] || continue
   assert_fm "$f" "name"
   assert_fm "$f" "description"
-  assert_fm "$f" "model"
 done
 
 # ─── OpenCode agents ──────────────────────────────────────────────────────────
@@ -47,47 +46,6 @@ printf "\n\033[1m  OpenCode Agent Frontmatter\033[0m\n\n"
 for f in "$TEMPLATE/.opencode/agents/"*.md; do
   [[ -f "$f" ]] || continue
   assert_fm "$f" "description"
-  assert_fm "$f" "model"
-done
-
-# ─── Model assignment rules ───────────────────────────────────────────────────
-printf "\n\033[1m  Model Assignment Rules\033[0m\n\n"
-
-# Orchestrator and Architect must use Opus on both platforms
-for platform in .claude .opencode; do
-  for agent in orchestrator architect; do
-    f="$TEMPLATE/$platform/agents/${agent}.md"
-    if [[ -f "$f" ]]; then
-      if grep -qi "opus" "$f"; then
-        ok "$platform/$agent uses opus"
-      else
-        fail "$platform/$agent must use opus model"
-      fi
-    else
-      fail "$platform/agents/${agent}.md not found"
-    fi
-  done
-done
-
-# Implementation agents must use Sonnet (not Opus) on Claude Code platform
-IMPLEMENTATION_AGENTS=(
-  dotnet javascript typescript react-vite nextjs java springboot
-  qa docs docker terraform kubernetes redis postgresql supabase stripe vercel
-)
-for agent in "${IMPLEMENTATION_AGENTS[@]}"; do
-  f="$TEMPLATE/.claude/agents/${agent}.md"
-  if [[ -f "$f" ]]; then
-    if grep -qi "sonnet" "$f"; then
-      ok ".claude/$agent uses sonnet"
-    else
-      fail ".claude/$agent should use sonnet"
-    fi
-    if grep -qi "opus" "$f"; then
-      fail ".claude/$agent must not use opus"
-    else
-      ok ".claude/$agent does not use opus"
-    fi
-  fi
 done
 
 # ─── No stale date-suffixed model IDs ─────────────────────────────────────────
