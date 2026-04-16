@@ -1,0 +1,70 @@
+name: new-ui-feature
+description: Full-stack UI feature — spec intake, design, implementation, a11y, pipeline
+version: "1.0.0"
+
+inputs:
+  - name: problem_statement
+    type: string
+    required: true
+    description: Raw problem description from user voice. No solution language.
+  - name: epic
+    type: string
+    required: true
+    description: Epic slug (kebab-case, 2-4 words)
+  - name: feature_slug
+    type: string
+    required: true
+    description: Feature slug (kebab-case, 2-5 words)
+
+stages:
+  - agent: spec-kit
+    description: "Spec intake: PROBLEM → SPEC → PLAN → TASKS → story files"
+    inputs:
+      epic: "{{epic}}"
+      feature_slug: "{{feature_slug}}"
+      problem_statement: "{{problem_statement}}"
+
+  - gate: human-approval
+    description: "Await TASKS.md approval before design begins"
+
+  - agent: ux-researcher
+    description: "UX research: personas + journey map"
+    when: story.ui_true
+
+  - agent: wireframe-architect
+    description: "Wireframes for all story screens"
+    when: story.ui_true
+
+  - gate: human-approval
+    description: "Await wireframe approval"
+    when: story.ui_true
+
+  - agent: visual-identity-designer
+    description: "Visual identity: palette + typography + token seed"
+    when: identity.tokens_missing
+
+  - gate: human-approval
+    description: "Await palette approval"
+    when: identity.tokens_missing
+
+  - agent: design-system-author
+    description: "Emit CSS vars, Tailwind config, Mantine theme from approved tokens"
+
+  - agent: ui-mockup-builder
+    description: "High-fidelity code mockups from approved wireframes + tokens"
+    when: story.ui_true
+
+  - gate: human-approval
+    description: "Await mockup approval"
+    when: story.ui_true
+
+  - skill: component-scaffold
+    description: "Scaffold component file tree wired to tokens"
+    when: story.ui_true
+
+  - pipeline: standard-8-phase
+    description: "Full 8-phase pipeline (DISCOVER through FINAL GATE)"
+
+  - agent: a11y-auditor
+    description: "WCAG 2.2 AA audit — blocks merge on critical/serious violations"
+    when: story.ui_true

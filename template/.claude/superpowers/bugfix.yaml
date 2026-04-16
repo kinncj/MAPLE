@@ -1,0 +1,36 @@
+name: bugfix
+description: Bug fix flow — triage, failing test, fix, regression guard
+version: "1.0.0"
+
+inputs:
+  - name: issue_number
+    type: string
+    required: true
+    description: GitHub Issue number for the bug report
+  - name: description
+    type: string
+    required: true
+    description: Brief description of the observed bug
+
+stages:
+  - agent: qa
+    description: "Write a failing test that reproduces the bug (TDD red)"
+    inputs:
+      issue_number: "{{issue_number}}"
+      description: "{{description}}"
+
+  - gate: human-approval
+    description: "Confirm the failing test correctly reproduces the bug"
+
+  - agent: orchestrator
+    description: "Route fix to appropriate specialist agent (language/stack detection)"
+    inputs:
+      task: "Fix the bug described in issue #{{issue_number}}. Failing test at path from QA output."
+
+  - agent: qa
+    description: "Verify fix: run full test suite, confirm no regressions"
+
+  - skill: story-issue-sync
+    description: "Update issue: add tdd:green label, post resolution comment"
+    inputs:
+      issue_number: "{{issue_number}}"

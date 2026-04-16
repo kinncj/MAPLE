@@ -1,0 +1,52 @@
+name: api-endpoint
+description: API-only feature — spec intake, Gherkin, backend implementation, contract tests, OpenAPI update
+version: "1.0.0"
+
+inputs:
+  - name: problem_statement
+    type: string
+    required: true
+    description: Raw problem description from user voice. No solution language.
+  - name: epic
+    type: string
+    required: true
+    description: Epic slug (kebab-case)
+  - name: feature_slug
+    type: string
+    required: true
+    description: Feature slug (kebab-case)
+  - name: http_method
+    type: enum
+    required: false
+    default: POST
+    enum: [GET, POST, PUT, PATCH, DELETE]
+    description: Primary HTTP method for the new endpoint
+
+stages:
+  - agent: spec-kit
+    description: "Spec intake: PROBLEM → SPEC → PLAN → TASKS → story files"
+    inputs:
+      epic: "{{epic}}"
+      feature_slug: "{{feature_slug}}"
+      problem_statement: "{{problem_statement}}"
+
+  - gate: human-approval
+    description: "Await TASKS.md approval"
+
+  - skill: gherkin-authoring
+    description: "Allocate story IDs, build filenames, validate Gherkin"
+
+  - agent: architect
+    description: "API contract design: OpenAPI spec, ADR if needed"
+
+  - gate: human-approval
+    description: "Await API contract approval"
+
+  - pipeline: standard-8-phase
+    description: "Full 8-phase pipeline"
+
+  - skill: cucumber-automation
+    description: "Extract Gherkin → .feature files, generate step stubs"
+
+  - skill: story-issue-sync
+    description: "Sync story files to GitHub Issues + project board"

@@ -376,6 +376,195 @@ for keyword in "ui: true" "Wireframe" "mockup" "WCAG" "a11y"; do
   fi
 done
 
+# ─── Phase IV: Spec-Kit ───────────────────────────────────────────────────────
+
+for platform in claude opencode; do
+  if [[ -f "$TEMPLATE_DIR/.$platform/skills/spec-kit/SKILL.md" ]]; then
+    ok "$platform spec-kit skill present"
+  else
+    fail "$platform spec-kit skill missing"
+  fi
+  if [[ -f "$TEMPLATE_DIR/.$platform/agents/spec-kit.md" ]]; then
+    ok "$platform spec-kit agent present"
+  else
+    fail "$platform spec-kit agent missing"
+  fi
+done
+
+if [[ -f "$TEMPLATE_DIR/docs/specs/README.md" ]]; then
+  ok "docs/specs/README.md present"
+else
+  fail "docs/specs/README.md missing"
+fi
+
+for keyword in "PROBLEM" "SPEC.md" "PLAN.md" "TASKS.md" "stories_emitted" "spike" "chore"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/spec-kit/SKILL.md"; then
+    ok "spec-kit skill covers: $keyword"
+  else
+    fail "spec-kit skill missing: $keyword"
+  fi
+done
+
+# Orchestrator references spec-kit
+if grep -q "spec-kit" "$TEMPLATE_DIR/.claude/agents/orchestrator.md"; then
+  ok "orchestrator references spec-kit pre-DISCOVER gate"
+else
+  fail "orchestrator missing spec-kit reference"
+fi
+
+# ─── Phase V: Superpowers ─────────────────────────────────────────────────────
+
+if [[ -f "$TEMPLATE_DIR/.claude/superpowers/schema.yaml" ]]; then
+  ok "superpowers schema.yaml present"
+else
+  fail "superpowers schema.yaml missing"
+fi
+
+for sp in new-ui-feature api-endpoint bugfix design-refresh; do
+  if [[ -f "$TEMPLATE_DIR/.claude/superpowers/$sp.yaml" ]]; then
+    ok "superpower present: $sp"
+  else
+    fail "superpower missing: $sp"
+  fi
+done
+
+for platform in claude opencode; do
+  if [[ -f "$TEMPLATE_DIR/.$platform/skills/superpower-runner/SKILL.md" ]]; then
+    ok "$platform superpower-runner skill present"
+  else
+    fail "$platform superpower-runner skill missing"
+  fi
+done
+
+for keyword in "stages" "when:" "gate:" "human-approval" "pipeline" "PAUSED" "squad.json"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/superpower-runner/SKILL.md"; then
+    ok "superpower-runner covers: $keyword"
+  else
+    fail "superpower-runner missing: $keyword"
+  fi
+done
+
+# new-ui-feature superpower references key agents
+for keyword in "spec-kit" "wireframe" "ui-mockup-builder" "a11y-audit" "standard-8-phase"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/superpowers/new-ui-feature.yaml"; then
+    ok "new-ui-feature superpower references: $keyword"
+  else
+    fail "new-ui-feature superpower missing: $keyword"
+  fi
+done
+
+# ─── Phase VI: TUI ────────────────────────────────────────────────────────────
+
+for f in go.mod main.go app.go themes.go ui.go README.md; do
+  if [[ -f "tui/$f" ]]; then
+    ok "tui/$f present"
+  else
+    fail "tui/$f missing"
+  fi
+done
+
+# go.mod declares Bubble Tea (not Ratatui)
+if grep -q "bubbletea" tui/go.mod; then
+  ok "tui uses Bubble Tea (Go, not Rust/Ratatui)"
+else
+  fail "tui go.mod missing bubbletea"
+fi
+
+# All 5 themes present
+for theme in tokyoNight catppuccinMocha gruvbox nord everforest; do
+  if grep -q "$theme" tui/themes.go; then
+    ok "tui theme present: $theme"
+  else
+    fail "tui theme missing: $theme"
+  fi
+done
+
+# Key keybindings documented in README
+for key in "Tab" "Shift+Tab" "superpower" ":kickoff" ":theme" ":resume" "Ctrl+c"; do
+  if grep -q "$key" tui/README.md; then
+    ok "tui README documents: $key"
+  else
+    fail "tui README missing: $key"
+  fi
+done
+
+# ─── Phase VII: Enforcement ───────────────────────────────────────────────────
+
+if [[ -f "$TEMPLATE_DIR/lefthook.yml" ]]; then
+  ok "lefthook.yml present"
+else
+  fail "lefthook.yml missing"
+fi
+
+for hook in "spec-kit-gate" "feature-frontmatter" "design-approved" "a11y-required"; do
+  if grep -q "$hook" "$TEMPLATE_DIR/lefthook.yml"; then
+    ok "lefthook.yml defines hook: $hook"
+  else
+    fail "lefthook.yml missing hook: $hook"
+  fi
+done
+
+for script in validate-frontmatter.sh a11y-gate.sh design-approved-gate.sh spec-kit-gate.sh; do
+  if [[ -f "$TEMPLATE_DIR/scripts/sdlc/$script" ]]; then
+    ok "sdlc script present: $script"
+  else
+    fail "sdlc script missing: $script"
+  fi
+  if [[ -x "$TEMPLATE_DIR/scripts/sdlc/$script" ]]; then
+    ok "sdlc script executable: $script"
+  else
+    fail "sdlc script not executable: $script"
+  fi
+done
+
+if [[ -f "$TEMPLATE_DIR/.github/workflows/sdlc-gates.yml" ]]; then
+  ok "sdlc-gates.yml workflow present"
+else
+  fail "sdlc-gates.yml workflow missing"
+fi
+
+for job in frontmatter spec-kit design-approved a11y; do
+  if grep -q "name: $job\|$job:" "$TEMPLATE_DIR/.github/workflows/sdlc-gates.yml" 2>/dev/null; then
+    ok "workflow job present: $job"
+  else
+    fail "workflow job missing: $job"
+  fi
+done
+
+if [[ -f "$TEMPLATE_DIR/scripts/bootstrap-branch-protection.sh" ]]; then
+  ok "bootstrap-branch-protection.sh present"
+else
+  fail "bootstrap-branch-protection.sh missing"
+fi
+
+# ─── Phase VIII: Examples ─────────────────────────────────────────────────────
+
+for example in ui-feature api-endpoint spike; do
+  if [[ -f "docs/examples/$example/README.md" ]]; then
+    ok "example present: $example"
+  else
+    fail "example missing: $example"
+  fi
+done
+
+if grep -q "ui: true" docs/examples/ui-feature/README.md; then
+  ok "ui-feature example demonstrates ui:true"
+else
+  fail "ui-feature example missing ui:true"
+fi
+
+if grep -q "ui: false" docs/examples/api-endpoint/README.md; then
+  ok "api-endpoint example demonstrates ui:false (no design gate)"
+else
+  fail "api-endpoint example missing ui:false"
+fi
+
+if grep -q "spike" docs/examples/spike/README.md && grep -q "Spec-Kit" docs/examples/spike/README.md; then
+  ok "spike example shows spec-kit skip for spike/* branches"
+else
+  fail "spike example missing spike/spec-kit explanation"
+fi
+
 # ─── summary ──────────────────────────────────────────────────────────────────
 printf "\n  ────────────────────────────────────────\n"
 printf "  \033[1;32m%d passed\033[0m  ·  " "$PASS"

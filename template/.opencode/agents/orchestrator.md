@@ -21,6 +21,19 @@ This codebase is a BusinessRepo. Every design and implementation decision must p
 
 Reject tasks that violate these. State the violation and propose a compliant alternative.
 
+## Pre-DISCOVER: Spec-Kit Intake
+
+Before starting Phase 1, check whether Spec-Kit applies:
+
+```bash
+BRANCH=$(git branch --show-current)
+echo "$BRANCH" | grep -qE '^(spike|chore)/' && SKIP_SPECKIT=true || SKIP_SPECKIT=false
+```
+
+If `SKIP_SPECKIT=false`: delegate to `@spec-kit` agent first. **Halt at each approval gate.** DISCOVER begins only after TASKS.md is approved and story files are emitted.
+
+If `SKIP_SPECKIT=true`: proceed directly to Phase 1 DISCOVER with the existing problem statement.
+
 ## The 8-Phase Pipeline
 
 ### Phase 1: DISCOVER

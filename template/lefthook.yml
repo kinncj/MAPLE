@@ -1,0 +1,32 @@
+# lefthook configuration
+# Extends any existing pre-push and pre-commit hooks.
+# Docs: https://github.com/evilmartians/lefthook
+
+pre-push:
+  parallel: true
+  commands:
+    spec-kit-gate:
+      run: scripts/sdlc/spec-kit-gate.sh
+      fail_text: "Spec-Kit gate failed — PROBLEM/SPEC/PLAN/TASKS not all approved."
+
+    feature-frontmatter:
+      glob: "docs/stories/*.md"
+      run: scripts/sdlc/validate-frontmatter.sh {staged_files}
+      fail_text: "Story frontmatter invalid — check required fields."
+
+    design-approved:
+      glob: "docs/stories/*.md"
+      run: scripts/sdlc/design-approved-gate.sh {staged_files}
+      fail_text: "Design gate failed — wireframe or mockup not approved for ui:true story."
+
+    a11y-required:
+      glob: "docs/stories/*.md"
+      run: scripts/sdlc/a11y-gate.sh {staged_files}
+      fail_text: "A11y gate failed — WCAG 2.2 AA audit not passed for ui:true story."
+
+pre-commit:
+  parallel: true
+  commands:
+    no-secrets:
+      run: git diff --cached --name-only | xargs grep -lE "(API_KEY|SECRET|PASSWORD|TOKEN)\s*=\s*['\"][^'\"]{8,}" 2>/dev/null && echo "SECRETS FOUND" && exit 1 || exit 0
+      fail_text: "Possible secrets staged — review before committing."
