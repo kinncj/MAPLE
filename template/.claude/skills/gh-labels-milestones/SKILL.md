@@ -1,3 +1,8 @@
+---
+name: gh-labels-milestones
+description: "Bootstrap and sync GitHub labels and milestones idempotently. Use when setting up a new repository or syncing label definitions."
+---
+
 # SKILL: gh-labels-milestones
 
 ## Purpose

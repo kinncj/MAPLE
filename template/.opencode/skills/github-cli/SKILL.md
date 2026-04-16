@@ -1,3 +1,8 @@
+---
+name: github-cli
+description: "Orchestrate the full GitHub workflow — issues, PRs, labels, and project board — using the gh CLI. Use when automating GitHub operations."
+---
+
 # SKILL: GitHub CLI
 
 ## Issue Lifecycle

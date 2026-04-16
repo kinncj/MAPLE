@@ -1,3 +1,8 @@
+---
+name: postgresql-patterns
+description: "Apply PostgreSQL schema, migration, and query patterns with idempotent SQL. Use when writing database schemas or migrations."
+---
+
 # SKILL: PostgreSQL Patterns
 
 ## Migration Naming

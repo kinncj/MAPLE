@@ -1,3 +1,8 @@
+---
+name: wireframe
+description: "Generate low-fidelity wireframes (ASCII, SVG, or HTML) from user story files. Use when creating wireframes for UI stories."
+---
+
 # SKILL: wireframe
 
 ## Purpose

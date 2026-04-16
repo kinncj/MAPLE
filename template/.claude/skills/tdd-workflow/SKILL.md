@@ -1,3 +1,8 @@
+---
+name: tdd-workflow
+description: "Drive development with a red-green-refactor TDD cycle, ensuring tests are written before implementation. Use when implementing any new functionality."
+---
+
 # SKILL: TDD Workflow
 
 ## The RED → GREEN → REFACTOR Cycle

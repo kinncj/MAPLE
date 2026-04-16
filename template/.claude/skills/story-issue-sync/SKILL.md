@@ -1,3 +1,8 @@
+---
+name: story-issue-sync
+description: "Maintain bidirectional consistency between story markdown files and GitHub Issues. Use when syncing story status with GitHub."
+---
+
 # SKILL: story-issue-sync
 
 ## Purpose

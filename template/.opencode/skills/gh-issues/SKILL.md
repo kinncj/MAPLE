@@ -1,3 +1,8 @@
+---
+name: gh-issues
+description: "Create, read, update, and link GitHub Issues as story artifacts throughout the story lifecycle. Use when managing issues for stories."
+---
+
 # SKILL: gh-issues
 
 ## Purpose

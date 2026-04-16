@@ -1,3 +1,8 @@
+---
+name: jupyter-patterns
+description: "Apply best practices for Jupyter notebooks: cell ordering, reproducibility, parameterisation. Use when working with .ipynb files."
+---
+
 # SKILL: Jupyter Notebook Patterns
 
 ## Notebook Structure

@@ -1,3 +1,8 @@
+---
+name: stripe-patterns
+description: "Apply Stripe API integration patterns: webhooks, idempotency keys, and subscription handling. Use when integrating Stripe payments."
+---
+
 # SKILL: Stripe Patterns
 
 ## Local Testing Setup

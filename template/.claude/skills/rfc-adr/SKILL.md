@@ -1,3 +1,8 @@
+---
+name: rfc-adr
+description: "Author and manage Architecture Decision Records (ADRs) in docs/specs/. Use when a significant architectural decision needs to be documented."
+---
+
 # SKILL: RFC / Architecture Decision Records
 
 ## ADR Format

@@ -1,3 +1,8 @@
+---
+name: sre-review
+description: "Evaluate operational readiness: SLOs, alerting, runbooks, and rollback plan before launch. Use when reviewing a feature for production readiness."
+---
+
 # SKILL: SRE Review
 
 ## Purpose

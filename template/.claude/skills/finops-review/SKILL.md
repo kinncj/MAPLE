@@ -1,3 +1,8 @@
+---
+name: finops-review
+description: "Identify and annotate cloud cost implications of architectural decisions. Use when reviewing infrastructure changes or designing new services."
+---
+
 # SKILL: FinOps Review
 
 ## Purpose

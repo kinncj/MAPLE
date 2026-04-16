@@ -1,3 +1,8 @@
+---
+name: vercel-patterns
+description: "Apply Vercel deployment, edge function, and environment variable patterns. Use when deploying to Vercel."
+---
+
 # SKILL: Vercel Patterns
 
 ## vercel.json Configuration

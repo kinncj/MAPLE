@@ -1,3 +1,8 @@
+---
+name: playwright-cli
+description: "Use Playwright CLI for interactive browser exploration and snapshot-based interaction. Use when writing or running browser automation tests."
+---
+
 # SKILL: Playwright CLI
 
 ## When to Use

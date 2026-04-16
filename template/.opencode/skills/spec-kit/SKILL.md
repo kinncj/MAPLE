@@ -1,3 +1,8 @@
+---
+name: spec-kit
+description: "Enforce the Problem → Spec → Plan → Tasks progression with human approval gates before any DISCOVER phase work. Use when starting a new feature."
+---
+
 # SKILL: spec-kit
 
 ## Purpose

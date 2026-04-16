@@ -1,3 +1,8 @@
+---
+name: superpower-runner
+description: "Load a superpower YAML declaration, resolve stages, and dispatch each to the appropriate agent or skill. Use when running a multi-stage workflow."
+---
+
 # SKILL: superpower-runner
 
 ## Purpose

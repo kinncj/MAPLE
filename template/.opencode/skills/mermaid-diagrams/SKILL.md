@@ -1,3 +1,8 @@
+---
+name: mermaid-diagrams
+description: "Generate and validate Mermaid diagrams (component, sequence, ER, deployment, state machine) for features. Use when documenting architecture."
+---
+
 # SKILL: Mermaid Diagrams
 
 ## Required Diagrams Per Feature

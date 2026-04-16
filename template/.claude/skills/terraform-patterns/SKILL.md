@@ -1,3 +1,8 @@
+---
+name: terraform-patterns
+description: "Apply Terraform module structure, state management, and variable patterns for infrastructure as code. Use when writing Terraform."
+---
+
 # SKILL: Terraform Patterns
 
 ## Module Structure

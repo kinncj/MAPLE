@@ -1,3 +1,8 @@
+---
+name: redis-patterns
+description: "Apply Redis data structure, caching, and pub/sub patterns. Use when integrating Redis into a service."
+---
+
 # SKILL: Redis Patterns
 
 ## Key Design Convention

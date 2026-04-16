@@ -1,3 +1,8 @@
+---
+name: mockup
+description: "Scaffold high-fidelity UI component mockups using the project UI stack consuming approved wireframes. Use when implementing approved wireframes."
+---
+
 # SKILL: mockup
 
 ## Purpose

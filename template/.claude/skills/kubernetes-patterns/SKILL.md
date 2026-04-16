@@ -1,3 +1,8 @@
+---
+name: kubernetes-patterns
+description: "Apply Kubernetes and Kustomize patterns for deployments, services, and overlays. Use when writing or reviewing k8s manifests."
+---
+
 # SKILL: Kubernetes Patterns
 
 ## Kustomize Structure

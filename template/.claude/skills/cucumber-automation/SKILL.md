@@ -1,3 +1,8 @@
+---
+name: cucumber-automation
+description: "Extract Gherkin scenarios from story markdown files into runnable .feature files and generate step definition stubs. Use when syncing stories to test suites."
+---
+
 # SKILL: cucumber-automation
 
 ## Purpose

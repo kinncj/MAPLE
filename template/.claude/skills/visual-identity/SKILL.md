@@ -1,3 +1,8 @@
+---
+name: visual-identity
+description: "Produce a coherent visual identity (palette, typography, spacing, radius) from a brief and serialise to JSON for the design-tokens skill. Use when establishing brand identity."
+---
+
 # SKILL: visual-identity
 
 ## Purpose

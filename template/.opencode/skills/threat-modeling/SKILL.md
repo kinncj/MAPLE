@@ -1,3 +1,8 @@
+---
+name: threat-modeling
+description: "Perform STRIDE threat modeling for each component and trust boundary and produce a threat register. Use when reviewing a feature for security."
+---
+
 # SKILL: Threat Modeling (STRIDE)
 
 ## Output Location

@@ -1,3 +1,8 @@
+---
+name: supabase-patterns
+description: "Apply Supabase schema, RLS policies, and edge function patterns. Use when building on Supabase."
+---
+
 # SKILL: Supabase Patterns
 
 ## Local Development Workflow

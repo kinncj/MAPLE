@@ -1,3 +1,8 @@
+---
+name: design-tokens
+description: "Read and write design tokens in W3C DTCG format (tokens.json) and emit CSS, Tailwind, and Mantine outputs. Use when modifying or generating design tokens."
+---
+
 # SKILL: design-tokens
 
 ## Purpose

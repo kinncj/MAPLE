@@ -1,3 +1,8 @@
+---
+name: a11y-audit
+description: "Run WCAG 2.2 Level AA accessibility audits against generated UI. Use when a story has ui:true or when asked to audit accessibility."
+---
+
 # SKILL: a11y-audit
 
 ## Purpose

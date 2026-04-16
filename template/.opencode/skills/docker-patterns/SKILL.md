@@ -1,3 +1,8 @@
+---
+name: docker-patterns
+description: "Apply Docker and Docker Compose best practices for containerising services. Use when writing or reviewing Dockerfiles and compose configs."
+---
+
 # SKILL: Docker Patterns
 
 ## Multi-Stage Dockerfile Pattern

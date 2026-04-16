@@ -1,3 +1,8 @@
+---
+name: gherkin-authoring
+description: "Produce valid, consistently named Gherkin story files with correct IDs, timestamps, and tags. Use when writing or updating story files."
+---
+
 # SKILL: gherkin-authoring
 
 ## Purpose

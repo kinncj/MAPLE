@@ -1,3 +1,8 @@
+---
+name: component-scaffold
+description: "Generate a complete component file tree wired to design tokens with tests and Gherkin spec. Use when scaffolding a new UI component."
+---
+
 # SKILL: component-scaffold
 
 ## Purpose

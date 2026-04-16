@@ -1,3 +1,8 @@
+---
+name: gh-projects
+description: "Manage GitHub Projects v2 board: add issues, update field values, and query board state. Use when managing project boards."
+---
+
 # SKILL: gh-projects
 
 ## Purpose
