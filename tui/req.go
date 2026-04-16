@@ -38,14 +38,16 @@ const (
 )
 
 type reqModel struct {
-	tools    Tools
-	textarea textarea.Model
-	step     reqStep
-	result   string
-	savedTo  string
-	err      error
-	width    int
-	height   int
+	tools     Tools
+	textarea  textarea.Model
+	step      reqStep
+	result    string
+	savedTo   string
+	err       error
+	width     int
+	height    int
+	logoFrame int
+	logoDone  bool
 }
 
 type reqDoneMsg struct {
@@ -69,7 +71,7 @@ func newReqModel(tools Tools) *reqModel {
 }
 
 func (m *reqModel) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch(textarea.Blink, logoTick(0))
 }
 
 func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -79,6 +81,16 @@ func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.textarea.SetWidth(msg.Width - 4)
 		m.textarea.SetHeight(msg.Height - 10)
+
+	case logoTickMsg:
+		if !m.logoDone {
+			m.logoFrame++
+			if m.logoFrame >= logoFrameCount {
+				m.logoDone = true
+			} else {
+				return m, logoTick(m.logoFrame)
+			}
+		}
 
 	case tea.KeyMsg:
 		switch m.step {
@@ -115,7 +127,12 @@ func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *reqModel) View() string {
 	t := tokyoNight()
-	header := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(logo())
+	var header string
+	if m.logoDone {
+		header = logo()
+	} else {
+		header = logoAnimFrame(m.logoFrame)
+	}
 	ai := lipgloss.NewStyle().Foreground(t.Muted).Render("  AI: " + m.tools.PreferredAI())
 
 	switch m.step {

@@ -91,19 +91,6 @@ func buildTheme(name string, primary, accent, success, warning, errColor, muted,
 
 // ─── Built-in themes ──────────────────────────────────────────────────────────
 
-// logo returns the canonical AI-Squad ASCII block art header.
-// DO NOT re-kern or redraw this glyph — only rendering (colors, animation) may change.
-func logo() string {
-	return "" +
-		"                                                                    \n" +
-		"   ▄▄▄▄   ▄▄▄▄▄    ▄▄▄▄▄▄▄   ▄▄▄▄▄   ▄▄▄  ▄▄▄   ▄▄▄▄   ▄▄▄▄▄▄   \n" +
-		"  ▄██▀▀██▄  ███    █████▀▀▀ ▄███████▄ ███  ███ ▄██▀▀██▄ ███▀▀██▄  \n" +
-		"  ███  ███  ███     ▀████▄  ███   ███ ███  ███ ███  ███ ███  ███   \n" +
-		"  ███▀▀███  ███       ▀████ ███▄█▄███ ███▄▄███ ███▀▀███ ███  ███   \n" +
-		"  ███  ███ ▄███▄   ███████▀  ▀█████▀  ▀██████▀ ███  ███ ██████▀   \n" +
-		"                          ▀▀                                        \n"
-}
-
 func tokyoNight() Theme {
 	return buildTheme("tokyo-night",
 		"#7aa2f7", // primary (blue)

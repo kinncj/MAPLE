@@ -57,7 +57,7 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Print(logo())
+	printLogoAnimated()
 	fmt.Printf(`squad %s — AI-Squad initialiser and project helper
 
 Usage:

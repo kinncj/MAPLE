@@ -43,6 +43,8 @@ type initModel struct {
 	logs        []string
 	err         error
 	width       int
+	logoFrame   int
+	logoDone    bool
 }
 
 type initDoneMsg struct{ logs []string; err error }
@@ -60,13 +62,23 @@ func newInitModel(tools Tools, templateDir string) *initModel {
 }
 
 func (m *initModel) Init() tea.Cmd {
-	return nil
+	return logoTick(0)
 }
 
 func (m *initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+
+	case logoTickMsg:
+		if !m.logoDone {
+			m.logoFrame++
+			if m.logoFrame >= logoFrameCount {
+				m.logoDone = true
+			} else {
+				return m, logoTick(m.logoFrame)
+			}
+		}
 
 	case tea.KeyMsg:
 		switch m.step {
@@ -105,7 +117,12 @@ func (m *initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *initModel) View() string {
 	t := tokyoNight()
-	header := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(logo())
+	var header string
+	if m.logoDone {
+		header = logo()
+	} else {
+		header = logoAnimFrame(m.logoFrame)
+	}
 	switch m.step {
 	case stepWelcome:
 		detected := strings.Join(m.tools.Summary(), "\n")
