@@ -223,7 +223,18 @@ This creates the full label set the orchestrator uses to track pipeline phases.
 
 ## Running your first feature
 
-### Option A — Single-agent pipeline (simplest)
+### Option A — `squad` TUI (recommended)
+
+Install and launch the interactive dashboard:
+
+```bash
+cd ~/.ai-squad/tui && go build -o ~/bin/squad .
+cd your-project && squad
+```
+
+Press `F` to fire a superpower (e.g. `new-ui-feature`), or use `:kickoff <story-id>` to start the 8-phase pipeline for a specific story.
+
+### Option B — `ai-squad` CLI (non-interactive / CI)
 
 Open Claude Code in your project directory and run:
 
@@ -231,17 +242,7 @@ Open Claude Code in your project directory and run:
 /feature "describe your feature here"
 ```
 
-Claude Code will invoke the orchestrator, which drives all 8 phases sequentially in a single session.
-
-### Option B — Swarm mode (parallel agents, faster)
-
-Swarm mode opens each agent in its own Zellij tab so all Phase 5 tasks run simultaneously.
-
-```bash
-ai-squad swarm feature "describe your feature here"
-```
-
-See [Swarm Mode](./swarm.md) for full details.
+Claude Code invokes the orchestrator, which drives all 8 phases sequentially.
 
 ---
 
@@ -326,6 +327,3 @@ Re-run: `source ~/.zshrc`
 
 **Agent doesn't start a phase**
 Ensure `CLAUDE.md` is present in your project root — it contains the project rules the orchestrator reads.
-
-**Swarm mode: `There is no active session!`**
-You are already inside a Zellij session. Press `Ctrl-o d` to detach first, then re-run the command. See [Swarm Mode](./swarm.md#troubleshooting).

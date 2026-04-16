@@ -8,8 +8,22 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
+	noAnimate := false
+	args := os.Args[1:]
+
+	// Filter --no-animate before command dispatch
+	filtered := args[:0]
+	for _, a := range args {
+		if a == "--no-animate" {
+			noAnimate = true
+		} else {
+			filtered = append(filtered, a)
+		}
+	}
+	args = filtered
+
+	if len(args) > 0 {
+		switch args[0] {
 		case "--version", "-v":
 			fmt.Println("squad v3.5.0")
 			return
@@ -17,17 +31,18 @@ func main() {
 			printHelp()
 			return
 		case ":resume":
-			if len(os.Args) < 3 {
+			if len(args) < 2 {
 				fmt.Fprintln(os.Stderr, "usage: squad :resume <superpower-name>")
 				os.Exit(1)
 			}
-			fmt.Printf("Resuming superpower: %s\n", os.Args[2])
+			fmt.Printf("Resuming superpower: %s\n", args[1])
 			// TODO: load .claude/state/squad.json and resume
 			return
 		}
 	}
 
 	app := newApp()
+	app.noAnimate = noAnimate
 	p := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "squad: %v\n", err)
@@ -43,6 +58,7 @@ Usage:
   squad :resume <name>    Resume a paused superpower
   squad --version         Print version
   squad --help            Show this help
+  squad --no-animate      Skip splash animation (useful on slow terminals / SSH)
 
 Keybindings (in dashboard):
   Tab / Shift+Tab   Cycle panes

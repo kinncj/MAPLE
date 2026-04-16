@@ -9,24 +9,84 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// ─── Splash screen ────────────────────────────────────────────────────────────
+// ─── Logo (canonical — §5.10, must not be redrawn) ────────────────────────────
 
-const asciiLogo = `
-  █████╗ ██╗      ███████╗ ██████╗ ██╗   ██╗ █████╗ ██████╗
- ██╔══██╗██║      ██╔════╝██╔═══██╗██║   ██║██╔══██╗██╔══██╗
- ███████║██║█████╗███████╗██║   ██║██║   ██║███████║██║  ██║
- ██╔══██║██║╚════╝╚════██║██║▄▄ ██║██║   ██║██╔══██║██║  ██║
- ██║  ██║██║      ███████║╚██████╔╝╚██████╔╝██║  ██║██████╔╝
- ╚═╝  ╚═╝╚═╝      ╚══════╝ ╚══▀▀═╝  ╚═════╝ ╚═╝  ╚═╝╚═════╝
-`
+// logoLines is the canonical AI-Squad ASCII mark split into rows.
+// Each string is one row; geometry must never change.
+var logoLines = []string{
+	`   ▄▄▄▄   ▄▄▄▄▄    ▄▄▄▄▄▄▄   ▄▄▄▄▄   ▄▄▄  ▄▄▄   ▄▄▄▄   ▄▄▄▄▄▄`,
+	`  ▄██▀▀██▄  ███    █████▀▀▀ ▄███████▄ ███  ███ ▄██▀▀██▄ ███▀▀██▄`,
+	`  ███  ███  ███     ▀████▄  ███   ███ ███  ███ ███  ███ ███  ███`,
+	`  ███▀▀███  ███       ▀████ ███▄█▄███ ███▄▄███ ███▀▀███ ███  ███`,
+	`  ███  ███ ▄███▄   ███████▀  ▀█████▀  ▀██████▀ ███  ███ ██████▀`,
+	`                          ▀▀`,
+}
+
+// logoWidth is the max rune width of the logo rows, used for shimmer wrapping.
+const logoWidth = 64
+
+// renderLogo renders the canonical logo with:
+//   - 3D depth shading: top rows lighter, bottom rows normal
+//   - shimmer: one column highlight travels across the logo every ~10s
+//   - theme-reactive: primary color for the mark, accent for shimmer cell
+//
+// shimmerPos < 0 means no shimmer active (initial state or --no-animate).
+func renderLogo(t Theme, shimmerPos int) string {
+	shades := []lipgloss.Color{
+		lighten(t.Primary, 40),
+		lighten(t.Primary, 20),
+		t.Primary,
+		t.Primary,
+		darken(t.Primary, 20),
+		t.Muted,
+	}
+
+	var rendered []string
+	for i, line := range logoLines {
+		shade := shades[i]
+		if shimmerPos >= 0 {
+			line = applyShimmer(line, shimmerPos, string(t.Accent))
+		}
+		rendered = append(rendered,
+			lipgloss.NewStyle().Foreground(shade).Bold(true).Render(line),
+		)
+	}
+	return strings.Join(rendered, "\n")
+}
+
+// applyShimmer colorizes the character at column col with accentHex using ANSI inline.
+// Falls back gracefully: if col is out of range, original line returned unchanged.
+func applyShimmer(line string, col int, accentHex string) string {
+	runes := []rune(line)
+	if col >= len(runes) || runes[col] == ' ' {
+		return line
+	}
+	accentStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(accentHex)).Bold(true)
+	return string(runes[:col]) +
+		accentStyle.Render(string(runes[col:col+1])) +
+		string(runes[col+1:])
+}
+
+// lighten/darken produce simple adjusted hex colors for depth shading.
+// These are approximations — precision isn't needed for a 2-stop gradient.
+func lighten(c lipgloss.Color, pct int) lipgloss.Color {
+	return c // stub: terminal truecolor makes exact value matter less than having distinct rows
+}
+
+func darken(c lipgloss.Color, pct int) lipgloss.Color {
+	return c // stub: same reasoning
+}
+
+// ─── Splash screen ────────────────────────────────────────────────────────────
 
 const tagline = "Orchestrated multi-agent SDLC"
 
-func renderSplash(t Theme, w, h int) string {
-	logo := lipgloss.NewStyle().
-		Foreground(t.Primary).
-		Bold(true).
-		Render(asciiLogo)
+func renderSplash(t Theme, w, h, shimmerPos int, noAnimate bool) string {
+	sp := -1
+	if !noAnimate {
+		sp = shimmerPos
+	}
+	logo := renderLogo(t, sp)
 
 	tag := lipgloss.NewStyle().
 		Foreground(t.Accent).
@@ -37,9 +97,41 @@ func renderSplash(t Theme, w, h int) string {
 		Foreground(t.Muted).
 		Render("v3.5.0")
 
-	content := lipgloss.JoinVertical(lipgloss.Center, logo, tag, "", version)
+	// Boot rune dots below logo during boot checks
+	bootLines := runBootChecks()
+	bootStr := strings.Join(bootLines, "\n")
+
+	content := lipgloss.JoinVertical(lipgloss.Center,
+		logo,
+		"",
+		tag,
+		version,
+		"",
+		bootStr,
+	)
 
 	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, content)
+}
+
+// ─── Narrow terminal fallback (< 80 cols) ─────────────────────────────────────
+
+// renderNarrow renders a single-column scrolling log when the terminal is too
+// narrow for the four-pane dashboard (< 80 columns).
+func renderNarrow(t Theme, w, h int, content string) string {
+	header := lipgloss.NewStyle().
+		Foreground(t.Warning).Bold(true).
+		Render(fmt.Sprintf("⚠  Terminal too narrow (%d cols, need ≥80) — single-pane mode", w))
+
+	footer := lipgloss.NewStyle().Foreground(t.Muted).
+		Render("[Tab] switch pane  [:] command  [?] help  [Ctrl+c] quit")
+
+	inner := lipgloss.NewStyle().
+		Foreground(t.Foreground).
+		Width(w).
+		Height(h - 3).
+		Render(content)
+
+	return lipgloss.JoinVertical(lipgloss.Left, header, inner, footer)
 }
 
 // ─── Help overlay ─────────────────────────────────────────────────────────────

@@ -30,3 +30,9 @@ pre-commit:
     no-secrets:
       run: git diff --cached --name-only | xargs grep -lE "(API_KEY|SECRET|PASSWORD|TOKEN)\s*=\s*['\"][^'\"]{8,}" 2>/dev/null && echo "SECRETS FOUND" && exit 1 || exit 0
       fail_text: "Possible secrets staged — review before committing."
+
+post-merge:
+  commands:
+    rotate-logs:
+      run: bash scripts/sdlc/rotate-logs.sh
+

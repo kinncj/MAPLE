@@ -41,6 +41,9 @@ type App struct {
 	showHelp    bool
 	showSplash  bool
 	splashDone  bool
+	noAnimate   bool
+	splashTick  int
+	shimmerPos  int
 	width       int
 	height      int
 	cmdMode     bool
@@ -58,16 +61,21 @@ type App struct {
 }
 
 type tickMsg time.Time
+type shimmerTickMsg struct{}
 
 func newApp() *App {
 	return &App{
 		theme:      loadTheme(),
 		activePane: paneStories,
 		showSplash: true,
+		shimmerPos: -1,
 	}
 }
 
 func (a *App) Init() tea.Cmd {
+	if a.noAnimate {
+		a.showSplash = false
+	}
 	return tea.Batch(
 		tickCmd(),
 		a.stories.Init(),
@@ -78,6 +86,12 @@ func (a *App) Init() tea.Cmd {
 func tickCmd() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
+	})
+}
+
+func shimmerCmd() tea.Cmd {
+	return tea.Tick(10*time.Second, func(_ time.Time) tea.Msg {
+		return shimmerTickMsg{}
 	})
 }
 
@@ -92,13 +106,22 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		if a.showSplash {
-			// Splash shows for 800ms then transitions to dashboard
-			a.showSplash = false
+			a.splashTick++
+			// Splash shows for ~800ms (1 tick), then transitions
+			if a.splashTick >= 1 || a.noAnimate {
+				a.showSplash = false
+				return a, shimmerCmd()
+			}
 		}
 		var cmds []tea.Cmd
 		cmds = append(cmds, tickCmd())
 		cmds = append(cmds, a.logs.Tick())
 		return a, tea.Batch(cmds...)
+
+	case shimmerTickMsg:
+		// Advance shimmer highlight across logo
+		a.shimmerPos = (a.shimmerPos + 1) % logoWidth
+		return a, shimmerCmd()
 
 	case tea.KeyMsg:
 		return a.handleKey(msg)
@@ -199,7 +222,11 @@ func (a *App) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) executeCommand(cmd string) tea.Cmd {
-	// TODO: parse and dispatch :kickoff, :sync, :a11y, :theme, :resume
+	// Parse :theme <name> immediately; others TODO
+	if len(cmd) > 6 && cmd[:6] == "theme " {
+		a.theme = themeByName(cmd[6:])
+	}
+	// TODO: :kickoff, :sync, :a11y, :resume
 	return nil
 }
 
@@ -211,12 +238,18 @@ func (a *App) moveFocus(delta int) {
 	// Delegate to active pane
 }
 
+const minWidth = 80
+
 func (a *App) View() string {
 	if a.showSplash {
-		return renderSplash(a.theme, a.width, a.height)
+		return renderSplash(a.theme, a.width, a.height, a.shimmerPos, a.noAnimate)
 	}
 	if a.width == 0 {
 		return "Loading…"
+	}
+	// Narrow terminal: degrade to single-column scrolling log
+	if a.width < minWidth {
+		return renderNarrow(a.theme, a.width, a.height, a.getPaneContent(a.activePane, a.width-2, a.height-4))
 	}
 	if a.showHelp {
 		return renderHelp(a.theme, a.width, a.height)

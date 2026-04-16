@@ -360,7 +360,7 @@ Reference the skill in an agent prompt:
 
 ## Adjusting the plan.md format
 
-The watcher and `swarm full` / `swarm tasks` parse `plan.md` for unchecked tasks using this pattern:
+The orchestrator and spec-kit agent parse `plan.md` for unchecked tasks using this pattern:
 
 ```
 - [ ] Task N: @agent-name description of task
@@ -370,13 +370,9 @@ Any line matching `- [ ] Task [0-9]+:` with an `@agent-name` gets picked up. Che
 
 ---
 
-## Changing the sentinel plan path
+## Changing the plan path
 
-By default, `swarm full` reads `docs/specs/current/plan.md`. Override with:
-
-```bash
-PLAN_FILE=docs/specs/my-feature/plan.md ai-squad swarm full
-```
+By default, spec-kit reads `docs/specs/<slug>/TASKS.md`. The orchestrator's pre-DISCOVER gate checks this path. Override by passing the path explicitly when invoking the spec-kit agent.
 
 ---
 
