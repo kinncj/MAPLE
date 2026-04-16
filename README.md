@@ -9,8 +9,8 @@
 
 ```
 
-[![CI](https://github.com/kinncj/AI-Development-Squad-Template/actions/workflows/ci.yml/badge.svg)](https://github.com/kinncj/AI-Development-Squad-Template/actions/workflows/ci.yml)
-[![Integration Validation](https://github.com/kinncj/AI-Development-Squad-Template/actions/workflows/validate-integrations.yml/badge.svg)](https://github.com/kinncj/AI-Development-Squad-Template/actions/workflows/validate-integrations.yml)
+[![CI](https://github.com/kinncj/AI-Squad/actions/workflows/ci.yml/badge.svg)](https://github.com/kinncj/AI-Squad/actions/workflows/ci.yml)
+[![Integration Validation](https://github.com/kinncj/AI-Squad/actions/workflows/validate-integrations.yml/badge.svg)](https://github.com/kinncj/AI-Squad/actions/workflows/validate-integrations.yml)
 
 A production-ready template for running an **orchestrated, phase-gated, TDD-enforced** development pipeline with **specialist AI agents**. Runs on three platforms: **Claude Code**, **GitHub Copilot CLI**, and **OpenCode**.
 
@@ -45,7 +45,7 @@ Single-agent AI coding breaks down at scale. Context gets polluted, tests get sk
 ## Quick Start
 
 ```bash
-git clone https://github.com/kinncj/AI-Development-Squad-Template.git ai-squad
+git clone https://github.com/kinncj/AI-Squad.git ai-squad
 cd ai-squad
 make build-tui              # produces ./squad
 export PATH="$PWD:$PATH"   # or move to any directory on your PATH

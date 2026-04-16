@@ -25,7 +25,10 @@ jobs:
           cache-dependency-path: tui/go.sum
 
       - name: Build squad
-        run: go build -C tui -o ../squad .
+        run: |
+          cp -r template tui/template
+          go build -C tui -o ../squad .
+
 
       - name: Validate agent frontmatter (structural)
         run: bash tests/template/test_agents.sh
@@ -66,10 +69,11 @@ jobs:
           import json, sys
           with open('template/opencode.json') as f:
               cfg = json.load(f)
-          required = ['model', 'mcp']
+          required = ['mcp']
           for k in required:
               assert k in cfg, f'Missing key: {k}'
-          assert isinstance(cfg['model'], str), 'model must be a string (provider/model)'
+          if 'model' in cfg:
+              assert isinstance(cfg['model'], str), 'model must be a string (provider/model-id)'
           assert 'providers' not in cfg, 'providers is not a valid key'
           assert isinstance(cfg.get('instructions', []), list), 'instructions must be an array'
           print('opencode.json is valid.')

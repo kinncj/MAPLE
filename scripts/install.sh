@@ -44,7 +44,7 @@ echo ""
 
 if ! echo ":${PATH}:" | grep -q ":${INSTALL_DIR}:"; then
     echo "Add to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-    echo "  export PATH=\"\$HOME/.tools/ai-squad/bin:\$PATH\""
+    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
     echo ""
 fi
 
