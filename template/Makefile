@@ -75,7 +75,7 @@ containers-down:
 
 ## Seed test data
 seed-test:
-	./infra/scripts/seed-test.sh
+	./scripts/seed-test.sh
 
 ## Run database migrations
 migrate:
