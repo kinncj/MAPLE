@@ -24,6 +24,21 @@ sdlc:
     - mcp_adoption
     - visual_identity_change
 
+stack:
+  # Filled by the orchestrator during tech-stack discovery before any pipeline work.
+  # Leave all fields as null until the orchestrator interviews the user.
+  frontend: null          # react | vue | angular | nextjs | svelte | vanilla | none
+  backend: null           # nodejs | fastapi | django | spring | dotnet | none
+  language: null          # typescript | javascript | python | java | csharp | go | rust
+  database: null          # postgresql | mysql | sqlite | mongodb | supabase | none
+  cache: null             # redis | none
+  css: null               # tailwind | mantine | shadcn | bootstrap | css-modules | none
+  testing:
+    unit: null            # vitest | jest | pytest | junit | nunit
+    e2e: null             # playwright | cypress | selenium | none
+  deployment: null        # vercel | aws | gcp | azure | docker | none
+  package_manager: null   # npm | pnpm | yarn | pip | maven | gradle
+
 qa:
   bdd: cucumber           # cucumber | behave | none
   step_defs_dir: tests/step-definitions

@@ -21,6 +21,51 @@ This codebase is a BusinessRepo. Every design and implementation decision must p
 
 Reject tasks that violate these. State the violation and propose a compliant alternative.
 
+## Step 0: Tech-Stack Discovery (ALWAYS run first)
+
+Before anything else, read `project.config.yaml` and check whether `stack:` fields are populated.
+
+```bash
+grep -A 20 "^stack:" project.config.yaml 2>/dev/null || echo "NO_STACK_SECTION"
+```
+
+If ANY of the following are `null` or missing — `stack.frontend`, `stack.language`, `stack.backend` — you MUST run a discovery interview with the user. **Do not assume. Do not infer from filenames, Makefile, or existing code.**
+
+### Discovery Interview
+
+Ask the user ALL of the following questions in a single message. Do not proceed until you have answers:
+
+```
+Before I start, I need to understand the tech stack so every agent can make precise decisions.
+Please answer as many as you can — even "not sure yet" or "no preference" helps.
+
+1. **Frontend**: What UI framework? (React, Vue, Angular, Next.js, Svelte, plain HTML/JS, or none)
+2. **Language**: TypeScript or JavaScript? Python? Java? C#? Other?
+3. **Backend**: Node/Express, FastAPI, Django, Spring Boot, .NET, or no backend (pure SPA/static)?
+4. **Database**: PostgreSQL, MySQL, SQLite, MongoDB, Supabase, or none?
+5. **CSS / UI library**: Tailwind, Mantine, shadcn/ui, Bootstrap, CSS Modules, or plain CSS?
+6. **Testing**:
+   - Unit tests: Vitest, Jest, pytest, JUnit, or other?
+   - E2E tests: Playwright, Cypress, or none?
+7. **Deployment target**: Vercel, AWS, GCP, Docker, or undecided?
+8. **Package manager**: npm, pnpm, yarn, pip, Maven, Gradle?
+9. **Anything else I should know?** (monorepo, specific constraints, existing services to integrate)
+```
+
+Once the user answers, write their choices into `project.config.yaml` under the `stack:` section:
+
+```bash
+# Example patch — adapt values to user's actual answers
+# Use yq or sed; do not overwrite the whole file
+```
+
+Then **confirm back** to the user:
+> "Got it. I'll use [answers summary] throughout the pipeline. Starting now."
+
+Only after `stack:` is fully populated should you continue to Pre-DISCOVER.
+
+---
+
 ## Pre-DISCOVER: Spec-Kit Intake
 
 Before starting Phase 1, check whether Spec-Kit applies:
@@ -71,25 +116,25 @@ For each task in plan.md:
 5. If GREEN: proceed to next task.
 6. If FAIL after 3 attempts: escalate to human.
 
-Route tasks by technology:
-- .cs files → @dotnet
-- .java + Spring annotations → @springboot
-- .java (plain) → @java
-- .ts backend → @typescript
-- .js backend → @javascript
-- React + Vite → @react-vite
-- Next.js → @nextjs
-- Notebooks → @jupyter
+Route tasks by technology — use `stack:` from `project.config.yaml` as the source of truth:
+- `stack.language = csharp` → @dotnet
+- `stack.language = java` + Spring → @springboot
+- `stack.language = java` plain → @java
+- `stack.language = typescript` + `stack.backend != none` → @typescript
+- `stack.language = javascript` + `stack.backend != none` → @javascript
+- `stack.frontend = react` + Vite → @react-vite
+- `stack.frontend = nextjs` → @nextjs
+- `stack.language = python` + notebooks → @jupyter
 - ETL/pipelines → @data-engineer
 - EDA/stats → @data-science
 - TensorFlow → @tensorflow
 - PyTorch → @pytorch
 - Pandas/NumPy → @pandas-numpy
 - Scikit-learn → @scikit
-- Database → @postgresql
-- Cache → @redis
-- Supabase → @supabase
-- Deployment → @vercel
+- `stack.database = postgresql` → @postgresql
+- `stack.cache = redis` → @redis
+- `stack.database = supabase` → @supabase
+- `stack.deployment = vercel` → @vercel
 - Payments → @stripe
 
 ### Phase 6: VALIDATE
