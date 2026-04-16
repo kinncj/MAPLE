@@ -11,40 +11,15 @@ const version = "v3.5.0"
 
 func main() {
 	args := os.Args[1:]
-	tools := Detect()
 	tplDir := templateDir()
 
-	// No args → interactive TUI menu
+	// No args → interactive TUI menu loop
 	if len(args) == 0 {
-		result := runMenu(tools, tplDir)
-		switch result.action {
-		case menuInit:
-			if err := runInitFromMenu(tools, tplDir, false); err != nil {
-				fatalf("init: %v", err)
-			}
-		case menuUpdate:
-			if err := runInitFromMenu(tools, tplDir, true); err != nil {
-				fatalf("update: %v", err)
-			}
-		case menuReq:
-			if err := runReq(tools); err != nil {
-				fatalf("req: %v", err)
-			}
-		case menuLabels:
-			if err := runLabels(tools.GH); err != nil {
-				fatalf("labels: %v", err)
-			}
-		case menuProject:
-			if err := runProject(tools.GH); err != nil {
-				fatalf("project: %v", err)
-			}
-		case menuHelp:
-			// Help is handled inline in the menu; this branch is unreachable
-			// but kept for completeness.
-			printHelpStatic()
-		}
+		runInteractive(tplDir)
 		return
 	}
+
+	tools := Detect()
 
 	// Subcommand mode
 	switch args[0] {
@@ -82,6 +57,39 @@ func main() {
 	}
 }
 
+func runInteractive(tplDir string) {
+	for {
+		tools := Detect()
+		result := runMenu(tools, tplDir)
+		switch result.action {
+		case menuQuit:
+			return
+		case menuInit:
+			if err := runInitFromMenu(tools, tplDir, false); err != nil {
+				fmt.Fprintf(os.Stderr, "init: %v\n", err)
+			}
+		case menuUpdate:
+			if err := runInitFromMenu(tools, tplDir, true); err != nil {
+				fmt.Fprintf(os.Stderr, "update: %v\n", err)
+			}
+		case menuReq:
+			if err := runReq(tools); err != nil {
+				fmt.Fprintf(os.Stderr, "req: %v\n", err)
+			}
+		case menuLabels:
+			if err := runLabels(tools.GH); err != nil {
+				fmt.Fprintf(os.Stderr, "labels: %v\n", err)
+			}
+		case menuProject:
+			if err := runProject(tools.GH); err != nil {
+				fmt.Fprintf(os.Stderr, "project: %v\n", err)
+			}
+		case menuHelp:
+			// handled inline in menu
+		}
+	}
+}
+
 func printHelp() {
 	printLogoAnimated()
 	printHelpText()
@@ -111,19 +119,25 @@ Usage:
 // templateDir resolves the template source directory.
 // Resolution order:
 //  1. AI_SQUAD_TEMPLATE env var
-//  2. <binary>/../template/  (installed alongside repo)
-//  3. ./template/  (cwd fallback — running from repo root)
-//  4. ~/.ai-squad/template/
+//  2. <binary_dir>/template/        (binary in repo root, template alongside)
+//  3. <binary_dir>/../template/     (binary in bin/ subdir, template one level up)
+//  4. ./template/                   (cwd fallback — running from repo root)
+//  5. ~/.ai-squad/template/
 func templateDir() string {
 	if v := os.Getenv("AI_SQUAD_TEMPLATE"); v != "" {
 		return v
 	}
 	exe, err := os.Executable()
 	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "..", "template")
-		if stat, err := os.Stat(candidate); err == nil && stat.IsDir() {
-			abs, _ := filepath.Abs(candidate)
-			return abs
+		binDir := filepath.Dir(exe)
+		for _, candidate := range []string{
+			filepath.Join(binDir, "template"),
+			filepath.Join(binDir, "..", "template"),
+		} {
+			if stat, err := os.Stat(candidate); err == nil && stat.IsDir() {
+				abs, _ := filepath.Abs(candidate)
+				return abs
+			}
 		}
 	}
 	if stat, err := os.Stat("template"); err == nil && stat.IsDir() {

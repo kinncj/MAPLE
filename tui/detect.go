@@ -9,7 +9,8 @@ import (
 type Tools struct {
 	Claude    string // path or "" if not found
 	OpenCode  string
-	GHCopilot bool   // gh copilot extension present
+	Copilot   string // GitHub Copilot CLI binary ("copilot"), supports -p for non-interactive
+	GHCopilot bool   // gh copilot extension (explain/suggest shell commands only)
 	GH        string // gh CLI path
 	Lefthook  string // lefthook binary path
 }
@@ -19,10 +20,11 @@ func Detect() Tools {
 	t := Tools{}
 	t.Claude, _ = exec.LookPath("claude")
 	t.OpenCode, _ = exec.LookPath("opencode")
+	t.Copilot, _ = exec.LookPath("copilot")
 	t.GH, _ = exec.LookPath("gh")
 	t.Lefthook, _ = exec.LookPath("lefthook")
 
-	// Check gh copilot extension
+	// Check gh copilot extension (shell-command helper only)
 	if t.GH != "" {
 		out, err := exec.Command(t.GH, "extension", "list").Output()
 		if err == nil && strings.Contains(string(out), "copilot") {
@@ -35,25 +37,27 @@ func Detect() Tools {
 // aiOption represents one available AI tool that supports general-purpose prompt → text.
 type aiOption struct {
 	label string // display name
-	kind  string // "claude" | "opencode"
+	kind  string // "claude" | "copilot" | "opencode"
 	path  string // binary path
 }
 
 // HasAI returns true if at least one AI tool is available (for init/detection purposes).
 func (t Tools) HasAI() bool {
-	return t.Claude != "" || t.OpenCode != "" || t.GHCopilot
+	return t.Claude != "" || t.Copilot != "" || t.OpenCode != "" || t.GHCopilot
 }
 
 // HasReqAI returns true if at least one tool capable of requirements→Gherkin is available.
 func (t Tools) HasReqAI() bool {
-	return t.Claude != "" || t.OpenCode != ""
+	return t.Claude != "" || t.Copilot != "" || t.OpenCode != ""
 }
-
 
 // PreferredAI returns the name of the first available AI tool.
 func (t Tools) PreferredAI() string {
 	if t.Claude != "" {
 		return "claude"
+	}
+	if t.Copilot != "" {
+		return "copilot"
 	}
 	if t.OpenCode != "" {
 		return "opencode"
@@ -75,8 +79,9 @@ func (t Tools) Summary() []string {
 		}
 	}
 	check(t.Claude != "", "claude")
+	check(t.Copilot != "", "copilot")
 	check(t.OpenCode != "", "opencode")
-	check(t.GHCopilot, "copilot")
+	check(t.GHCopilot, "gh-copilot")
 	check(t.GH != "", "gh")
 	check(t.Lefthook != "", "lefthook")
 
