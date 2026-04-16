@@ -48,11 +48,12 @@ jobs:
       - name: Smoke-test squad init
         run: |
           mkdir -p /tmp/test-smoke
+          cd /tmp/test-smoke
           AI_SQUAD_TEMPLATE="$GITHUB_WORKSPACE/template" \
-            ./squad init /tmp/test-smoke 2>&1 || true
-          ls /tmp/test-smoke/.claude/agents/orchestrator.md || \
+            "$GITHUB_WORKSPACE/squad" init 2>&1
+          ls .claude/agents/orchestrator.md || \
             { echo "orchestrator agent missing"; exit 1; }
-          ls /tmp/test-smoke/.claude/agents/architect.md || \
+          ls .claude/agents/architect.md || \
             { echo "architect agent missing"; exit 1; }
           echo "Agent definitions are available to Claude Code."
 

@@ -18,8 +18,8 @@ import (
 // ─── Init command ─────────────────────────────────────────────────────────────
 
 func runInit(tools Tools, fsys fs.FS, force bool) error {
-	if !isStdinTTY() {
-		// Non-interactive mode (CI / pipe): run setup directly without the TUI.
+	// Skip TUI when running in CI or when /dev/tty is unavailable.
+	if os.Getenv("CI") != "" || !hasTTY() {
 		_, err := doInit(tools, fsys, force)
 		return err
 	}

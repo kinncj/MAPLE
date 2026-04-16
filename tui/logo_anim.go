@@ -172,3 +172,15 @@ func isStdinTTY() bool {
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
 }
+
+// hasTTY reports whether a controlling terminal is available.
+// It tries to open /dev/tty (POSIX) and returns false on Windows or in CI
+// environments where no TTY exists.
+func hasTTY() bool {
+	f, err := os.Open("/dev/tty")
+	if err != nil {
+		return false
+	}
+	_ = f.Close()
+	return true
+}
