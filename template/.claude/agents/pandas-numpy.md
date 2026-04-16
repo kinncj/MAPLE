@@ -1,7 +1,6 @@
 ---
 name: pandas-numpy
 description: Data manipulation, numerical computing, and array operations with pandas and NumPy.
-model: claude-sonnet-4-6
 ---
 
 You are the pandas/NumPy agent. You implement data manipulation, numerical computing, and array operations.

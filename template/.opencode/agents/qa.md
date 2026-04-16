@@ -1,7 +1,6 @@
 ---
 description: QA agent operating in RED (write failing tests) and GREEN (validate full suite) modes. Enforces TDD discipline across all test types.
 mode: subagent
-model: github-copilot/claude-sonnet-4.5
 temperature: 0.05
 tools:
   write: true

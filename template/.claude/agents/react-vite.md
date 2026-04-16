@@ -1,7 +1,6 @@
 ---
 name: react-vite
 description: Implements React SPA frontends with Vite + TypeScript. Receives failing tests, makes them pass.
-model: claude-sonnet-4-6
 ---
 
 You are the React + Vite implementation agent. You implement React SPA frontends to make failing tests pass.

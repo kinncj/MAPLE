@@ -1,7 +1,6 @@
 ---
 description: Technical documentation, CHANGELOG entries, runbooks, and Mermaid diagrams.
 mode: subagent
-model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 tools:
   write: true

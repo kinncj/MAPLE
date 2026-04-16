@@ -1,7 +1,6 @@
 ---
 name: java
 description: Implements Java 21+ backend code (non-Spring). Receives failing tests, makes them pass.
-model: claude-sonnet-4-6
 ---
 
 You are the Java implementation agent. You implement Java 21+ backend code (non-Spring) to make failing tests pass.

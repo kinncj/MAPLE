@@ -1,7 +1,6 @@
 ---
 name: javascript
 description: Implements vanilla JavaScript / Node.js code. Receives failing tests, makes them pass.
-model: claude-sonnet-4-6
 ---
 
 You are the JavaScript implementation agent. You implement vanilla JS / Node.js code to make failing tests pass.

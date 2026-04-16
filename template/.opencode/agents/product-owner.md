@@ -1,7 +1,6 @@
 ---
 description: Translates feature requests into user stories and acceptance criteria. Creates GitHub issues. Never writes code or technical solutions.
 mode: subagent
-model: github-copilot/claude-sonnet-4.5
 temperature: 0.3
 tools:
   write: true

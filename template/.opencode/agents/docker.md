@@ -1,7 +1,6 @@
 ---
 description: Creates Dockerfiles, docker-compose configs, and container orchestration configs.
 mode: subagent
-model: copilot/gpt-4.1
 temperature: 0.1
 tools:
   write: true

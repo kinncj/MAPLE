@@ -1,7 +1,6 @@
 ---
 description: Primary orchestrator agent. Controls the entire 8-phase pipeline. Never writes code — delegates all implementation to specialist agents via the task tool. Manages GitHub issues, quality gates, and escalation.
 mode: primary
-model: anthropic/claude-opus-4-6
 temperature: 0.1
 tools:
   write: false

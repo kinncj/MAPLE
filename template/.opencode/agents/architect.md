@@ -1,7 +1,6 @@
 ---
 description: Produces staff-level system design documentation including ADRs, API contracts, threat models, and Mermaid architecture diagrams.
 mode: subagent
-model: anthropic/claude-opus-4-6
 temperature: 0.1
 tools:
   write: true

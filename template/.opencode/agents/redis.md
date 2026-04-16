@@ -1,7 +1,6 @@
 ---
 description: Caching, session management, pub/sub, rate limiting, and streams with Redis.
 mode: subagent
-model: github-copilot/claude-sonnet-4.5
 temperature: 0.15
 tools:
   write: true

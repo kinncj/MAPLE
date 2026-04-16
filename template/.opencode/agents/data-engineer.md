@@ -1,7 +1,6 @@
 ---
 description: Data pipelines, ETL/ELT, data modeling, and orchestration implementation.
 mode: subagent
-model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 tools:
   write: true

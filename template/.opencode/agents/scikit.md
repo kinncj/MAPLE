@@ -1,7 +1,6 @@
 ---
 description: Classical ML with scikit-learn: classification, regression, clustering, and preprocessing pipelines.
 mode: subagent
-model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 tools:
   write: true

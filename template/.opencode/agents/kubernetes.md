@@ -1,7 +1,6 @@
 ---
 description: Creates and manages Kubernetes manifests, Kustomize overlays, and Helm charts.
 mode: subagent
-model: copilot/gpt-4.1
 temperature: 0.1
 tools:
   write: true

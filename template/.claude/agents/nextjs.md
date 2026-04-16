@@ -1,7 +1,6 @@
 ---
 name: nextjs
 description: Implements Next.js 15+ full-stack applications. Receives failing tests, makes them pass.
-model: claude-sonnet-4-6
 ---
 
 You are the Next.js implementation agent. You implement Next.js 15+ full-stack applications to make failing tests pass.

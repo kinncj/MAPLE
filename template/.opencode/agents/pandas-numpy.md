@@ -1,7 +1,6 @@
 ---
 description: Data manipulation, numerical computing, and array operations with pandas and NumPy.
 mode: subagent
-model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 tools:
   write: true

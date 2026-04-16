@@ -14,6 +14,188 @@ Create `.claude/agents/{name}.md`:
 ---
 name: rust
 description: Rust systems programming specialist. Handles Cargo workspaces, async Tokio, and FFI.
+---
+
+You are the Rust specialist. You write idiomatic, safe Rust code.
+
+## What you do
+- Implement tasks assigned by the orchestrator
+- Write unit tests with `#[test]` and integration tests in `tests/`
+- Run `cargo build`, `cargo test`, `cargo clippy`, `cargo fmt`
+
+## What you never do
+- Modify files outside Rust source directories
+- Invoke agents other than yourself
+- Skip failing tests
+```
+
+No `model:` field needed — the agent uses your Claude Code default model.
+
+### Step 2 — Create the OpenCode agent
+
+Create `.opencode/agents/{name}.md`:
+
+```markdown
+---
+name: rust
+temperature: 0.2
+mode: code
+tools:
+  - read
+  - edit
+  - write
+  - bash
+permission:
+  allow:
+    - bash: ["cargo", "rustc", "rustfmt", "clippy", "rustup"]
+---
+
+You are the Rust specialist...
+```
+
+No `model:` field needed — the agent inherits OpenCode's configured default.
+
+### Step 3 — Register with the orchestrator
+
+In `.opencode/agents/orchestrator.md`, add `rust` to the `permission.task` list:
+
+```yaml
+permission:
+  task:
+    - product-owner
+    - architect
+    - qa
+    - rust        # ← add here
+    - typescript
+    # ...
+```
+
+Do the same in `.claude/agents/orchestrator.md` (add `rust` to the orchestrator's agent roster comment for documentation purposes).
+
+### Step 4 — Update AGENTS.md
+
+Add a row to the table in `AGENTS.md` so the orchestrator knows which tasks to route to the new agent.
+
+---
+
+## Removing an agent
+
+1. Delete `.claude/agents/{name}.md`
+2. Delete `.opencode/agents/{name}.md`
+3. Remove the agent from the `permission.task` list in both orchestrator files
+4. Remove the row from `AGENTS.md`
+
+The orchestrator will no longer delegate to it.
+
+---
+
+## Choosing models
+
+Agents have no hardcoded model — they use whatever model you configure in your AI tool of choice.
+
+**Claude Code:** Set your preferred model in Claude Code's global settings. You can optionally add a `model:` field to individual agent frontmatter to override on a per-agent basis.
+
+**OpenCode:** Configure your default model in `opencode.json` or via Settings → Providers. Add a `model:` field to individual agent frontmatter to override per-agent:
+
+```json
+{
+  "model": {
+    "default": "your-provider/your-model-id"
+  }
+}
+```
+
+---
+
+## Restricting agent permissions
+
+Each OpenCode agent has a `permission.allow` list that controls which shell commands it can run:
+
+```yaml
+permission:
+  allow:
+    - bash: ["cargo", "rustc", "rustfmt"]
+```
+
+This prevents the rust agent from running `npm`, `python`, or any other tool outside its domain. Claude Code uses tool permissions configured per-project in `CLAUDE.md`.
+
+---
+
+## Adding a custom skill
+
+Skills are markdown files that encode specialized workflows (CLI patterns, TDD sequences, tool usage). They are loaded on demand.
+
+Create `.claude/skills/{name}.md` (and `.opencode/skills/{name}.md`):
+
+```markdown
+# Skill: redis-pub-sub
+
+Use this skill when implementing Redis pub/sub patterns.
+
+## Setup
+Always use connection pooling:
+```bash
+redis-cli -h localhost -p 6379
+```
+
+## Pattern: fan-out
+...
+```
+
+Reference the skill in an agent prompt:
+
+```
+@skill redis-pub-sub
+```
+
+---
+
+## Adjusting the plan.md format
+
+Tasks in `plan.md` follow this format:
+
+```
+- [ ] Task N: @agent-name description of task
+```
+
+Any line matching `- [ ] Task [0-9]+:` with an `@agent-name` is a delegatable task. Checked tasks (`- [x]`) are skipped. Maintain this format if you customise the orchestrator's planning output.
+
+---
+
+## Makefile customization
+
+The template ships with stub targets. Replace the recipe bodies for your stack:
+
+```makefile
+test:
+	pytest tests/unit -v           # Python example
+
+test-integration:
+	docker compose -f docker-compose.test.yml up -d
+	pytest tests/integration -v
+	docker compose -f docker-compose.test.yml down
+
+test-e2e:
+	npx playwright test
+```
+
+The 13-target contract (`build`, `test`, `test-integration`, `test-e2e`, `test-contract`, `test-all`, `lint`, `security-scan`, `fmt`, `containers-up`, `containers-down`, `seed-test`, `migrate`) must remain intact — agents rely on these names.
+
+
+This guide covers how to tailor the AI Development Squad template to your specific stack — adding agents, adjusting models, and restricting what each agent can do.
+
+---
+
+## Adding a custom agent
+
+### Step 1 — Create the Claude Code agent
+
+Create `.claude/agents/{name}.md`:
+
+```markdown
+---
+name: rust
+description: Rust systems programming specialist. Handles Cargo workspaces, async Tokio, and FFI.
 model: claude-sonnet-4-6
 ---
 

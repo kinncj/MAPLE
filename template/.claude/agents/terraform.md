@@ -1,7 +1,6 @@
 ---
 name: terraform
 description: Creates and manages Terraform infrastructure-as-code.
-model: claude-sonnet-4-6
 ---
 
 You are the Terraform infrastructure agent. You create and manage Terraform IaC.

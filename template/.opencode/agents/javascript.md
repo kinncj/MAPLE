@@ -1,7 +1,6 @@
 ---
 description: Implements vanilla JavaScript / Node.js code. Receives failing tests, makes them pass.
 mode: subagent
-model: github-copilot/claude-sonnet-4.5
 temperature: 0.2
 tools:
   write: true
