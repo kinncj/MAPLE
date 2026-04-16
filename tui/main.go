@@ -7,7 +7,7 @@ import (
 	"runtime"
 )
 
-const version = "v3.5.0"
+var version = "dev" // overridden at build time: -ldflags "-X main.version=vX.Y.Z"
 
 func main() {
 	args := os.Args[1:]

@@ -1,22 +1,25 @@
 # Makefile — ai-squad repo root
 # Targets for building, testing, and maintaining the ai-squad platform itself.
 # For targets in your project template, see template/Makefile.
-.PHONY: build-tui test lint sdlc-report sdlc-rotate-logs clean help
+.PHONY: build-tui build-tui-all test lint sdlc-report sdlc-rotate-logs clean help
+
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS  = -s -w -X main.version=$(VERSION)
 
 ## Build the squad TUI binary
 build-tui:
 	@echo "Building squad TUI..."
-	@cd tui && go build -o ../squad .
+	@cd tui && go build -ldflags="$(LDFLAGS)" -o ../squad .
 	@echo "Built: ./squad"
 
 ## Cross-compile squad for all platforms
 build-tui-all:
 	@mkdir -p dist
-	GOOS=darwin  GOARCH=amd64  go build -C tui -o ../dist/squad-darwin-amd64  .
-	GOOS=darwin  GOARCH=arm64  go build -C tui -o ../dist/squad-darwin-arm64  .
-	GOOS=linux   GOARCH=amd64  go build -C tui -o ../dist/squad-linux-amd64   .
-	GOOS=linux   GOARCH=arm64  go build -C tui -o ../dist/squad-linux-arm64   .
-	GOOS=windows GOARCH=amd64  go build -C tui -o ../dist/squad-windows-amd64.exe .
+	GOOS=darwin  GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-darwin-amd64  .
+	GOOS=darwin  GOARCH=arm64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-darwin-arm64  .
+	GOOS=linux   GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-linux-amd64   .
+	GOOS=linux   GOARCH=arm64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-linux-arm64   .
+	GOOS=windows GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-windows-amd64.exe .
 	@echo "Binaries in dist/"
 
 ## Run the test suite for this repo
