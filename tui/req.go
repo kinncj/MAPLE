@@ -275,32 +275,39 @@ Requirements:
 func convertToGherkin(requirements string, ai aiOption) (string, error) {
 	prompt := fmt.Sprintf(gherkinPrompt, requirements)
 
+	out, err := invokeAI(ai, prompt)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", ai.label, err)
+	}
+	return stripFences(strings.TrimSpace(string(out))), nil
+}
+
+// invokeAI runs the selected AI tool and returns its stdout.
+// Prompt is always delivered via stdin to avoid argument-length limits and
+// shell-escaping issues with large texts.
+func invokeAI(ai aiOption, prompt string) ([]byte, error) {
 	var cmd *exec.Cmd
 	switch ai.kind {
 	case "claude":
-		cmd = exec.Command(ai.path, "--print", prompt)
+		// -p = non-interactive print mode; reads prompt from stdin when no arg given
+		cmd = exec.Command(ai.path, "-p")
 	case "opencode":
-		cmd = exec.Command(ai.path, "run", prompt)
+		cmd = exec.Command(ai.path, "run")
 	default:
-		return "", fmt.Errorf("unknown AI tool: %s", ai.kind)
+		return nil, fmt.Errorf("unsupported AI tool: %s", ai.kind)
 	}
 
-	out, err := cmd.Output()
+	cmd.Stdin = strings.NewReader(prompt)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		// Fallback: pipe prompt via stdin (claude also accepts this form)
-		if ai.kind == "claude" {
-			cmd2 := exec.Command(ai.path, "--print")
-			cmd2.Stdin = strings.NewReader(prompt)
-			out, err = cmd2.Output()
+		// Surface the actual error output so users see "not authenticated" etc.
+		msg := strings.TrimSpace(string(out))
+		if msg == "" {
+			msg = err.Error()
 		}
-		if err != nil {
-			return "", fmt.Errorf("%s: %w", ai.label, err)
-		}
+		return nil, fmt.Errorf("%s", msg)
 	}
-
-	result := strings.TrimSpace(string(out))
-	result = stripFences(result)
-	return result, nil
+	return out, nil
 }
 
 func stripFences(s string) string {
