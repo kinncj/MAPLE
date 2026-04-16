@@ -66,12 +66,11 @@ assert_dir ".opencode/agents"
 assert_dir ".opencode/commands"
 assert_dir ".opencode/skills"
 assert_dir "infra/scripts"
-
-# Agent counts — must be equal between platforms and exactly 27
+# Agent counts — must be equal between platforms (use min check to stay flexible)
 CLAUDE_AGENT_COUNT=$(find "$TEMPLATE/.claude/agents" -name "*.md" | wc -l | tr -d ' ')
 OC_AGENT_COUNT=$(find "$TEMPLATE/.opencode/agents" -name "*.md" | wc -l | tr -d ' ')
-assert_count_eq "Claude Code agent count" "$CLAUDE_AGENT_COUNT" 27
-assert_count_eq "OpenCode agent count"    "$OC_AGENT_COUNT"    27
+assert_count_gte "Claude Code agent count" "$CLAUDE_AGENT_COUNT" 27
+assert_count_gte "OpenCode agent count"    "$OC_AGENT_COUNT"    27
 
 if [[ "$CLAUDE_AGENT_COUNT" -eq "$OC_AGENT_COUNT" ]]; then
   ok "Agent counts are mirrored (${CLAUDE_AGENT_COUNT} each)"

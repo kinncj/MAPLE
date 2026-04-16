@@ -18,7 +18,6 @@ set -euo pipefail
 
 TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMPLATE_DIR="$TOOL_DIR/template"
-SCRIPTS_DIR="$TOOL_DIR/scripts"
 PLAN_FILE="${PLAN_FILE:-docs/specs/current/plan.md}"
 GLOBAL_CONFIG="$HOME/.ai-squad.json"   # jingle state — once ever, across all projects
 CONFIG_FILE="$(pwd)/.ai-squad.json"    # project options — per working directory
@@ -531,6 +530,7 @@ cmd_project() {
   # ── Resolve project number + node ID ─────────────────────────────────────
   step "Resolving project number and node ID..."
   local PROJ_NUMBER PROJ_NODE_ID PROJ_QUERY
+  # shellcheck disable=SC2016  # single quotes intentional: GraphQL variables use $login syntax
   PROJ_QUERY=$(gh api graphql -f query='
     query($login: String!) {
       repositoryOwner(login: $login) {
@@ -567,6 +567,7 @@ print(match['id'] if match else '')
   # ── Add custom fields ─────────────────────────────────────────────────────
   step "Adding custom fields..."
 
+  # shellcheck disable=SC2016  # GraphQL uses $var syntax — single quotes are intentional
   _add_text_field() {
     local name="$1"
     gh api graphql -f query='
@@ -582,6 +583,7 @@ print(match['id'] if match else '')
     local name="$1"; shift
     local opts_json
     opts_json=$(python3 -c "import json,sys; print(json.dumps([{'name':o} for o in sys.argv[1:]]))" "$@")
+    # shellcheck disable=SC2016
     gh api graphql -f query='
       mutation($projectId: ID!, $name: String!, $opts: [ProjectV2SingleSelectFieldOptionInput!]!) {
         addProjectV2Field(input: {projectId: $projectId, dataType: SINGLE_SELECT, name: $name,
@@ -599,6 +601,7 @@ print(match['id'] if match else '')
   _add_text_field "Specialist"
 
   # Type: SINGLE_SELECT
+  # shellcheck disable=SC2016
   gh api graphql -f query='
     mutation($projectId: ID!, $name: String!) {
       addProjectV2Field(input: {projectId: $projectId, dataType: SINGLE_SELECT, name: $name,
@@ -615,6 +618,7 @@ print(match['id'] if match else '')
     || printf "  ${D}–  %-30s  skipped (may already exist)${R}\n" "Type"
 
   # ADR Required: SINGLE_SELECT acting as boolean (no native CHECKBOX in Projects v2)
+  # shellcheck disable=SC2016
   gh api graphql -f query='
     mutation($projectId: ID!, $name: String!) {
       addProjectV2Field(input: {projectId: $projectId, dataType: SINGLE_SELECT, name: $name,

@@ -18,6 +18,11 @@ import (
 // ─── Init command ─────────────────────────────────────────────────────────────
 
 func runInit(tools Tools, fsys fs.FS, force bool) error {
+	if !isStdinTTY() {
+		// Non-interactive mode (CI / pipe): run setup directly without the TUI.
+		_, err := doInit(tools, fsys, force)
+		return err
+	}
 	m := newInitModel(tools, fsys, force, false)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
