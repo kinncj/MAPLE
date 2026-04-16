@@ -17,13 +17,9 @@ import (
 
 // ─── Requirements command ─────────────────────────────────────────────────────
 
-// aiOption represents one available AI tool the user can choose.
-type aiOption struct {
-	label string // display name
-	kind  string // "claude" | "opencode" | "gh-copilot"
-	path  string // binary path
-}
-
+// availableAITools returns tools that support arbitrary prompt → text generation.
+// gh copilot is intentionally excluded: it is a shell-command assistant (explain/suggest)
+// and exits 1 when given a general-purpose prompt.
 func availableAITools(tools Tools) []aiOption {
 	var opts []aiOption
 	if tools.Claude != "" {
@@ -32,15 +28,13 @@ func availableAITools(tools Tools) []aiOption {
 	if tools.OpenCode != "" {
 		opts = append(opts, aiOption{"OpenCode", "opencode", tools.OpenCode})
 	}
-	if tools.GHCopilot && tools.GH != "" {
-		opts = append(opts, aiOption{"GitHub Copilot", "gh-copilot", tools.GH})
-	}
 	return opts
 }
 
 func runReq(tools Tools) error {
-	if !tools.HasAI() {
-		return fmt.Errorf("no AI tool found (need claude, opencode, or gh copilot)")
+	opts := availableAITools(tools)
+	if len(opts) == 0 {
+		return fmt.Errorf("no AI tool available for requirements conversion — install claude or opencode")
 	}
 	m := newReqModel(tools)
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -287,15 +281,13 @@ func convertToGherkin(requirements string, ai aiOption) (string, error) {
 		cmd = exec.Command(ai.path, "--print", prompt)
 	case "opencode":
 		cmd = exec.Command(ai.path, "run", prompt)
-	case "gh-copilot":
-		cmd = exec.Command(ai.path, "copilot", "explain", prompt)
 	default:
 		return "", fmt.Errorf("unknown AI tool: %s", ai.kind)
 	}
 
 	out, err := cmd.Output()
 	if err != nil {
-		// Fallback: try piping via stdin for claude
+		// Fallback: pipe prompt via stdin (claude also accepts this form)
 		if ai.kind == "claude" {
 			cmd2 := exec.Command(ai.path, "--print")
 			cmd2.Stdin = strings.NewReader(prompt)

@@ -91,9 +91,9 @@ func buildMenuItems(tools Tools, initialized bool) []menuItem {
 	}
 
 	req := menuItem{action: menuReq, label: "Requirements", desc: "Write requirements → Gherkin story"}
-	if !tools.HasAI() {
+	if !tools.HasReqAI() {
 		req.disabled = true
-		req.why = "needs claude, opencode, or gh copilot"
+		req.why = "needs claude or opencode"
 	}
 	items = append(items, req)
 

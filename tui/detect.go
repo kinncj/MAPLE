@@ -32,10 +32,23 @@ func Detect() Tools {
 	return t
 }
 
-// HasAI returns true if at least one AI tool is available.
+// aiOption represents one available AI tool that supports general-purpose prompt → text.
+type aiOption struct {
+	label string // display name
+	kind  string // "claude" | "opencode"
+	path  string // binary path
+}
+
+// HasAI returns true if at least one AI tool is available (for init/detection purposes).
 func (t Tools) HasAI() bool {
 	return t.Claude != "" || t.OpenCode != "" || t.GHCopilot
 }
+
+// HasReqAI returns true if at least one tool capable of requirements→Gherkin is available.
+func (t Tools) HasReqAI() bool {
+	return t.Claude != "" || t.OpenCode != ""
+}
+
 
 // PreferredAI returns the name of the first available AI tool.
 func (t Tools) PreferredAI() string {
