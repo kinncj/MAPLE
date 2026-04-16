@@ -73,6 +73,7 @@ jobs:
           cp -r template tui/template
           go build -C tui -o ../squad .
 
+      - name: Configure git identity
         run: |
           git config --global user.email "ai-squad@noreply"
           git config --global user.name "AI Development Squad"
