@@ -455,7 +455,7 @@ done
 
 # ─── Phase VI: TUI ────────────────────────────────────────────────────────────
 
-for f in go.mod main.go app.go themes.go ui.go README.md; do
+for f in go.mod go.sum main.go detect.go init.go req.go gh_cmds.go themes.go README.md; do
   if [[ -f "tui/$f" ]]; then
     ok "tui/$f present"
   else
@@ -479,14 +479,30 @@ for theme in tokyoNight catppuccinMocha gruvbox nord everforest; do
   fi
 done
 
-# Key keybindings documented in README
-for key in "Tab" "Shift+Tab" "superpower" ":kickoff" ":theme" ":resume" "Ctrl+c"; do
-  if grep -q "$key" tui/README.md; then
-    ok "tui README documents: $key"
+# squad binary commands documented in README
+for cmd in "squad init" "squad req" "squad labels" "squad project"; do
+  if grep -q "$cmd" tui/README.md; then
+    ok "tui README documents: $cmd"
   else
-    fail "tui README missing: $key"
+    fail "tui README missing: $cmd"
   fi
 done
+
+# squad binary builds and responds to --help
+SQUAD_BIN="$REPO_ROOT/squad"
+if [[ -f "$SQUAD_BIN" ]] || (cd "$REPO_ROOT/tui" && go build -o "$SQUAD_BIN" . 2>/dev/null); then
+  ok "squad binary builds"
+  SQUAD_HELP=$("$SQUAD_BIN" --help 2>&1 || true)
+  for cmd in "init" "req" "labels" "project"; do
+    if printf '%s' "$SQUAD_HELP" | grep -q "$cmd"; then
+      ok "squad --help lists: $cmd"
+    else
+      fail "squad --help missing: $cmd"
+    fi
+  done
+else
+  fail "squad binary failed to build"
+fi
 
 # ─── Phase VII: Enforcement ───────────────────────────────────────────────────
 

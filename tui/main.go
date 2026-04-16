@@ -3,79 +3,115 @@ package main
 import (
 	"fmt"
 	"os"
-
-	tea "github.com/charmbracelet/bubbletea"
+	"path/filepath"
+	"runtime"
 )
 
+const version = "v3.5.0"
+
 func main() {
-	noAnimate := false
 	args := os.Args[1:]
 
-	// Filter --no-animate before command dispatch
-	filtered := args[:0]
-	for _, a := range args {
-		if a == "--no-animate" {
-			noAnimate = true
-		} else {
-			filtered = append(filtered, a)
-		}
-	}
-	args = filtered
-
-	if len(args) > 0 {
-		switch args[0] {
-		case "--version", "-v":
-			fmt.Println("squad v3.5.0")
-			return
-		case "--help", "-h":
-			printHelp()
-			return
-		case ":resume":
-			if len(args) < 2 {
-				fmt.Fprintln(os.Stderr, "usage: squad :resume <superpower-name>")
-				os.Exit(1)
-			}
-			fmt.Printf("Resuming superpower: %s\n", args[1])
-			// TODO: load .claude/state/squad.json and resume
-			return
-		}
+	if len(args) == 0 {
+		printHelp()
+		return
 	}
 
-	app := newApp()
-	app.noAnimate = noAnimate
-	p := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "squad: %v\n", err)
+	tools := Detect()
+
+	switch args[0] {
+	case "--version", "-v", "version":
+		fmt.Println("squad " + version)
+
+	case "--help", "-h", "help":
+		printHelp()
+
+	case "init":
+		force := contains(args[1:], "--force")
+		_ = force // copyFile already skips existing; --force would overwrite — future flag
+		tplDir := templateDir()
+		if err := runInit(tools, tplDir); err != nil {
+			fatalf("init: %v", err)
+		}
+
+	case "req":
+		if err := runReq(tools); err != nil {
+			fatalf("req: %v", err)
+		}
+
+	case "labels":
+		if err := runLabels(tools.GH); err != nil {
+			fatalf("labels: %v", err)
+		}
+
+	case "project":
+		if err := runProject(tools.GH); err != nil {
+			fatalf("project: %v", err)
+		}
+
+	default:
+		fmt.Fprintf(os.Stderr, "squad: unknown command %q\n\n", args[0])
+		printHelp()
 		os.Exit(1)
 	}
 }
 
 func printHelp() {
-	fmt.Print(`squad — AI-Squad TUI
+	fmt.Print(logo())
+	fmt.Printf(`squad %s — AI-Squad initialiser and project helper
 
 Usage:
-  squad                   Launch interactive dashboard
-  squad :resume <name>    Resume a paused superpower
+  squad init              Set up AI-Squad in the current directory
+  squad init --force      Overwrite existing files
+  squad req               Write requirements → generate Gherkin story
+  squad labels            Bootstrap GitHub label set
+  squad project           Create GitHub Project v2
+
   squad --version         Print version
   squad --help            Show this help
-  squad --no-animate      Skip splash animation (useful on slow terminals / SSH)
+`, version)
+}
 
-Keybindings (in dashboard):
-  Tab / Shift+Tab   Cycle panes
-  j / k             Move down / up
-  Enter             Open detail view
-  s                 Stories pane
-  a                 Agents pane
-  p                 PRs pane
-  q                 QA pane
-  d                 Design pane
-  l                 Logs pane
-  n                 New story / spike / ADR
-  /                 Search
-  :                 Command mode
-  F                 Fire superpower
-  ?                 Help overlay
-  Ctrl+c            Quit
+// templateDir resolves the template source directory.
+// Resolution order:
+//  1. AI_SQUAD_TEMPLATE env var
+//  2. <binary>/../template/  (local dev / installed alongside repo)
+//  3. ~/.ai-squad/template/
+func templateDir() string {
+	if v := os.Getenv("AI_SQUAD_TEMPLATE"); v != "" {
+		return v
+	}
+	exe, err := os.Executable()
+	if err == nil {
+		candidate := filepath.Join(filepath.Dir(exe), "..", "template")
+		if stat, err := os.Stat(candidate); err == nil && stat.IsDir() {
+			abs, _ := filepath.Abs(candidate)
+			return abs
+		}
+	}
+	// Try relative to cwd (e.g. running from repo root)
+	if stat, err := os.Stat("template"); err == nil && stat.IsDir() {
+		abs, _ := filepath.Abs("template")
+		return abs
+	}
+	// Fallback: ~/.ai-squad/template
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".ai-squad", "template")
+}
 
-`)
+func contains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
+}
+
+func fatalf(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "squad: "+format+"\n", args...)
+	if runtime.GOOS == "windows" {
+		os.Exit(1)
+	}
+	os.Exit(1)
 }

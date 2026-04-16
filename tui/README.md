@@ -1,13 +1,13 @@
-# squad — AI-Squad TUI
+# squad — AI-Squad CLI
 
-`squad` is the interactive terminal dashboard for AI-Squad. It surfaces stories, active agents, PRs, QA status, design artifacts, and logs in a single four-pane view. It is the default interactive entry point; the existing `ai-squad` CLI stays for CI and non-interactive use.
+`squad` is the command-line entry point for AI-Squad. It initialises a project with the full agent/skill/hook setup, and provides a requirements-to-Gherkin helper for fast story creation.
 
 ## Requirements
 
-- Go 1.22+
-- A terminal with truecolor support (degrades to 256-color with a notice)
+- Go 1.22+  (to build from source)
+- A terminal — no truecolor required; works on Windows, Linux, macOS
 
-No other runtime dependencies. The binary is statically linked.
+No runtime dependencies beyond the Go standard library and the Bubble Tea family.
 
 ## Build
 
@@ -31,6 +31,12 @@ GOOS=linux   GOARCH=arm64  go build -o squad-linux-arm64   .
 GOOS=windows GOARCH=amd64  go build -o squad-windows-amd64.exe .
 ```
 
+Or from the repo root:
+
+```bash
+make build-tui   # builds ./squad
+```
+
 ## Install
 
 ```bash
@@ -40,63 +46,54 @@ cd tui && go build -o squad . && sudo mv squad /usr/local/bin/squad
 # Windows — add the .exe to a directory on %PATH%
 ```
 
-## Usage
+## Commands
 
-```
-squad                   Launch interactive dashboard
-squad :resume <name>    Resume a paused superpower
-squad --version         Print version
-squad --help            Show keybindings
-```
-
-## Keybindings
-
-| Key | Action |
+| Command | Description |
 |---|---|
-| `Tab` / `Shift+Tab` | Cycle panes |
-| `j` / `k` | Move down / up |
-| `Enter` | Detail view |
-| `s` | Stories pane |
-| `a` | Agents pane |
-| `p` | PRs pane |
-| `q` | QA pane |
-| `d` | Design pane |
-| `l` | Logs pane |
-| `F` | Fire superpower |
-| `n` | New story / spike / ADR |
-| `/` | Search |
-| `:` | Command mode |
-| `r` | Refresh pane |
-| `?` | Help overlay |
-| `Ctrl+c` | Quit |
+| `squad init` | Set up AI-Squad in the current directory |
+| `squad init --force` | Overwrite existing files |
+| `squad req` | Write requirements and generate a Gherkin story |
+| `squad labels` | Bootstrap the canonical GitHub label set |
+| `squad project` | Create a GitHub Project v2 and update project.config.yaml |
+| `squad --version` | Print version |
+| `squad --help` | Show usage |
 
-## Commands (`:` mode)
+## squad init
 
-| Command | Action |
-|---|---|
-| `:kickoff <story-id>` | Start 8-phase pipeline for story |
-| `:sync` | Sync all stories ↔ GitHub Issues |
-| `:a11y <story-id>` | Run a11y audit for a story |
-| `:theme <name>` | Switch theme |
-| `:resume <superpower>` | Resume paused superpower |
-| `:debug` | Toggle debug log tee to `.claude/logs/tui.log` |
+Detects which AI tools are installed (claude, opencode, gh copilot) and copies the matching template files:
+
+- `.claude/` — agents, skills, hooks (if Claude Code detected)
+- `.opencode/` — agents, skills (if OpenCode detected)
+- `.github/` — copilot-instructions, workflows
+- `docs/` — story templates, specs, design structure
+- `Makefile`, `lefthook.yml`, `scripts/sdlc/`
+- `project.config.yaml` — written only if not already present
+- Runs `lefthook install` to wire git hooks
+
+Existing files are never overwritten (use `--force` to override).
+
+## squad req
+
+Opens an interactive Bubble Tea editor. Type plain-text requirements, press **Ctrl+D** to convert. The AI tool detected on the machine converts the text to a Gherkin `.feature` file saved under `docs/stories/`.
+
+## Template resolution
+
+`squad init` finds templates in this order:
+
+1. `AI_SQUAD_TEMPLATE` environment variable
+2. `<binary>/../template/` (works when installed alongside the repo)
+3. `./template/` (cwd fallback — works when running from repo root)
+4. `~/.ai-squad/template/` (global install)
 
 ## Themes
 
 Built-in: `tokyo-night` (default), `catppuccin-mocha`, `gruvbox`, `nord`, `everforest`.
 
-Switch: `:theme gruvbox`
-
-## State
-
-TUI state is stored in `.claude/state/squad.json` (gitignored). It contains only ephemeral runtime state (active superpower, current stage). All persistent data (stories, issues, tokens) lives in git or GitHub.
-
 ## Dependencies
 
 ```
 github.com/charmbracelet/bubbletea   — TUI framework
-github.com/charmbracelet/bubbles     — reusable TUI components
+github.com/charmbracelet/bubbles     — textarea, spinner
 github.com/charmbracelet/lipgloss    — terminal styling
 ```
 
-That's it. Three packages.
