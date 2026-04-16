@@ -103,7 +103,7 @@ graph TB
 
 ---
 
-## The 17 skills
+## The 31 skills
 
 Skills are markdown files agents read before executing specific tasks. They encode CLI patterns, workflows, and tool usage. They are loaded on demand — not injected on every turn — keeping token costs low.
 
@@ -287,7 +287,7 @@ graph LR
 
 ---
 
-## The 17 skills
+## The 31 skills
 
 Skills are markdown files agents read before executing specific tasks. They encode CLI patterns, workflows, and tool usage. They are loaded on demand — not injected on every turn — keeping token costs low.
 

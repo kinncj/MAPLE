@@ -41,23 +41,34 @@ bash tests/run_all.sh
 ```
 .
 ├── scripts/
-│   └── ai-squad              # Global CLI (init · labels · swarm)
+│   └── ai-squad              # Global CLI (init · labels · project)
+├── tui/                      # squad TUI binary (Go + Bubble Tea)
 ├── template/                 # Everything copied on ai-squad init
-│   ├── .claude/agents/       # 27 Claude Code agent definitions
-│   ├── .claude/commands/     # 5 slash commands
-│   ├── .claude/skills/       # 17 skill files
-│   ├── .opencode/agents/     # 27 OpenCode agent definitions (mirrored)
+│   ├── .claude/agents/       # 34 Claude Code agent definitions
+│   ├── .claude/commands/     # slash commands
+│   ├── .claude/skills/       # 31 skill files
+│   ├── .claude/superpowers/  # composed named workflows
+│   ├── .opencode/agents/     # 34 OpenCode agent definitions (mirrored)
 │   ├── .opencode/commands/
 │   ├── .opencode/skills/
-│   ├── infra/scripts/        # seed-test.sh (called by make seed-test)
+│   ├── .github/workflows/    # sdlc-gates CI
+│   ├── scripts/sdlc/         # gate scripts (validate-frontmatter, a11y, design, spec-kit, rotate-logs)
+│   ├── lefthook.yml          # pre-push, pre-commit, post-merge hooks
 │   ├── Makefile
 │   ├── CLAUDE.md
 │   ├── AGENTS.md
 │   └── opencode.json
+├── docs/
+│   ├── examples/             # ui-feature, api-endpoint, spike walk-throughs
+│   ├── specs/                # spec-kit outputs
+│   └── design/               # design artifacts (wireframes, mockups, tokens)
 ├── tests/
-│   ├── cli/                  # CLI tests
-│   └── template/             # Template validation tests
-└── .github/workflows/        # CI/CD
+│   ├── cli/                  # CLI tests (218 assertions)
+│   └── features/             # generated .feature files (qa-cucumber output)
+└── .github/
+    ├── workflows/            # ci.yml, validate-integrations.yml
+    ├── copilot-instructions.md
+    └── pull_request_template.md
 ```
 
 ---
@@ -69,7 +80,7 @@ Every pull request runs:
 | Job | What it checks |
 |---|---|
 | **Lint** | `shellcheck` on all `.sh` files |
-| **CLI Tests** | `ai-squad help`, `swarm help`, `init`, file count assertions |
+| **CLI Tests** | `ai-squad help`, `init`, file count assertions |
 | **Template Validation** | Structure, agent frontmatter, skills, commands |
 | **Model ID Audit** | No stale date-suffixed IDs; Orchestrator/Architect use Opus |
 

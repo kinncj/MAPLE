@@ -27,4 +27,4 @@ npm-debug.log*
 var/*
 
 # Swarm v2 session data (worktrees, status files, result.md)
-.swarm/
+.swarm/squad

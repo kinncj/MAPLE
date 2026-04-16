@@ -141,7 +141,7 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "ctrl+c", "q":
+	case "ctrl+c":
 		return a, tea.Quit
 	case "?":
 		a.showHelp = !a.showHelp

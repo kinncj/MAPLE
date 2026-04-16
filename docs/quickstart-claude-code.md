@@ -134,9 +134,9 @@ sequenceDiagram
 ```
 my-project/
 ├── .claude/
-│   ├── agents/          # 27 agent definitions
+│   ├── agents/          # 34 agent definitions
 │   ├── commands/        # /feature, /bugfix, /validate, /tdd
-│   └── skills/          # 17 reusable skill files
+│   └── skills/          # 31 reusable skill files
 ├── .opencode/           # Mirror for OpenCode platform
 ├── CLAUDE.md            # Project rules loaded by Claude Code
 ├── Makefile             # 13-target build/test contract
@@ -298,9 +298,9 @@ sequenceDiagram
 ```
 my-project/
 ├── .claude/
-│   ├── agents/          # 27 agent definitions
+│   ├── agents/          # 34 agent definitions
 │   ├── commands/        # /feature, /bugfix, /validate, /tdd
-│   └── skills/          # 17 reusable skill files
+│   └── skills/          # 31 reusable skill files
 ├── .opencode/           # Mirror for OpenCode platform
 ├── CLAUDE.md            # Project rules loaded by Claude Code
 ├── Makefile             # 13-target build/test contract

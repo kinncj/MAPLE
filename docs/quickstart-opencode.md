@@ -84,9 +84,9 @@ OpenCode will invoke the orchestrator agent, which drives the full 8-phase pipel
 ```
 my-project/
 ├── .opencode/
-│   ├── agents/          # 27 agent definitions (OpenCode frontmatter)
+│   ├── agents/          # 34 agent definitions (OpenCode frontmatter)
 │   ├── commands/        # /feature, /bugfix, /validate, /tdd
-│   └── skills/          # 17 reusable skill files
+│   └── skills/          # 31 reusable skill files
 ├── .claude/             # Mirror for Claude Code platform
 ├── opencode.json        # OpenCode project config
 ├── Makefile             # 13-target build/test contract
@@ -194,7 +194,7 @@ mkdir my-project && cd my-project
 ai-squad init
 ```
 
-During `ai-squad init` you will be asked which providers you have. Answer honestly — the wizard rewrites all 27 agent `.md` files and `opencode.json` to use the right `provider/model-id` strings for your subscription.
+During `ai-squad init` you will be asked which providers you have. Answer honestly — the wizard rewrites all 34 agent `.md` files and `opencode.json` to use the right `provider/model-id` strings for your subscription.
 
 **If you have both Anthropic API + GitHub Copilot Enterprise:**
 - Orchestrator and Architect → `anthropic/claude-opus-4-6`
@@ -258,9 +258,9 @@ OpenCode will invoke the orchestrator agent, which drives the full 8-phase pipel
 ```
 my-project/
 ├── .opencode/
-│   ├── agents/          # 27 agent definitions (OpenCode frontmatter)
+│   ├── agents/          # 34 agent definitions (OpenCode frontmatter)
 │   ├── commands/        # /feature, /bugfix, /validate, /tdd
-│   └── skills/          # 17 reusable skill files
+│   └── skills/          # 31 reusable skill files
 ├── .claude/             # Mirror for Claude Code platform
 ├── opencode.json        # OpenCode project config (model routing)
 ├── Makefile             # 13-target build/test contract

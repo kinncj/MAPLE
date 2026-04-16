@@ -311,7 +311,7 @@ Provider model ID strings:
 | GitHub Copilot Enterprise | Claude Sonnet 4.5 | `github-copilot/claude-sonnet-4.5` |
 | GitHub Copilot Enterprise | GPT-4.1 | `copilot/gpt-4.1` |
 
-Re-run `ai-squad init` (answer the provider prompts) to automatically rewrite all 27 agent files for your subscription.
+Re-run `ai-squad init` (answer the provider prompts) to automatically rewrite all 34 agent files for your subscription.
 
 ---
 
