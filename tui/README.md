@@ -85,8 +85,6 @@ squad --help            Show keybindings
 
 Built-in: `tokyo-night` (default), `catppuccin-mocha`, `gruvbox`, `nord`, `everforest`.
 
-Auto-detects Omarchy theme from `~/.config/omarchy/current/theme` when available.
-
 Switch: `:theme gruvbox`
 
 ## State

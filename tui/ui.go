@@ -161,6 +161,8 @@ func (p *StoriesPane) Init() tea.Cmd { return nil }
 func (p *AgentsPane) Init() tea.Cmd  { return nil }
 func (l *LogsPane) Init() tea.Cmd    { return nil }
 func (l *LogsPane) Tick() tea.Cmd    { return nil } // TODO: tail .claude/logs/skills.jsonl
+
+func (p *StoriesPane) View(w, h int) string {
 	// TODO: read docs/stories/*.md and gh issue list
 	placeholder := []string{
 		"● 0042  export-csv       ▸ Implement",

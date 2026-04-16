@@ -31,18 +31,10 @@ type Theme struct {
 	WarningText lipgloss.Style
 }
 
-// loadTheme detects the Omarchy theme, falls back to tokyo-night.
+// loadTheme returns the default theme (tokyo-night).
+// Use themeByName to switch at runtime via :theme <name>.
 func loadTheme() Theme {
-	if t, ok := loadOmarchyTheme(); ok {
-		return t
-	}
 	return tokyoNight()
-}
-
-func loadOmarchyTheme() (Theme, bool) {
-	// TODO: read ~/.config/omarchy/current/theme and parse palette
-	// Return false if file not found or parse fails
-	return Theme{}, false
 }
 
 func buildTheme(name string, primary, accent, success, warning, errColor, muted, bg, fg string) Theme {
