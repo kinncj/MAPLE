@@ -1,6 +1,6 @@
 # Quickstart — Claude Code
 
-This guide gets you from zero to a running feature pipeline using **Claude Code** and the AI Development Squad template.
+Get from zero to a running feature pipeline using **Claude Code** and AI Squad.
 
 ---
 
@@ -11,319 +11,152 @@ This guide gets you from zero to a running feature pipeline using **Claude Code*
 | [Claude Code](https://claude.ai/claude-code) | `npm install -g @anthropic-ai/claude-code` |
 | [GitHub CLI](https://cli.github.com) | `brew install gh` |
 | [Git](https://git-scm.com) | pre-installed on macOS/Linux |
-| [Node.js](https://nodejs.org) | `brew install node` (for Playwright E2E tests) |
+| [Go 1.22+](https://go.dev) | `brew install go` *(only to build from source)* |
+| [Node.js](https://nodejs.org) | `brew install node` *(Playwright E2E tests)* |
 | [Docker](https://docker.com) | [docker.com/get-started](https://docker.com/get-started) |
 
 ---
 
-## Installation
+## 1. Install `squad`
 
-```mermaid
-flowchart TD
-    A["Clone the template globally"] --> B["Add scripts/ to PATH"]
-    B --> C["Scaffold a new project"]
-    C --> D["Authenticate gh CLI"]
-    D --> E["Start your first feature"]
-```
-
-### 1. Install the CLI globally
+**From source (preferred):**
 
 ```bash
-git clone https://github.com/kinncj/AI-Development-Squad-Template.git ~/.ai-squad
-echo 'export PATH="$HOME/.ai-squad/scripts:$PATH"' >> ~/.zshrc
+git clone https://github.com/kinncj/AI-Squad.git ai-squad
+cd ai-squad
+make build-tui           # produces ./squad
+```
+
+Add to your PATH — pick one:
+
+```bash
+# Option A: move to a system bin
+sudo mv squad /usr/local/bin/squad
+
+# Option B: add repo directory to PATH (useful during development)
+export PATH="$PWD:$PATH"   # add to ~/.zshrc / ~/.bashrc to persist
+
+# Option C: install to ~/.tools/ai-squad/bin (recommended for personal installs)
+mkdir -p ~/.tools/ai-squad/bin
+mv squad ~/.tools/ai-squad/bin/squad
+echo 'export PATH="$HOME/.tools/ai-squad/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
+```
+
+**From a release (no Go required):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.sh | bash
+# installs to ~/.tools/ai-squad/bin/ and prints PATH instructions
 ```
 
 Verify:
 
 ```bash
-ai-squad help
+squad --version
 ```
-
-### 2. Scaffold a new project
-
-```bash
-mkdir my-project && cd my-project
-ai-squad init
-```
-
-`ai-squad init` will:
-- Copy all agent definitions, commands, and skills into the project
-- Initialize a git repository
-- Install npm dependencies (Playwright)
-- Offer to bootstrap GitHub labels
-
-### 3. Connect a remote repository
-
-```bash
-gh auth login
-gh repo create my-project --public --push --source=.
-```
-
-### 4. Bootstrap GitHub labels (optional but recommended)
-
-```bash
-ai-squad labels
-```
-
-This creates the full label set the orchestrator uses to track pipeline phases.
 
 ---
 
-## Running your first feature
+## 2. Scaffold a project
 
-Open Claude Code in your project directory and run:
+```bash
+mkdir my-project && cd my-project
+git init
+squad init
+```
+
+`squad init` detects which AI tools are installed and copies the matching agent definitions, skills, hooks, Makefile, and config. Existing files are never overwritten.
+
+```bash
+squad labels       # bootstrap GitHub label set (requires gh auth login)
+squad project      # create a GitHub Project v2 (optional)
+```
+
+---
+
+## 3. Write your first requirement
+
+```bash
+squad req
+```
+
+Type your requirement in plain text, press `Ctrl+D`. AI Squad converts it to a Gherkin story saved under `docs/stories/`.
+
+---
+
+## 4. Run the pipeline
+
+Open Claude Code in your project directory:
+
+```bash
+claude
+```
+
+Then run:
 
 ```
 /feature "describe your feature here"
 ```
 
-Claude Code will invoke the orchestrator, which drives all 8 phases sequentially in a single session. Use Claude Code's built-in sub-agent support to run specialist agents in parallel if needed.
+The orchestrator drives all 8 phases: DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE. It pauses at each human-approval gate and surfaces results as GitHub Issues.
+
+---
+
+## Rubber Duck (second opinion)
+
+Claude Code invokes `@rubber-duck` automatically at three checkpoints:
+
+1. **After plan** — before implementation starts
+2. **After complex multi-file implementations** — before tests run
+3. **After tests written** — before executing them
+
+You can also trigger it manually: just ask Claude to "critique your work" or "get a second opinion."
 
 ---
 
 ## Available commands
 
-Run these inside Claude Code with `/command-name`:
-
 | Command | What it does |
 |---|---|
 | `/feature "description"` | Full 8-phase pipeline from discovery to PR |
-| `/build-feature "description"` | Alias for `/feature` |
 | `/bugfix "description"` | Reproduce → fix → validate → CHANGELOG |
-| `/validate` | Run the full test suite (no discovery/architecture) |
+| `/validate` | Run full test suite (skips discovery/architecture) |
 | `/tdd "requirement"` | Single RED → GREEN → REFACTOR cycle |
 
 ---
 
-## Workflow overview
-
-```mermaid
-sequenceDiagram
-    participant H as Human
-    participant ORC as Orchestrator
-    participant PO as @product-owner
-    participant ARCH as @architect
-    participant QA as @qa
-    participant DEV as Specialist agents
-    participant DOCS as @docs
-
-    H->>ORC: /feature "description"
-    ORC->>PO: Phase 1 — write stories & acceptance criteria
-    PO-->>H: stories.md (human gate)
-    H-->>ORC: approved
-    ORC->>ARCH: Phase 2 — ADR, contracts, threat model
-    ARCH-->>H: architecture.md (human gate)
-    H-->>ORC: approved
-    ORC->>ORC: Phase 3 — decompose into plan.md
-    ORC->>DEV: Phase 4 — spin up infra
-    loop Each task in plan.md
-        ORC->>QA: write failing test (RED)
-        ORC->>DEV: make test pass (GREEN)
-        ORC->>DEV: refactor
-    end
-    ORC->>QA: Phase 6 — full validation suite
-    ORC->>DOCS: Phase 7 — docs, CHANGELOG
-    ORC->>H: Phase 8 — PR created ✅
-```
-
----
-
-## Project structure after `ai-squad init`
+## Project structure after `squad init`
 
 ```
 my-project/
 ├── .claude/
-│   ├── agents/          # 34 agent definitions
+│   ├── agents/          # 35 agent definitions (incl. rubber-duck)
 │   ├── commands/        # /feature, /bugfix, /validate, /tdd
-│   └── skills/          # 31 reusable skill files
-├── .opencode/           # Mirror for OpenCode platform
-├── CLAUDE.md            # Project rules loaded by Claude Code
-├── Makefile             # 13-target build/test contract
-├── docker-compose.test.yml
-└── docs/specs/          # Pipeline artifact output
+│   ├── hooks/           # pre/post tool-use enforcement
+│   └── skills/          # 32 reusable skill files
+├── .opencode/           # Mirror for OpenCode
+├── .github/
+│   ├── copilot-instructions.md   # Copilot CLI rules
+│   └── instructions/             # path-specific rules
+├── CLAUDE.md            # Project rules loaded on every Claude Code session
+├── Makefile             # build/test/lint contract
+├── project.config.yaml  # stack detection, SDLC mode
+└── docs/stories/        # Gherkin stories (source of truth)
 ```
-
----
-
-## Customizing for your stack
-
-See [Customization Guide](./customization.md).
 
 ---
 
 ## Troubleshooting
 
-**`claude: command not found`**
-Install Claude Code: `npm install -g @anthropic-ai/claude-code`
-
-**`ai-squad: command not found`**
-Check your PATH: `echo $PATH | grep ai-squad`
-Re-run: `source ~/.zshrc`
-
-**Agent doesn't start a phase**
-Ensure `CLAUDE.md` is present in your project root — it contains the project rules the orchestrator reads.
-
-
----
-
-## Installation
-
-```mermaid
-flowchart TD
-    A["Clone the template globally"] --> B["Add scripts/ to PATH"]
-    B --> C["Scaffold a new project"]
-    C --> D["Authenticate gh CLI"]
-    D --> E["Start your first feature"]
-```
-
-### 1. Install the CLI globally
-
-```bash
-git clone https://github.com/kinncj/AI-Development-Squad-Template.git ~/.ai-squad
-echo 'export PATH="$HOME/.ai-squad/scripts:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-Verify:
-
-```bash
-ai-squad help
-```
-
-### 2. Scaffold a new project
-
-```bash
-mkdir my-project && cd my-project
-ai-squad init
-```
-
-`ai-squad init` will:
-- Copy all agent definitions, commands, and skills into the project
-- Initialize a git repository
-- Install npm dependencies (Playwright)
-- Offer to bootstrap GitHub labels
-
-### 3. Connect a remote repository
-
-```bash
-gh auth login
-gh repo create my-project --public --push --source=.
-```
-
-### 4. Bootstrap GitHub labels (optional but recommended)
-
-```bash
-ai-squad labels
-```
-
-This creates the full label set the orchestrator uses to track pipeline phases.
-
----
-
-## Running your first feature
-
-### Option A — `squad` TUI (recommended)
-
-Install and launch the interactive dashboard:
-
-```bash
-cd ~/.ai-squad/tui && go build -o ~/bin/squad .
-cd your-project && squad
-```
-
-Press `F` to fire a superpower (e.g. `new-ui-feature`), or use `:kickoff <story-id>` to start the 8-phase pipeline for a specific story.
-
-### Option B — `ai-squad` CLI (non-interactive / CI)
-
-Open Claude Code in your project directory and run:
-
-```
-/feature "describe your feature here"
-```
-
-Claude Code invokes the orchestrator, which drives all 8 phases sequentially.
-
----
-
-## Available commands
-
-Run these inside Claude Code with `/command-name`:
-
-| Command | What it does |
-|---|---|
-| `/feature "description"` | Full 8-phase pipeline from discovery to PR |
-| `/build-feature "description"` | Alias for `/feature` |
-| `/bugfix "description"` | Reproduce → fix → validate → CHANGELOG |
-| `/validate` | Run the full test suite (no discovery/architecture) |
-| `/tdd "requirement"` | Single RED → GREEN → REFACTOR cycle |
-
----
-
-## Workflow overview
-
-```mermaid
-sequenceDiagram
-    participant H as Human
-    participant ORC as Orchestrator
-    participant PO as @product-owner
-    participant ARCH as @architect
-    participant QA as @qa
-    participant DEV as Specialist agents
-    participant DOCS as @docs
-
-    H->>ORC: /feature "description"
-    ORC->>PO: Phase 1 — write stories & acceptance criteria
-    PO-->>H: stories.md (human gate)
-    H-->>ORC: approved
-    ORC->>ARCH: Phase 2 — ADR, contracts, threat model
-    ARCH-->>H: architecture.md (human gate)
-    H-->>ORC: approved
-    ORC->>ORC: Phase 3 — decompose into plan.md
-    ORC->>DEV: Phase 4 — spin up infra
-    loop Each task in plan.md
-        ORC->>QA: write failing test (RED)
-        ORC->>DEV: make test pass (GREEN)
-        ORC->>DEV: refactor
-    end
-    ORC->>QA: Phase 6 — full validation suite
-    ORC->>DOCS: Phase 7 — docs, CHANGELOG
-    ORC->>H: Phase 8 — PR created ✅
-```
-
----
-
-## Project structure after `ai-squad init`
-
-```
-my-project/
-├── .claude/
-│   ├── agents/          # 34 agent definitions
-│   ├── commands/        # /feature, /bugfix, /validate, /tdd
-│   └── skills/          # 31 reusable skill files
-├── .opencode/           # Mirror for OpenCode platform
-├── CLAUDE.md            # Project rules loaded by Claude Code
-├── Makefile             # 13-target build/test contract
-├── docker-compose.test.yml
-└── docs/specs/          # Pipeline artifact output
-```
-
----
-
-## Customizing for your stack
-
-See [Customization Guide](./customization.md).
-
----
-
-## Troubleshooting
+**`squad: command not found`**
+Check your PATH. If you used Option C above: `source ~/.zshrc` then retry.
 
 **`claude: command not found`**
-Install Claude Code: `npm install -g @anthropic-ai/claude-code`
+`npm install -g @anthropic-ai/claude-code`
 
-**`ai-squad: command not found`**
-Check your PATH: `echo $PATH | grep ai-squad`
-Re-run: `source ~/.zshrc`
+**Agent skips a phase gate**
+Ensure `CLAUDE.md` is present in your project root — it contains the project rules the orchestrator reads on every session start.
 
-**Agent doesn't start a phase**
-Ensure `CLAUDE.md` is present in your project root — it contains the project rules the orchestrator reads.
+**Hook blocked my commit**
+The pre-bash hook runs SDLC gates before every `git commit`. Fix the reported issue (failing test, missing frontmatter, secret in staged files) and retry.

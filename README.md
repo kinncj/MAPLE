@@ -12,14 +12,14 @@
 [![CI](https://github.com/kinncj/AI-Development-Squad-Template/actions/workflows/ci.yml/badge.svg)](https://github.com/kinncj/AI-Development-Squad-Template/actions/workflows/ci.yml)
 [![Integration Validation](https://github.com/kinncj/AI-Development-Squad-Template/actions/workflows/validate-integrations.yml/badge.svg)](https://github.com/kinncj/AI-Development-Squad-Template/actions/workflows/validate-integrations.yml)
 
-A production-ready template for running an **orchestrated, phase-gated, TDD-enforced** development pipeline with **specialist AI agents**. Runs on two platforms: **Claude Code** and **OpenCode**.
+A production-ready template for running an **orchestrated, phase-gated, TDD-enforced** development pipeline with **specialist AI agents**. Runs on three platforms: **Claude Code**, **GitHub Copilot CLI**, and **OpenCode**.
 
 > Based on: [Building an AI Development Squad: Orchestrated Multi-Agent Systems with Claude Code and OpenCode](./ARTICLE.md)
 
 <div align="center">
-  <img src="./demo.gif" alt="AI Squad demo — ai-squad init scaffolding a project" width="860">
+  <img src="./demo.gif" alt="AI Squad demo — squad init scaffolding a project" width="860">
   <br/>
-  <sub><code>ai-squad init</code> — scaffolding a new project from the CLI</sub>
+  <sub><code>squad init</code> — scaffolding a new project from the CLI</sub>
 </div>
 
 ---
@@ -32,44 +32,36 @@ Single-agent AI coding breaks down at scale. Context gets polluted, tests get sk
 - **8-phase pipeline** — DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE
 - **Spec-Kit layer** — Problem → Spec → Plan → Tasks before any agent writes code
 - **Design & UX suite** — wireframes, mockups, design tokens, visual identity, a11y audit as first-class pipeline stages
+- **Rubber Duck** — second-opinion reviewer invoked at plan, code, and test checkpoints; backed by Copilot CLI's built-in cross-model reviewer when using `/experimental`
 - **Superpowers** — named, versioned workflows composed from skills (e.g. `new-ui-feature` fires 11 stages in one keystroke)
-- **TDD enforced** — QA writes failing tests first; implementation agents make them pass
-- **GitHub integration** — every feature tracked via `gh` CLI, Projects v2, Issues, PRs
+- **TDD enforced** — QA writes failing tests first; implementation agents make them pass; proper Playwright patterns enforced (no `window.fetch` overrides)
+- **GitHub integration** — every feature tracked via `gh` CLI, Projects v2, Issues, PRs; stories auto-sync on write
 - **Reusable skills** — token-efficient CLI wrappers for Playwright, Docker, kubectl, Stripe, Supabase, gh, and more
-- **Dual platform** — identical agent prompts for Claude Code and OpenCode
-- **`squad` TUI** — persistent panel dashboard replacing the one-shot CLI
+- **Three platforms** — identical agent prompts for Claude Code, GitHub Copilot CLI, and OpenCode
+- **`squad` TUI** — interactive dashboard and `init` / `req` wizard; self-contained binary with template embedded
 
 ---
 
 ## Quick Start
 
-### Option 1 — `squad` TUI (interactive, recommended)
-
 ```bash
-# Requires Go 1.22+
 git clone https://github.com/kinncj/AI-Development-Squad-Template.git ai-squad
-cd ai-squad/tui && go build -o ../squad .
-sudo mv ../squad /usr/local/bin/squad
+cd ai-squad
+make build-tui              # produces ./squad
+export PATH="$PWD:$PATH"   # or move to any directory on your PATH
 
 cd your-project
-squad
+squad init
+squad req                   # write requirements → Gherkin story
 ```
 
-The TUI shows Stories, Active Agents, PRs, QA status, Design artifacts, and Logs in a four-pane dashboard. Press `?` for keybindings.
+Open your project in **Claude Code**, **GitHub Copilot CLI**, or **OpenCode**, then run `/feature "your feature description"`.
 
-### Option 2 — `ai-squad` CLI (non-interactive / CI)
-
-```bash
-git clone https://github.com/kinncj/AI-Development-Squad-Template.git ~/.ai-squad
-echo 'export PATH="$HOME/.ai-squad/scripts:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-mkdir my-project && cd my-project
-ai-squad init
-
-# Start a feature (inside Claude Code)
-/feature "user registration with email and OAuth"
-```
+> **Releases** — if you don't have Go installed, grab a pre-built binary:
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.sh | bash
+> ```
+> This installs `squad` to `~/.tools/ai-squad/bin/`. Add that to your `PATH`.
 
 ---
 
@@ -122,12 +114,12 @@ Declare your own in `template/.claude/superpowers/<name>.yaml`.
 | Doc | Contents |
 |---|---|
 | [Quickstart — Claude Code](./docs/quickstart-claude-code.md) | Install, scaffold, run your first feature |
+| [Quickstart — Copilot CLI](./docs/quickstart-copilot-cli.md) | Install, enable Rubber Duck, run your first feature |
 | [Quickstart — OpenCode](./docs/quickstart-opencode.md) | Install, configure providers, run your first feature |
 | [The 8-Phase Pipeline](./docs/pipeline.md) | Phase details, TDD loop, Makefile contract, escalation policy |
 | [The Agents](./docs/agents.md) | Agent roster, skills, adding custom agents |
 | [Customization Guide](./docs/customization.md) | Add agents, restrict permissions, extend skills |
 | [Architecture Article](./ARTICLE.md) | Design decisions, why specialist agents, CLI vs MCP |
-| [TUI README](./tui/README.md) | Build, install, cross-compile, keybindings |
 | [Examples](./docs/examples/) | UI feature, API endpoint, spike walk-throughs |
 
 ---
@@ -136,12 +128,13 @@ Declare your own in `template/.claude/superpowers/<name>.yaml`.
 
 | Tool | Purpose | Install |
 |---|---|---|
-| [Claude Code](https://claude.ai/claude-code) | Primary platform | `npm install -g @anthropic-ai/claude-code` |
-| [OpenCode](https://opencode.ai) | Alternate platform | See opencode.ai |
-| [GitHub CLI](https://cli.github.com) | Issue and PR management | `brew install gh` |
-| [Go 1.22+](https://go.dev) | Build the `squad` TUI | `brew install go` |
+| [Go 1.22+](https://go.dev) | Build `squad` from source | `brew install go` |
+| [Claude Code](https://claude.ai/claude-code) or [Copilot CLI](https://github.com/features/copilot/cli) or [OpenCode](https://opencode.ai) | Run the agents | see each link |
+| [GitHub CLI](https://cli.github.com) | Issue, PR, project management | `brew install gh` |
 | [Docker](https://docker.com) | Test infrastructure | docker.com |
 | [Node.js](https://nodejs.org) | Playwright / Cucumber E2E tests | nodejs.org |
+
+> Go is only needed to build `squad` from source. If you prefer a pre-built binary, use the one-liner installer above.
 
 ---
 
