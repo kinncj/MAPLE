@@ -200,6 +200,79 @@ for group in "type:feature" "type:spike" "priority:high" "priority:medium" \
   fi
 done
 
+# ─── Phase II: GitHub Integration Skills ─────────────────────────────────────
+
+PHASE2_SKILLS=(gh-issues gh-projects gh-labels-milestones gherkin-authoring story-issue-sync cucumber-automation)
+
+for skill in "${PHASE2_SKILLS[@]}"; do
+  # Skill exists in Claude Code
+  if [[ -f "$TEMPLATE_DIR/.claude/skills/$skill/SKILL.md" ]]; then
+    ok "claude skill present: $skill"
+  else
+    fail "claude skill missing: $skill"
+  fi
+  # Mirrored in OpenCode
+  if [[ -f "$TEMPLATE_DIR/.opencode/skills/$skill/SKILL.md" ]]; then
+    ok "opencode skill present: $skill"
+  else
+    fail "opencode skill missing: $skill"
+  fi
+done
+
+# gh-issues: covers Create, View, Edit, Comment, Close
+for keyword in "gh issue create" "gh issue view" "gh issue edit" "gh issue comment" "gh issue close" "issue_number" "BLOCKED"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/gh-issues/SKILL.md"; then
+    ok "gh-issues covers: $keyword"
+  else
+    fail "gh-issues missing: $keyword"
+  fi
+done
+
+# gh-projects: covers GraphQL add, field update, project config read
+for keyword in "addProjectV2ItemById" "updateProjectV2ItemFieldValue" "project_node_id" "singleSelectOptionId"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/gh-projects/SKILL.md"; then
+    ok "gh-projects covers: $keyword"
+  else
+    fail "gh-projects missing: $keyword"
+  fi
+done
+
+# gh-labels-milestones: covers upsert pattern and milestone
+for keyword in "upsert_label" "upsert_milestone" "gh label edit" "gh label create" "PATCH"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/gh-labels-milestones/SKILL.md"; then
+    ok "gh-labels-milestones covers: $keyword"
+  else
+    fail "gh-labels-milestones missing: $keyword"
+  fi
+done
+
+# gherkin-authoring: covers naming convention, ID allocation, validation rules
+for keyword in "NNNN" "YYYY" "next_id" "@story:" "@epic:" "Scenario Outline"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/gherkin-authoring/SKILL.md"; then
+    ok "gherkin-authoring covers: $keyword"
+  else
+    fail "gherkin-authoring missing: $keyword"
+  fi
+done
+
+# story-issue-sync: covers both sync directions and ownership table
+for keyword in "issue_number: null" "File → Issue" "Issue → File" "DRIFT" "issue_node_id"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/story-issue-sync/SKILL.md"; then
+    ok "story-issue-sync covers: $keyword"
+  else
+    fail "story-issue-sync missing: $keyword"
+  fi
+done
+
+# cucumber-automation: covers extraction, both stacks, stubs
+for keyword in "gherkin" "@cucumber/cucumber" "behave" "NO_GHERKIN" "MANUAL_EDIT"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/cucumber-automation/SKILL.md"; then
+    ok "cucumber-automation covers: $keyword"
+  else
+    fail "cucumber-automation missing: $keyword"
+  fi
+done
+
 # ─── summary ──────────────────────────────────────────────────────────────────
 printf "\n  ────────────────────────────────────────\n"
 printf "  \033[1;32m%d passed\033[0m  ·  " "$PASS"
