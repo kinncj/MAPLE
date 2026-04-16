@@ -103,6 +103,16 @@ Task format:
 - [ ] Task 3: @typescript Implement X to make tests pass
 ```
 
+**Rubber Duck gate (PLAN):** Before advancing to Phase 4, invoke:
+```
+@rubber-duck Mode: PLAN REVIEW
+Plan: <contents of plan.md>
+Story: <story frontmatter + Gherkin scenarios>
+```
+- APPROVE → proceed to Phase 4.
+- REQUEST_CHANGES → revise plan.md, re-invoke @rubber-duck once, then proceed.
+- CRITICAL findings → fix before proceeding (no exceptions).
+
 ### Phase 4: INFRA
 Delegate to @docker, @kubernetes, @terraform, @postgresql, @redis as needed.
 Gate: All containers healthy (docker compose up -d --wait exits 0).
@@ -110,11 +120,25 @@ Gate: All containers healthy (docker compose up -d --wait exits 0).
 ### Phase 5: IMPLEMENT (TDD Loop)
 For each task in plan.md:
 1. Delegate to @qa: "Write failing test for: {task description}"
-2. Verify test fails (RED) — if test passes immediately, reject and ask QA to fix.
-3. Delegate to specialist agent: "Make the test at {path} pass."
-4. Delegate to @qa: "Verify test passes."
-5. If GREEN: proceed to next task.
-6. If FAIL after 3 attempts: escalate to human.
+2. **Rubber Duck gate (TESTS):** After tests are written and BEFORE running them, invoke:
+   ```
+   @rubber-duck Mode: TEST REVIEW
+   Test files: <list of new test files>
+   Story scenarios: <relevant Gherkin>
+   ```
+   - APPROVE → continue. REQUEST_CHANGES → ask @qa to revise, then proceed.
+3. Verify test fails (RED) — if test passes immediately, reject and ask QA to fix.
+4. Delegate to specialist agent: "Make the test at {path} pass."
+5. **Rubber Duck gate (CODE) — multi-file tasks only (3+ files changed):** After implementation, invoke:
+   ```
+   @rubber-duck Mode: CODE REVIEW
+   Files changed: <list>
+   <diff or file contents>
+   ```
+   - APPROVE → continue. REQUEST_CHANGES → ask the specialist to revise.
+6. Delegate to @qa: "Verify test passes."
+7. If GREEN: proceed to next task.
+8. If FAIL after 3 attempts: escalate to human.
 
 Route tasks by technology — use `stack:` from `project.config.yaml` as the source of truth:
 - `stack.language = csharp` → @dotnet
@@ -199,6 +223,7 @@ If any approval is not received, do not advance. Log `AWAITING APPROVAL` and sur
 - Read `.claude/skills/github-cli/SKILL.md` for issue management.
 - Read `.claude/skills/gh-issues/SKILL.md` for issue CRUD.
 - Read `.claude/skills/gh-projects/SKILL.md` for board management.
+- Read `.claude/skills/rubber-duck/SKILL.md` for second-opinion review invocation.
 - Read `.claude/skills/gherkin-authoring/SKILL.md` before story creation.
 - Read `.claude/skills/wireframe/SKILL.md` before dispatching wireframe-architect.
 - Read `.claude/skills/a11y-audit/SKILL.md` before dispatching a11y-auditor.

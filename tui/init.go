@@ -17,15 +17,15 @@ import (
 
 // ─── Init command ─────────────────────────────────────────────────────────────
 
-func runInit(tools Tools, templateDir string, force bool) error {
-	m := newInitModel(tools, templateDir, force, false)
+func runInit(tools Tools, fsys fs.FS, force bool) error {
+	m := newInitModel(tools, fsys, force, false)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }
 
-func runInitFromMenu(tools Tools, templateDir string, force bool) error {
-	m := newInitModel(tools, templateDir, force, true)
+func runInitFromMenu(tools Tools, fsys fs.FS, force bool) error {
+	m := newInitModel(tools, fsys, force, true)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
@@ -43,22 +43,22 @@ const (
 )
 
 type initModel struct {
-	tools       Tools
-	templateDir string
-	force       bool
-	fromMenu    bool // skip welcome step; jump straight to confirm
-	step        initStep
-	spinner     spinner.Model
-	logs        []string
-	err         error
-	width       int
-	logoFrame   int
-	logoDone    bool
+	tools      Tools
+	templateFS fs.FS
+	force      bool
+	fromMenu   bool // skip welcome step; jump straight to confirm
+	step       initStep
+	spinner    spinner.Model
+	logs       []string
+	err        error
+	width      int
+	logoFrame  int
+	logoDone   bool
 }
 
 type initDoneMsg struct{ logs []string; err error }
 
-func newInitModel(tools Tools, templateDir string, force bool, fromMenu bool) *initModel {
+func newInitModel(tools Tools, fsys fs.FS, force bool, fromMenu bool) *initModel {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#7aa2f7"))
@@ -67,12 +67,12 @@ func newInitModel(tools Tools, templateDir string, force bool, fromMenu bool) *i
 		initialStep = stepConfirm
 	}
 	return &initModel{
-		tools:       tools,
-		templateDir: templateDir,
-		force:       force,
-		fromMenu:    fromMenu,
-		step:        initialStep,
-		spinner:     s,
+		tools:      tools,
+		templateFS: fsys,
+		force:      force,
+		fromMenu:   fromMenu,
+		step:       initialStep,
+		spinner:    s,
 	}
 }
 
@@ -206,14 +206,14 @@ func (m *initModel) platformList() string {
 func (m *initModel) runSetup() tea.Cmd {
 	force := m.force
 	return func() tea.Msg {
-		logs, err := doInit(m.tools, m.templateDir, force)
+		logs, err := doInit(m.tools, m.templateFS, force)
 		return initDoneMsg{logs: logs, err: err}
 	}
 }
 
 // ─── Actual setup logic ───────────────────────────────────────────────────────
 
-func doInit(tools Tools, templateDir string, force bool) ([]string, error) {
+func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 	var logs []string
 	log := func(s string) { logs = append(logs, s) }
 
@@ -224,11 +224,11 @@ func doInit(tools Tools, templateDir string, force bool) ([]string, error) {
 
 	// Always copy: docs structure, Makefile, scripts, .github
 	pairs := []struct{ src, dst string }{
-		{"docs",    "docs"},
+		{"docs", "docs"},
 		{"scripts", "scripts"},
 		{"Makefile", "Makefile"},
 		{"lefthook.yml", "lefthook.yml"},
-		{".github",  ".github"},
+		{".github", ".github"},
 	}
 
 	// Platform-specific copies
@@ -247,9 +247,8 @@ func doInit(tools Tools, templateDir string, force bool) ([]string, error) {
 	}
 
 	for _, p := range pairs {
-		src := filepath.Join(templateDir, p.src)
 		dst := filepath.Join(cwd, p.dst)
-		if err := copyPath(src, dst, force); err != nil {
+		if err := copyFromFS(fsys, p.src, dst, force); err != nil {
 			log("✗ " + p.dst + ": " + err.Error())
 		} else {
 			if force {
@@ -286,32 +285,43 @@ func doInit(tools Tools, templateDir string, force bool) ([]string, error) {
 	return logs, nil
 }
 
-func copyPath(src, dst string, force bool) error {
-	info, err := os.Stat(src)
+func copyFromFS(fsys fs.FS, src, dst string, force bool) error {
+	info, err := fs.Stat(fsys, src)
 	if err != nil {
 		return err
 	}
 	if info.IsDir() {
-		return copyDir(src, dst, force)
+		return fs.WalkDir(fsys, src, func(fspath string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, err := pathRel(src, fspath)
+			if err != nil {
+				return err
+			}
+			target := filepath.Join(dst, filepath.FromSlash(rel))
+			if d.IsDir() {
+				return os.MkdirAll(target, 0755)
+			}
+			return writeFromFS(fsys, fspath, target, force)
+		})
 	}
-	return copyFile(src, dst, force)
+	return writeFromFS(fsys, src, dst, force)
 }
 
-func copyDir(src, dst string, force bool) error {
-	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(src, path)
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0755)
-		}
-		return copyFile(path, target, force)
-	})
+// pathRel computes the relative path using forward-slash conventions (fs.FS paths).
+func pathRel(base, target string) (string, error) {
+	if base == target {
+		return ".", nil
+	}
+	prefix := base + "/"
+	if !strings.HasPrefix(target, prefix) {
+		return "", fmt.Errorf("%q not under %q", target, base)
+	}
+	return target[len(prefix):], nil
 }
 
-func copyFile(src, dst string, force bool) error {
+func writeFromFS(fsys fs.FS, src, dst string, force bool) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return err
 	}
@@ -320,18 +330,29 @@ func copyFile(src, dst string, force bool) error {
 			return nil // skip existing
 		}
 	}
-	in, err := os.Open(src)
+	r, err := fsys.Open(src)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-	out, err := os.Create(dst)
+	defer r.Close()
+
+	// .sh files need execute permission (embed strips it)
+	mode := os.FileMode(0644)
+	if strings.HasSuffix(src, ".sh") {
+		mode = 0755
+	}
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
-	_, err = io.Copy(out, in)
-	return err
+	defer f.Close()
+	if _, err = io.Copy(f, r); err != nil {
+		return err
+	}
+	if strings.HasSuffix(src, ".sh") {
+		_ = os.Chmod(dst, 0755)
+	}
+	return nil
 }
 
 func projectConfigYAML(name string) string {

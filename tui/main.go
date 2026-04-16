@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,11 +12,11 @@ var version = "dev" // overridden at build time: -ldflags "-X main.version=vX.Y.
 
 func main() {
 	args := os.Args[1:]
-	tplDir := templateDir()
+	tplFS, _ := resolveTemplateFS()
 
 	// No args → interactive TUI menu loop
 	if len(args) == 0 {
-		runInteractive(tplDir)
+		runInteractive(tplFS)
 		return
 	}
 
@@ -31,7 +32,7 @@ func main() {
 
 	case "init":
 		force := contains(args[1:], "--force")
-		if err := runInit(tools, tplDir, force); err != nil {
+		if err := runInit(tools, tplFS, force); err != nil {
 			fatalf("init: %v", err)
 		}
 
@@ -57,19 +58,19 @@ func main() {
 	}
 }
 
-func runInteractive(tplDir string) {
+func runInteractive(fsys fs.FS) {
 	for {
 		tools := Detect()
-		result := runMenu(tools, tplDir)
+		result := runMenu(tools, fsys)
 		switch result.action {
 		case menuQuit:
 			return
 		case menuInit:
-			if err := runInitFromMenu(tools, tplDir, false); err != nil {
+			if err := runInitFromMenu(tools, fsys, false); err != nil {
 				fmt.Fprintf(os.Stderr, "init: %v\n", err)
 			}
 		case menuUpdate:
-			if err := runInitFromMenu(tools, tplDir, true); err != nil {
+			if err := runInitFromMenu(tools, fsys, true); err != nil {
 				fmt.Fprintf(os.Stderr, "update: %v\n", err)
 			}
 		case menuReq:
@@ -116,36 +117,31 @@ Usage:
 `, version)
 }
 
-// templateDir resolves the template source directory.
+// resolveTemplateFS resolves the template source as an fs.FS.
 // Resolution order:
-//  1. AI_SQUAD_TEMPLATE env var
-//  2. <binary_dir>/template/        (binary in repo root, template alongside)
-//  3. <binary_dir>/../template/     (binary in bin/ subdir, template one level up)
-//  4. ./template/                   (cwd fallback — running from repo root)
-//  5. ~/.ai-squad/template/
-func templateDir() string {
+//  1. AI_SQUAD_TEMPLATE env var (resolved to absolute path, uses OS filesystem)
+//  2. <binary_dir>/template/ if it exists on disk (dev checkout)
+//  3. ./template/ in cwd if exists (running from repo root in dev)
+//  4. Embedded FS (always works for released binaries)
+func resolveTemplateFS() (fs.FS, string) {
 	if v := os.Getenv("AI_SQUAD_TEMPLATE"); v != "" {
-		return v
+		if abs, err := filepath.Abs(v); err == nil {
+			v = abs
+		}
+		return os.DirFS(v), v
 	}
-	exe, err := os.Executable()
-	if err == nil {
-		binDir := filepath.Dir(exe)
-		for _, candidate := range []string{
-			filepath.Join(binDir, "template"),
-			filepath.Join(binDir, "..", "template"),
-		} {
-			if stat, err := os.Stat(candidate); err == nil && stat.IsDir() {
-				abs, _ := filepath.Abs(candidate)
-				return abs
-			}
+	exe, _ := os.Executable()
+	for _, c := range []string{
+		filepath.Join(filepath.Dir(exe), "template"),
+		"template",
+	} {
+		if stat, err := os.Stat(c); err == nil && stat.IsDir() {
+			abs, _ := filepath.Abs(c)
+			return os.DirFS(abs), abs
 		}
 	}
-	if stat, err := os.Stat("template"); err == nil && stat.IsDir() {
-		abs, _ := filepath.Abs("template")
-		return abs
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".ai-squad", "template")
+	sub, _ := fs.Sub(embeddedTemplate, "template")
+	return sub, "(embedded)"
 }
 
 func contains(haystack []string, needle string) bool {

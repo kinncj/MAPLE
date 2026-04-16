@@ -1,19 +1,25 @@
 # Makefile — ai-squad repo root
 # Targets for building, testing, and maintaining the ai-squad platform itself.
 # For targets in your project template, see template/Makefile.
-.PHONY: build-tui build-tui-all test lint sdlc-report sdlc-rotate-logs clean help
+.PHONY: build-tui build-tui-all sync-template test lint sdlc-report sdlc-rotate-logs clean help
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS  = -s -w -X main.version=$(VERSION)
 
+## Sync template/ into tui/template/ for embedding
+sync-template:
+	@rm -rf tui/template
+	@cp -r template tui/template
+	@echo "Template synced to tui/template/"
+
 ## Build the squad TUI binary
-build-tui:
+build-tui: sync-template
 	@echo "Building squad TUI..."
 	@cd tui && go build -ldflags="$(LDFLAGS)" -o ../squad .
 	@echo "Built: ./squad"
 
 ## Cross-compile squad for all platforms
-build-tui-all:
+build-tui-all: sync-template
 	@mkdir -p dist
 	GOOS=darwin  GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-darwin-amd64  .
 	GOOS=darwin  GOARCH=arm64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-darwin-arm64  .
@@ -58,6 +64,7 @@ sdlc-rotate-logs:
 ## Remove built binaries
 clean:
 	@rm -f squad dist/squad-*
+	@rm -rf tui/template
 	@echo "Cleaned."
 
 ## Show available targets
@@ -65,6 +72,7 @@ help:
 	@echo ""
 	@echo "  make build-tui          Build squad TUI binary"
 	@echo "  make build-tui-all      Cross-compile for darwin/linux/windows"
+	@echo "  make sync-template      Sync template/ into tui/template/ for embedding"
 	@echo "  make test               Run test suite (218 tests)"
 	@echo "  make lint               Lint TUI Go code"
 	@echo "  make sdlc-report        Print cost + invocation report"

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -52,7 +53,7 @@ type menuModel struct {
 	width       int
 }
 
-func runMenu(tools Tools, templateDir string) menuResult {
+func runMenu(tools Tools, fsys fs.FS) menuResult {
 	if !isStdinTTY() {
 		printHelpStatic()
 		return menuResult{action: menuQuit}

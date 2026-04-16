@@ -53,6 +53,26 @@ After writing or editing a story file, validate:
 bash scripts/sdlc/validate-frontmatter.sh <file>
 ```
 
+## Rubber Duck — Second Opinion
+
+GitHub Copilot CLI has a built-in **Rubber Duck** reviewer (experimental). Enable it with `/experimental`.
+
+When Rubber Duck is active, it automatically provides a second opinion using a complementary model family at the three highest-value checkpoints:
+
+1. **After planning** (Phase 3) — before implementation begins
+2. **After complex multi-file implementations** — before tests run
+3. **After writing tests** — before executing them
+
+You can also trigger it manually at any time: say "critique your work" or "get a second opinion" and Copilot will invoke Rubber Duck, incorporate the feedback, and show you what changed and why.
+
+**To enable:**
+```
+/experimental
+```
+Then select a Claude model from the model picker. Rubber Duck will use GPT-5.4 as the reviewer.
+
+If Rubber Duck is not available (no `/experimental` access), the `@rubber-duck` agent defined in this project provides equivalent coverage — the orchestrator invokes it at the same three checkpoints.
+
 ## Phase Gates
 
 | Phase | Gate condition |
