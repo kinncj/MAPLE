@@ -7,9 +7,10 @@
 #   source ~/.zshrc
 #
 # Usage:
-#   ai-squad init    [project-name]   Scaffold template into new or current directory
-#   ai-squad labels  [owner/repo]     Create GitHub labels in current repo
-#   ai-squad help                     Show this help
+#   ai-squad init     [project-name]   Scaffold template into new or current directory
+#   ai-squad labels   [owner/repo]     Create GitHub labels in current repo
+#   ai-squad project  [owner/repo]     Bootstrap GitHub Project v2 board
+#   ai-squad help                      Show this help
 #
 # Copyright (C) 2025 Kinn Coelho Juliao <kinncj@protonmail.com>
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -438,6 +439,17 @@ cmd_labels() {
   label "could-have"   "eab308" "MoSCoW: Could have"
   label "wont-have"    "6b7280" "MoSCoW: Won't have"
 
+  printf '\n%b\n' "  ${B}${BCYN}Work Type${R}"
+  label "type:feature"  "7c3aed" "New feature"
+  label "type:spike"    "a78bfa" "Time-boxed investigation"
+  label "type:chore"    "6b7280" "Tech debt, maintenance"
+  label "type:bugfix"   "dc2626" "Bug fix"
+
+  printf '\n%b\n' "  ${B}${BCYN}Priority${R}"
+  label "priority:high"   "dc2626" "High priority"
+  label "priority:medium" "f59e0b" "Medium priority"
+  label "priority:low"    "6b7280" "Low priority"
+
   printf '\n%b\n' "  ${B}${BCYN}Pipeline Phases${R}"
   label "phase:discover"   "dbeafe" "Phase 1: Discovery"
   label "phase:architect"  "c7d2fe" "Phase 2: Architecture"
@@ -459,6 +471,24 @@ cmd_labels() {
   label "tdd:green"    "86efac" "Tests passing"
   label "tdd:refactor" "fde68a" "Refactor phase"
 
+  printf '\n%b\n' "  ${B}${BCYN}Spec-Kit${R}"
+  label "spec:problem"   "bfdbfe" "Spec-Kit: problem statement"
+  label "spec:spec"      "93c5fd" "Spec-Kit: specification written"
+  label "spec:plan"      "60a5fa" "Spec-Kit: plan decomposed"
+  label "spec:approved"  "2563eb" "Spec-Kit: approved — ready for DISCOVER"
+
+  printf '\n%b\n' "  ${B}${BCYN}Design${R}"
+  label "design:pending"       "f3e8ff" "Design work needed"
+  label "design:wireframe"     "e9d5ff" "Wireframe in progress"
+  label "design:mockup"        "d8b4fe" "Mockup in progress"
+  label "design:approved"      "a855f7" "Design approved"
+  label "design:a11y-passed"   "7e22ce" "Accessibility audit passed"
+  label "ui:required"          "ec4899" "Story requires UI work"
+
+  printf '\n%b\n' "  ${B}${BCYN}ADR${R}"
+  label "adr:required"  "fbbf24" "ADR must be written before proceeding"
+  label "adr:complete"  "d97706" "ADR written and linked"
+
   _config_set "labels.last_repo" "$REPO"
   _config_set "labels.last_run"  "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -469,7 +499,157 @@ cmd_labels() {
 }
 
 
-# ─── help ─────────────────────────────────────────────────────────────────────
+
+# ─── project ──────────────────────────────────────────────────────────────────
+cmd_project() {
+  header "Bootstrap GitHub Project v2"
+
+  local REPO="${1:-}"
+  [[ -z "$REPO" ]] && \
+    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)
+  [[ -z "$REPO" ]] && \
+    fail "Could not detect repository.  Pass owner/repo as argument:\n     ai-squad project owner/repo"
+
+  local OWNER="${REPO%%/*}"
+  local PROJ_TITLE="${REPO##*/} — AI Squad Board"
+
+  info "Repository  " "$REPO"
+  info "Board title " "$PROJ_TITLE"
+
+  # ── Create project ────────────────────────────────────────────────────────
+  printf '\n'
+  step "Creating Project v2 board..."
+  local PROJ_URL
+  PROJ_URL=$(gh project create --owner "$OWNER" --title "$PROJ_TITLE" --format json \
+               2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('url',''))" || true)
+
+  if [[ -z "$PROJ_URL" ]]; then
+    fail "gh project create failed.  Ensure you have admin access to the org/user and run:\n     gh auth refresh -s project"
+  fi
+  ok "Project created" "$PROJ_URL"
+
+  # ── Resolve project number + node ID ─────────────────────────────────────
+  step "Resolving project number and node ID..."
+  local PROJ_NUMBER PROJ_NODE_ID PROJ_QUERY
+  PROJ_QUERY=$(gh api graphql -f query='
+    query($login: String!) {
+      repositoryOwner(login: $login) {
+        projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+          nodes { number id title }
+        }
+      }
+    }' -f login="$OWNER" 2>/dev/null || true)
+
+  PROJ_NUMBER=$(printf '%s' "$PROJ_QUERY" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+nodes = d['data']['repositoryOwner']['projectsV2']['nodes']
+title = '$PROJ_TITLE'
+match = next((n for n in nodes if n['title'] == title), nodes[0] if nodes else None)
+print(match['number'] if match else '')
+" 2>/dev/null || true)
+
+  PROJ_NODE_ID=$(printf '%s' "$PROJ_QUERY" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+nodes = d['data']['repositoryOwner']['projectsV2']['nodes']
+title = '$PROJ_TITLE'
+match = next((n for n in nodes if n['title'] == title), nodes[0] if nodes else None)
+print(match['id'] if match else '')
+" 2>/dev/null || true)
+
+  [[ -z "$PROJ_NUMBER" || -z "$PROJ_NODE_ID" ]] && \
+    fail "Could not resolve project number or node ID.  Visit GitHub Projects to confirm the board was created."
+
+  ok "Project number  " "$PROJ_NUMBER"
+  ok "Node ID         " "$PROJ_NODE_ID"
+
+  # ── Add custom fields ─────────────────────────────────────────────────────
+  step "Adding custom fields..."
+
+  _add_text_field() {
+    local name="$1"
+    gh api graphql -f query='
+      mutation($projectId: ID!, $name: String!) {
+        addProjectV2Field(input: {projectId: $projectId, dataType: TEXT, name: $name}) {
+          projectV2Field { ... on ProjectV2Field { id name } }
+        }
+      }' -f projectId="$PROJ_NODE_ID" -f name="$name" &>/dev/null && ok "Field: $name" || \
+      printf "  ${D}–  %-30s  skipped (may already exist)${R}\n" "$name"
+  }
+
+  _add_select_field() {
+    local name="$1"; shift
+    local opts_json
+    opts_json=$(python3 -c "import json,sys; print(json.dumps([{'name':o} for o in sys.argv[1:]]))" "$@")
+    gh api graphql -f query='
+      mutation($projectId: ID!, $name: String!, $opts: [ProjectV2SingleSelectFieldOptionInput!]!) {
+        addProjectV2Field(input: {projectId: $projectId, dataType: SINGLE_SELECT, name: $name,
+            singleSelectOptions: $opts}) {
+          projectV2Field { ... on ProjectV2SingleSelectField { id name } }
+        }
+      }' -f projectId="$PROJ_NODE_ID" -f name="$name" \
+         --jq ".data" --input <(printf '{"query":"","variables":{"projectId":"%s","name":"%s","opts":%s}}' \
+           "$PROJ_NODE_ID" "$name" "$opts_json") &>/dev/null 2>&1 && ok "Field: $name" || \
+      printf "  ${D}–  %-30s  skipped (may already exist)${R}\n" "$name"
+  }
+
+  # Epic and Specialist are free-text
+  _add_text_field "Epic"
+  _add_text_field "Specialist"
+
+  # Type: SINGLE_SELECT
+  gh api graphql -f query='
+    mutation($projectId: ID!, $name: String!) {
+      addProjectV2Field(input: {projectId: $projectId, dataType: SINGLE_SELECT, name: $name,
+          singleSelectOptions: [
+            {name: "feature", color: PURPLE, description: "New feature"},
+            {name: "spike",   color: BLUE,   description: "Investigation"},
+            {name: "chore",   color: GRAY,   description: "Maintenance"},
+            {name: "bugfix",  color: RED,    description: "Bug fix"}
+          ]}) {
+        projectV2Field { ... on ProjectV2SingleSelectField { id name } }
+      }
+    }' -f projectId="$PROJ_NODE_ID" -f name="Type" &>/dev/null \
+    && ok "Field: Type" \
+    || printf "  ${D}–  %-30s  skipped (may already exist)${R}\n" "Type"
+
+  # ADR Required: SINGLE_SELECT acting as boolean (no native CHECKBOX in Projects v2)
+  gh api graphql -f query='
+    mutation($projectId: ID!, $name: String!) {
+      addProjectV2Field(input: {projectId: $projectId, dataType: SINGLE_SELECT, name: $name,
+          singleSelectOptions: [
+            {name: "yes", color: RED,   description: "ADR required before proceeding"},
+            {name: "no",  color: GREEN, description: "No ADR required"}
+          ]}) {
+        projectV2Field { ... on ProjectV2SingleSelectField { id name } }
+      }
+    }' -f projectId="$PROJ_NODE_ID" -f name="ADR Required" &>/dev/null \
+    && ok "Field: ADR Required" \
+    || printf "  ${D}–  %-30s  skipped (may already exist)${R}\n" "ADR Required"
+
+  # ── Persist to project.config.yaml if present ─────────────────────────────
+  local CONFIG_YAML
+  CONFIG_YAML="$(pwd)/project.config.yaml"
+  if [[ -f "$CONFIG_YAML" ]]; then
+    step "Updating project.config.yaml..."
+    python3 - "$CONFIG_YAML" "$PROJ_NUMBER" "$PROJ_NODE_ID" <<'PYEOF'
+import sys, re
+path, number, node_id = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path) as f: text = f.read()
+text = re.sub(r'(project_number:\s*).*', rf'\g<1>{number}', text)
+text = re.sub(r'(project_node_id:\s*).*', rf'\g<1>"{node_id}"', text)
+with open(path, 'w') as f: f.write(text)
+PYEOF
+    ok "project.config.yaml updated"
+  fi
+
+  printf "\n%b\n" "$HR"
+  printf '  %b›  https://github.com/orgs/%s/projects/%s%b\n\n' \
+    "${D}" "$OWNER" "$PROJ_NUMBER" "${R}"
+}
+
+
 cmd_help() {
   header "Help"
 
@@ -486,14 +666,20 @@ cmd_help() {
   printf '%b\n' "  ${BCYN}labels${R}  ${D}[owner/repo]${R}"
   printf '%b\n\n' "  ${D}    Create GitHub issue labels for the squad pipeline${R}"
 
+  printf '%b\n' "  ${BCYN}project${R} ${D}[owner/repo]${R}"
+  printf '%b\n\n' "  ${D}    Bootstrap a GitHub Project v2 board with Status columns and custom fields${R}"
+
   printf "%b\n" "$HR"
   printf '%b\n\n' "  ${B}EXAMPLES${R}"
 
   printf '%b\n' "  ${D}# New project${R}"
   printf '%b\n\n' "  ${BCYN}ai-squad${R} ${B}init${R} my-project"
 
-  printf '%b\n' "  ${D}# Create labels after connecting a remote repo${R}"
+  printf '%b\n' "  ${D}# Bootstrap labels after connecting a remote repo${R}"
   printf '%b\n\n' "  ${BCYN}ai-squad${R} ${B}labels${R}"
+
+  printf '%b\n' "  ${D}# Bootstrap GitHub Project v2 board${R}"
+  printf '%b\n\n' "  ${BCYN}ai-squad${R} ${B}project${R}"
 
   printf "\n%b\n" "$HR"
   printf '  %bTemplate:  %s%b\n\n' "${D}" "$TEMPLATE_DIR" "${R}"
@@ -504,8 +690,9 @@ _config_init
 _play_jingle
 
 case "${1:-help}" in
-  init)               shift; cmd_init   "$@" ;;
-  labels)             shift; cmd_labels "$@" ;;
+  init)               shift; cmd_init    "$@" ;;
+  labels)             shift; cmd_labels  "$@" ;;
+  project)            shift; cmd_project "$@" ;;
   help | -h | --help) cmd_help ;;
   *)
     printf "\n  %b✗%b  Unknown command: %b%s%b\n" "${BRED}" "${R}" "${B}" "$1" "${R}" >&2

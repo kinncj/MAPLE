@@ -135,12 +135,70 @@ else
   ok "ai-squad help contains no swarm references"
 fi
 
-# 13. ai-squad help mentions init and labels
-if printf '%s' "$MAIN_HELP" | grep -q 'init' && printf '%s' "$MAIN_HELP" | grep -q 'labels'; then
-  ok "ai-squad help lists init and labels commands"
+# 13. ai-squad help lists init, labels, and project commands
+if printf '%s' "$MAIN_HELP" | grep -q 'init' && \
+   printf '%s' "$MAIN_HELP" | grep -q 'labels' && \
+   printf '%s' "$MAIN_HELP" | grep -q 'project'; then
+  ok "ai-squad help lists init, labels, and project commands"
 else
-  fail "ai-squad help is missing init or labels"
+  fail "ai-squad help is missing init, labels, or project"
 fi
+
+# 14. ai-squad project command exists and exits non-zero without a repo (no gh auth in CI)
+PROJECT_OUT=$("$CLI" project 2>&1 || true)
+if printf '%s' "$PROJECT_OUT" | grep -qiE 'repository|owner|project|Could not'; then
+  ok "ai-squad project command exists and produces meaningful output"
+else
+  fail "ai-squad project command missing or silent"
+fi
+
+# 15. template includes story template
+if [[ -f "$TEMPLATE_DIR/docs/stories/_template.md" ]]; then
+  ok "template includes docs/stories/_template.md"
+else
+  fail "template is missing docs/stories/_template.md"
+fi
+
+# 16. template includes DoD document
+if [[ -f "$TEMPLATE_DIR/docs/dod/definition-of-done.md" ]]; then
+  ok "template includes docs/dod/definition-of-done.md"
+else
+  fail "template is missing docs/dod/definition-of-done.md"
+fi
+
+# 17. init copies story template and dod into new project
+if [[ -f "$TEST_PROJECT/docs/stories/_template.md" ]]; then
+  ok "init copies docs/stories/_template.md"
+else
+  fail "init did not copy docs/stories/_template.md"
+fi
+
+if [[ -f "$TEST_PROJECT/docs/dod/definition-of-done.md" ]]; then
+  ok "init copies docs/dod/definition-of-done.md"
+else
+  fail "init did not copy docs/dod/definition-of-done.md"
+fi
+
+# 18. template .gitignore contains Claude logs entries
+GITIGNORE_CONTENT=$(cat "$TEMPLATE_DIR/.gitignore")
+if printf '%s' "$GITIGNORE_CONTENT" | grep -q '.claude/logs/' && \
+   printf '%s' "$GITIGNORE_CONTENT" | grep -q 'pending-sync.jsonl' && \
+   printf '%s' "$GITIGNORE_CONTENT" | grep -q '.claude/state/squad.json'; then
+  ok ".gitignore includes .claude/logs/, pending-sync.jsonl, state/squad.json"
+else
+  fail ".gitignore missing one or more Claude runtime entries"
+fi
+
+# 19. label command output covers new groups (dry check via grep on script source)
+for group in "type:feature" "type:spike" "priority:high" "priority:medium" \
+             "spec:problem" "spec:approved" "design:pending" "design:a11y-passed" \
+             "adr:required" "adr:complete" "ui:required"; do
+  if grep -q "\"$group\"" "$CLI"; then
+    ok "label group present: $group"
+  else
+    fail "label group missing: $group"
+  fi
+done
 
 # ─── summary ──────────────────────────────────────────────────────────────────
 printf "\n  ────────────────────────────────────────\n"

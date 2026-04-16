@@ -41,11 +41,11 @@ test-results/
 *.swo
 *~
 
-# Claude Code local settings
+# Claude Code local settings and runtime state
 .claude/settings.local.json
+.claude/logs/
+.claude/pending-sync.jsonl
+.claude/state/squad.json
 
 # AI Squad CLI state (if ai-squad is installed inside the project)
 .ai-squad.json
-
-# Swarm v2 session data (worktrees, status files, result.md)
-.swarm/
