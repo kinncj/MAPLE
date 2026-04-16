@@ -111,9 +111,39 @@ gh issue edit {number} --add-label "blocked"
 gh issue comment {number} --body "BLOCKED: {agent} failed 3 times on {task}. Human intervention needed."
 ```
 
+## Design Gate (ui: true stories)
+
+When a story frontmatter contains `ui: true`, insert a design sub-pipeline before Phase 5 IMPLEMENT:
+
+1. **UX Research** — delegate to `@ux-researcher`: produce personas + journey map.
+2. **Wireframe** — delegate to `@wireframe-architect`: produce wireframe for every screen state. **PAUSE — await human wireframe approval.**
+3. **Visual Identity** — if `docs/design/identity/tokens.json` is missing, delegate to `@visual-identity-designer`. **PAUSE — await human palette approval.**
+4. **Design Tokens** — delegate to `@design-system-author`: emit CSS vars, Tailwind config, Mantine theme from approved tokens.
+5. **Mockup** — delegate to `@ui-mockup-builder`: produce high-fidelity code mockup. **PAUSE — await human mockup approval.**
+6. **Component Scaffold** — run `component-scaffold` skill to create component file tree.
+7. After Phase 5 IMPLEMENT: delegate to `@a11y-auditor`. Gate: no critical/serious WCAG 2.2 AA violations.
+
+If any approval is not received, do not advance. Log `AWAITING APPROVAL` and surface to human.
+
+## Design Agent Routing
+
+| Task | Agent |
+|---|---|
+| User personas, journey maps | `@ux-researcher` |
+| Wireframes (ASCII/SVG/HTML) | `@wireframe-architect` |
+| Palette, typography, spacing | `@visual-identity-designer` |
+| Token authoring, framework emit | `@design-system-author` |
+| High-fidelity code mockups | `@ui-mockup-builder` |
+| WCAG 2.2 AA audit, PR comment | `@a11y-auditor` |
+
 ## Skills to Read
 - Read `.claude/skills/tdd-workflow/SKILL.md` before Phase 5.
 - Read `.claude/skills/github-cli/SKILL.md` for issue management.
+- Read `.claude/skills/gh-issues/SKILL.md` for issue CRUD.
+- Read `.claude/skills/gh-projects/SKILL.md` for board management.
+- Read `.claude/skills/gherkin-authoring/SKILL.md` before story creation.
+- Read `.claude/skills/wireframe/SKILL.md` before dispatching wireframe-architect.
+- Read `.claude/skills/a11y-audit/SKILL.md` before dispatching a11y-auditor.
 - Read `.claude/skills/mermaid-diagrams/SKILL.md` if creating plan diagrams.
 
 ## Output Format

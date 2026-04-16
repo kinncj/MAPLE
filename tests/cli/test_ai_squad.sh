@@ -273,6 +273,109 @@ for keyword in "gherkin" "@cucumber/cucumber" "behave" "NO_GHERKIN" "MANUAL_EDIT
   fi
 done
 
+# ─── Phase III: Design & UX Suite ────────────────────────────────────────────
+
+PHASE3_SKILLS=(wireframe visual-identity design-tokens mockup component-scaffold a11y-audit)
+PHASE3_AGENTS=(ux-researcher wireframe-architect visual-identity-designer design-system-author ui-mockup-builder a11y-auditor)
+
+for skill in "${PHASE3_SKILLS[@]}"; do
+  if [[ -f "$TEMPLATE_DIR/.claude/skills/$skill/SKILL.md" ]]; then
+    ok "claude design skill present: $skill"
+  else
+    fail "claude design skill missing: $skill"
+  fi
+  if [[ -f "$TEMPLATE_DIR/.opencode/skills/$skill/SKILL.md" ]]; then
+    ok "opencode design skill present: $skill"
+  else
+    fail "opencode design skill missing: $skill"
+  fi
+done
+
+for agent in "${PHASE3_AGENTS[@]}"; do
+  if [[ -f "$TEMPLATE_DIR/.claude/agents/$agent.md" ]]; then
+    ok "claude design agent present: $agent"
+  else
+    fail "claude design agent missing: $agent"
+  fi
+  if [[ -f "$TEMPLATE_DIR/.opencode/agents/$agent.md" ]]; then
+    ok "opencode design agent present: $agent"
+  else
+    fail "opencode design agent missing: $agent"
+  fi
+done
+
+# docs/design/ structure
+for dir in research wireframes mockups identity "system/components"; do
+  if [[ -d "$TEMPLATE_DIR/docs/design/$dir" ]]; then
+    ok "docs/design/$dir directory exists"
+  else
+    fail "docs/design/$dir directory missing"
+  fi
+done
+
+# docs/design/README.md
+if [[ -f "$TEMPLATE_DIR/docs/design/README.md" ]]; then
+  ok "docs/design/README.md present"
+else
+  fail "docs/design/README.md missing"
+fi
+
+# Orchestrator references design gate and design agents
+ORC="$TEMPLATE_DIR/.claude/agents/orchestrator.md"
+for keyword in "ui: true" "ux-researcher" "wireframe-architect" "visual-identity-designer" "design-system-author" "ui-mockup-builder" "a11y-auditor"; do
+  if grep -q "$keyword" "$ORC"; then
+    ok "orchestrator references: $keyword"
+  else
+    fail "orchestrator missing reference: $keyword"
+  fi
+done
+
+# wireframe skill covers key constructs
+for keyword in "status: approved" "BLOCKED" "ASCII" "svg" "html" "tab order"; do
+  if grep -qi "$keyword" "$TEMPLATE_DIR/.claude/skills/wireframe/SKILL.md"; then
+    ok "wireframe skill covers: $keyword"
+  else
+    fail "wireframe skill missing: $keyword"
+  fi
+done
+
+# visual-identity skill covers WCAG contrast
+for keyword in "contrast_aa" "4.5" "WCAG" "palette.json" "typography.json"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/visual-identity/SKILL.md"; then
+    ok "visual-identity skill covers: $keyword"
+  else
+    fail "visual-identity skill missing: $keyword"
+  fi
+done
+
+# design-tokens covers W3C DTCG and all three emitters
+for keyword in "DTCG" "tokens.css" "tailwind.tokens.js" "mantine.theme.ts" "\$value" "\$type"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/design-tokens/SKILL.md"; then
+    ok "design-tokens skill covers: $keyword"
+  else
+    fail "design-tokens skill missing: $keyword"
+  fi
+done
+
+# a11y-audit covers axe, pa11y, WCAG, merge gate, PR comment
+for keyword in "axe" "pa11y" "WCAG" "critical" "serious" "gh pr comment" "BLOCKED"; do
+  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/a11y-audit/SKILL.md"; then
+    ok "a11y-audit skill covers: $keyword"
+  else
+    fail "a11y-audit skill missing: $keyword"
+  fi
+done
+
+# DoD has ui: true section
+DOD="$TEMPLATE_DIR/docs/dod/definition-of-done.md"
+for keyword in "ui: true" "Wireframe" "mockup" "WCAG" "a11y"; do
+  if grep -qi "$keyword" "$DOD"; then
+    ok "DoD covers ui:true requirement: $keyword"
+  else
+    fail "DoD missing ui:true requirement: $keyword"
+  fi
+done
+
 # ─── summary ──────────────────────────────────────────────────────────────────
 printf "\n  ────────────────────────────────────────\n"
 printf "  \033[1;32m%d passed\033[0m  ·  " "$PASS"
