@@ -75,7 +75,7 @@ func runInteractive(fsys fs.FS, noAnimate bool) {
 	}
 
 	// If project is initialized, run boot check then launch dashboard.
-	// The dashboard may signal a sub-workflow (e.g. dashActionReq) on exit.
+	// The dashboard may signal a sub-workflow on exit; we loop back after each.
 	if _, err := os.Stat("project.config.yaml"); err == nil {
 		t, ok := runBoot()
 		if !ok {
@@ -93,10 +93,23 @@ func runInteractive(fsys fs.FS, noAnimate bool) {
 				if err := runReq(tools); err != nil {
 					fmt.Fprintf(os.Stderr, "req: %v\n", err)
 				}
-				// loop back to dashboard after req completes
+			case dashActionUpdate:
+				if err := runInitFromMenu(tools, fsys, true); err != nil {
+					fmt.Fprintf(os.Stderr, "update: %v\n", err)
+				}
+			case dashActionLabels:
+				if err := runLabels(tools.GH); err != nil {
+					fmt.Fprintf(os.Stderr, "labels: %v\n", err)
+				}
+			case dashActionProject:
+				if err := runProject(tools.GH); err != nil {
+					fmt.Fprintf(os.Stderr, "project: %v\n", err)
+				}
 			default:
 				return
 			}
+			// re-detect tools after any operation that may install new things
+			tools = Detect()
 		}
 	}
 

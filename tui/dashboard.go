@@ -52,8 +52,11 @@ type spRow struct {
 type dashAction int
 
 const (
-	dashActionNone dashAction = iota
-	dashActionReq             // quit dashboard and run req (Gherkin converter)
+	dashActionNone    dashAction = iota
+	dashActionReq               // quit and run req (Gherkin converter)
+	dashActionUpdate            // quit and run init --force (re-sync template)
+	dashActionLabels            // quit and run labels bootstrap
+	dashActionProject           // quit and run project creation
 )
 
 // ─── Pane IDs ─────────────────────────────────────────────────────────────────
@@ -491,7 +494,15 @@ func (m *dashboardModel) execCmd(input string) string {
 		return "✓ reloading…"
 	case "req", "new", "story":
 		m.exitAction = dashActionReq
-		// return empty so Quit fires on next render cycle
+		return ""
+	case "update", "upgrade", "sync-template":
+		m.exitAction = dashActionUpdate
+		return ""
+	case "labels":
+		m.exitAction = dashActionLabels
+		return ""
+	case "project":
+		m.exitAction = dashActionProject
 		return ""
 	case "help":
 		m.showHelp = true
@@ -550,7 +561,7 @@ func (m *dashboardModel) header() string {
 
 func (m *dashboardModel) footer() string {
 	t := m.theme
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [d]esign · [l]ogs · [n] new story · [F] superpowers · [:] cmd · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [d]esign · [l]ogs · [n] new story · [F] superpowers · [:req/:update/:labels/:project] · [?] help · [q] quit"
 	if m.cmdMode {
 		keys = "  :" + m.cmdBuf + "█"
 	} else if m.status != "" {
@@ -820,7 +831,7 @@ func (m *dashboardModel) helpView() string {
 		{"l", "toggle Logs pane (full-screen)"},
 		{"n", "new story — open Gherkin requirements editor"},
 		{"F", "Superpower picker"},
-		{":", "command mode  (:theme, :reload, :req / :new / :story)"},
+		{":", "command mode  (:theme, :reload, :req, :update, :labels, :project)"},
 		{"r", "refresh data"},
 		{"?", "this help"},
 		{"q / Ctrl+C", "quit"},
