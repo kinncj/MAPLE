@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -130,6 +134,25 @@ func everforest() Theme {
 		"#7fbbb3", "#d699b6", "#a7c080", "#dbbc7f", "#e67e80",
 		"#859289", "#2d353b", "#d3c6aa",
 	)
+}
+
+// detectOmarchyTheme reads ~/.config/omarchy/current/theme and maps it to a
+// built-in theme. Returns (theme, true) if detected, (tokyo-night, false) otherwise.
+func detectOmarchyTheme() (Theme, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return tokyoNight(), false
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".config", "omarchy", "current", "theme"))
+	if err != nil {
+		return tokyoNight(), false
+	}
+	name := strings.TrimSpace(strings.ToLower(string(data)))
+	// Strip path components — Omarchy stores "catppuccin/mocha" or just "catppuccin-mocha"
+	name = filepath.Base(name)
+	name = strings.ReplaceAll(name, "/", "-")
+	t := themeByName(name)
+	return t, true
 }
 
 // themeByName returns a named theme or falls back to tokyo-night.

@@ -14,9 +14,19 @@ func main() {
 	args := os.Args[1:]
 	tplFS, _ := resolveTemplateFS()
 
-	// No args → interactive TUI menu loop
+	noAnimate := contains(args, "--no-animate")
+	// strip --no-animate so subcommand parsing below is unaffected
+	var cleanArgs []string
+	for _, a := range args {
+		if a != "--no-animate" {
+			cleanArgs = append(cleanArgs, a)
+		}
+	}
+	args = cleanArgs
+
+	// No args → interactive TUI (boot check + dashboard if initialized, menu otherwise)
 	if len(args) == 0 {
-		runInteractive(tplFS)
+		runInteractive(tplFS, noAnimate)
 		return
 	}
 
@@ -58,7 +68,24 @@ func main() {
 	}
 }
 
-func runInteractive(fsys fs.FS) {
+func runInteractive(fsys fs.FS, noAnimate bool) {
+	if !isStdinTTY() {
+		printHelpStatic()
+		return
+	}
+
+	// If project is initialized, run boot check then launch dashboard.
+	if _, err := os.Stat("project.config.yaml"); err == nil {
+		t, ok := runBoot()
+		if ok {
+			if err := runDashboard(t, noAnimate); err != nil {
+				fmt.Fprintf(os.Stderr, "dashboard: %v\n", err)
+			}
+		}
+		return
+	}
+
+	// Not yet initialized — show the setup menu.
 	for {
 		tools := Detect()
 		result := runMenu(tools, fsys)
@@ -112,6 +139,7 @@ Usage:
   squad labels            Bootstrap GitHub label set
   squad project           Create GitHub Project v2
 
+  squad --no-animate      Skip logo animations (SSH / slow terminals)
   squad --version         Print version
   squad --help            Show this help
 `, version)

@@ -1,5 +1,5 @@
 # Makefile — Unified build/test contract for all agents
-.PHONY: build test test-integration test-e2e test-contract test-all lint security-scan fmt containers-up containers-down seed-test migrate test-features-sync test-features-scaffold sdlc-report sdlc-rotate-logs help
+.PHONY: build test test-integration test-e2e test-contract test-all lint security-scan fmt containers-up containers-down seed-test migrate test-features-sync test-features-scaffold sdlc-report sdlc-rotate-logs sdlc-branch-protection sdlc-bootstrap-project-fields help
 
 ## Build
 build:
@@ -132,6 +132,10 @@ print(f'Stories: {len(by_story)}  Total invocations: {len(lines)}'); \
 sdlc-rotate-logs:
 	@bash scripts/sdlc/rotate-logs.sh
 
+## Apply branch protection rules to main (requires gh admin scope)
+sdlc-branch-protection:
+	@bash scripts/sdlc/branch-protection.sh
+
 ## Show available targets
 help:
 	@echo "Available make targets:"
@@ -152,3 +156,4 @@ help:
 	@echo "  migrate                - Run database migrations"
 	@echo "  sdlc-report            - Print per-story cost + invocation report"
 	@echo "  sdlc-rotate-logs       - Rotate .claude/logs/ (keep last 5 compressed)"
+	@echo "  sdlc-branch-protection - Apply branch protection rules to main"

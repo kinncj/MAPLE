@@ -99,6 +99,76 @@ func logoAnimFrame(frame int) string {
 	return sb.String()
 }
 
+// ─── Sweep animation (PRD §5.10: left-to-right reveal + accent pulse) ────────
+
+const (
+	logoSweepFrameCount = 14
+	logoSweepDelay      = 55 * time.Millisecond // 14 × 55ms ≈ 770ms
+	logoPulseFrameCount = 4
+	logoPulseDelay      = 80 * time.Millisecond
+	logoShimmerWidth    = 68 // canonical logo width in runes
+)
+
+// logoSweepFrame reveals the logo left-to-right. frame ∈ [0, logoSweepFrameCount).
+func logoSweepFrame(frame int, col lipgloss.Color) string {
+	charsToShow := (frame + 1) * logoShimmerWidth / logoSweepFrameCount
+	style := lipgloss.NewStyle().Foreground(col)
+	var sb strings.Builder
+	for _, row := range logoRows {
+		runes := []rune(row)
+		visible := make([]rune, len(runes))
+		for i, r := range runes {
+			if i < charsToShow {
+				visible[i] = r
+			} else {
+				visible[i] = ' '
+			}
+		}
+		sb.WriteString(style.Render(string(visible)))
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
+// logoPulseFrame renders the logo in a single color for the post-sweep pulse.
+// phase 0,2 = primary; phase 1 = accent (the "pulse"); phase 3+ = primary steady.
+func logoPulseFrame(phase int, primary, accent lipgloss.Color) string {
+	col := primary
+	if phase == 1 {
+		col = accent
+	}
+	style := lipgloss.NewStyle().Foreground(col)
+	var sb strings.Builder
+	for _, row := range logoRows {
+		sb.WriteString(style.Render(row))
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
+// logoShimmer renders the static logo with one bright cell traveling across it.
+// shimmerPos ∈ [0, logoShimmerWidth). Pass -1 to render without shimmer.
+func logoShimmer(shimmerPos int, primary, accent lipgloss.Color) string {
+	normal := lipgloss.NewStyle().Foreground(primary)
+	bright := lipgloss.NewStyle().Foreground(accent).Bold(true)
+	var sb strings.Builder
+	for _, row := range logoRows {
+		runes := []rune(row)
+		if shimmerPos < 0 || shimmerPos >= len(runes) || runes[shimmerPos] == ' ' {
+			sb.WriteString(normal.Render(row))
+		} else {
+			before := string(runes[:shimmerPos])
+			at := string(runes[shimmerPos : shimmerPos+1])
+			after := string(runes[shimmerPos+1:])
+			sb.WriteString(normal.Render(before))
+			sb.WriteString(bright.Render(at))
+			sb.WriteString(normal.Render(after))
+		}
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
 // ─── Raw stdout animation (for --help / non-TUI paths) ───────────────────────
 
 // printLogoAnimated writes the animated logo directly to stdout.

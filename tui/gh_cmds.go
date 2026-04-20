@@ -172,6 +172,55 @@ func runProject(gh string) error {
 		return err
 	}
 	fmt.Printf("  ✓ project.config.yaml updated\n")
+
+	// Bootstrap custom fields
+	if err := bootstrapProjectFields(gh, owner, nodeID); err != nil {
+		fmt.Printf("  ~ custom fields: %v (project was still created)\n", err)
+	}
+	return nil
+}
+
+// bootstrapProjectFields adds the standard AI-Squad custom fields to a Project v2.
+func bootstrapProjectFields(gh, owner, nodeID string) error {
+	type field struct {
+		name     string
+		dataType string
+		options  []string // for SINGLE_SELECT
+	}
+	fields := []field{
+		{name: "Epic", dataType: "TEXT"},
+		{name: "Phase", dataType: "SINGLE_SELECT", options: []string{
+			"discover", "architect", "plan", "infra", "implement", "validate", "document", "gate",
+		}},
+		{name: "Type", dataType: "SINGLE_SELECT", options: []string{
+			"feature", "bug", "spike", "chore", "docs", "refactor", "hotfix",
+		}},
+		{name: "Specialist", dataType: "SINGLE_SELECT", options: []string{
+			"frontend", "backend", "infra", "data", "ux", "qa",
+		}},
+		{name: "ADR Required", dataType: "SINGLE_SELECT", options: []string{"yes", "no"}},
+	}
+
+	for _, f := range fields {
+		args := []string{"project", "field-create", nodeID,
+			"--owner", owner,
+			"--name", f.name,
+			"--data-type", f.dataType,
+		}
+		if len(f.options) > 0 {
+			args = append(args, "--single-select-options", strings.Join(f.options, ","))
+		}
+		out, err := exec.Command(gh, args...).CombinedOutput()
+		if err != nil {
+			if strings.Contains(string(out), "already exists") {
+				fmt.Printf("    ~ field %q already exists\n", f.name)
+			} else {
+				fmt.Printf("    ✗ field %q: %s\n", f.name, strings.TrimSpace(string(out)))
+			}
+		} else {
+			fmt.Printf("    ✓ field %q\n", f.name)
+		}
+	}
 	return nil
 }
 

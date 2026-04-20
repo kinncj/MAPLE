@@ -81,6 +81,10 @@ Open your project in **Claude Code**, **GitHub Copilot CLI**, or **OpenCode**, t
 
 Themes: `tokyo-night` (default), `catppuccin-mocha`, `gruvbox`, `nord`, `everforest`. Switch with `:theme <name>`.
 
+**Dashboard auto-launch:** once a project is initialized (`project.config.yaml` present), running `squad` with no arguments launches the boot check followed by the live dashboard instead of the setup menu. The dashboard shows stories, recent agent activity, open PRs, and QA scenario counts in a 4-pane layout. Use `squad --no-animate` on slow terminals or over SSH.
+
+**Omarchy theme detection:** if `~/.config/omarchy/current/theme` exists, `squad` reads it and selects the matching built-in theme automatically.
+
 ---
 
 ## Commands (inside Claude Code or OpenCode)
@@ -120,7 +124,8 @@ Declare your own in `template/.claude/superpowers/<name>.yaml`.
 | [The Agents](./docs/agents.md) | Agent roster, skills, adding custom agents |
 | [Customization Guide](./docs/customization.md) | Add agents, restrict permissions, extend skills |
 | [Architecture Article](./ARTICLE.md) | Design decisions, why specialist agents, CLI vs MCP |
-| [Examples](./docs/examples/) | UI feature, API endpoint, spike walk-throughs |
+| [Examples](./template/docs/specs/examples/) | UI feature, API endpoint, spike walk-throughs |
+| [ADRs](./template/docs/specs/adrs/) | Architectural decisions (Go TUI, etc.) |
 
 ---
 
