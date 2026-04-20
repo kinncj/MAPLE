@@ -53,6 +53,7 @@ type dashAction int
 
 const (
 	dashActionNone    dashAction = iota
+	dashActionQuit              // plain quit — no follow-up workflow
 	dashActionReq               // quit and run req (Gherkin converter)
 	dashActionUpdate            // quit and run init --force (re-sync template)
 	dashActionLabels            // quit and run labels bootstrap
@@ -83,6 +84,7 @@ type prsLoadedMsg struct {
 
 type shimmerTickMsg struct{}
 type dashRefreshMsg struct{}
+type statusClearMsg struct{}
 
 func shimmerTick() tea.Cmd {
 	return tea.Tick(10*time.Second, func(time.Time) tea.Msg { return shimmerTickMsg{} })
@@ -170,6 +172,13 @@ func (m *dashboardModel) reload() {
 	m.clampCursor(&m.spCur, len(m.spItems))
 }
 
+// setStatus sets a status message and returns a Cmd to auto-clear it after 3s.
+func (m *dashboardModel) setStatus(msg string, isErr bool) tea.Cmd {
+	m.status = msg
+	m.statusErr = isErr
+	return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return statusClearMsg{} })
+}
+
 func (m *dashboardModel) clampCursor(c *int, n int) {
 	if n == 0 {
 		*c = 0
@@ -224,6 +233,10 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prsLoading = true
 		return m, loadPRsCmd()
 
+	case statusClearMsg:
+		m.status = ""
+		m.statusErr = false
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -265,12 +278,12 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			if result != "" {
-				m.status = result
-				m.statusErr = strings.HasPrefix(result, "✗")
+				return m, m.setStatus(result, strings.HasPrefix(result, "✗"))
 			}
 		case "ctrl+c", "esc":
 			m.cmdMode = false
 			m.cmdBuf = ""
+			m.status = ""
 		case "backspace":
 			if len(m.cmdBuf) > 0 {
 				_, size := utf8.DecodeLastRuneInString(m.cmdBuf)
@@ -354,7 +367,10 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		m.reload()
 		m.prsLoading = true
-		return m, loadPRsCmd()
+		return m, tea.Batch(loadPRsCmd(), m.setStatus("✓ reloading…", false))
+	case "u":
+		m.exitAction = dashActionUpdate
+		return m, tea.Quit
 	case "d":
 		if m.fullscreen == paneDesign {
 			m.fullscreen = -1
@@ -521,28 +537,39 @@ func (m *dashboardModel) execCmd(input string) string {
 		return ""
 	}
 	switch parts[0] {
-	case "theme":
+	// ── Navigation / quit (vim-style) ────────────────────────────────────────
+	case "q", "q!", "quit", "wq", "x":
+		m.exitAction = dashActionQuit
+		return ""
+	// ── Reload (vim :e / :e!) ────────────────────────────────────────────────
+	case "e", "e!", "r", "reload", "sync":
+		m.reload()
+		m.prsLoading = true
+		return "✓ reloading…"
+	// ── Theme ────────────────────────────────────────────────────────────────
+	case "theme", "colorscheme", "colo":
 		if len(parts) < 2 {
 			return "usage: theme <name>  (tokyo-night | catppuccin-mocha | gruvbox | nord | everforest)"
 		}
 		m.theme = themeByName(parts[1])
-		return "✓ theme switched to " + parts[1]
-	case "reload", "sync":
-		m.reload()
-		m.prsLoading = true
-		return "✓ reloading…"
-	case "req", "new", "story":
+		return "✓ theme → " + parts[1]
+	// ── Story / requirements ─────────────────────────────────────────────────
+	case "req", "new", "story", "n":
 		m.exitAction = dashActionReq
 		return ""
-	case "update", "upgrade", "sync-template":
+	// ── Template update ──────────────────────────────────────────────────────
+	case "update", "upgrade", "sync-template", "u":
 		m.exitAction = dashActionUpdate
 		return ""
+	// ── GitHub labels ────────────────────────────────────────────────────────
 	case "labels":
 		m.exitAction = dashActionLabels
 		return ""
+	// ── GitHub Project v2 ────────────────────────────────────────────────────
 	case "project":
 		m.exitAction = dashActionProject
 		return ""
+	// ── Debug ────────────────────────────────────────────────────────────────
 	case "debug":
 		m.debugMode = !m.debugMode
 		if m.debugMode {
@@ -550,11 +577,12 @@ func (m *dashboardModel) execCmd(input string) string {
 			return "✓ debug logging → .claude/logs/tui.log"
 		}
 		return "✓ debug logging off"
-	case "help":
+	// ── Help ─────────────────────────────────────────────────────────────────
+	case "help", "h", "?":
 		m.showHelp = true
 		return ""
 	default:
-		return "✗ unknown command: " + parts[0]
+		return "✗ unknown: " + parts[0] + "  (try :help)"
 	}
 }
 
@@ -607,7 +635,7 @@ func (m *dashboardModel) header() string {
 
 func (m *dashboardModel) footer() string {
 	t := m.theme
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [d]esign · [l]ogs · [n] new · [/] search · [F] superpowers · [:req/:update/:labels/:project/:debug] · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [j/k] nav · [n] new story · [u] update · [F] superpowers · [/] search · [r] reload · [?] help · [q/:q] quit"
 	if m.searchMode {
 		keys = "  /" + m.searchBuf + "█"
 	} else if m.cmdMode {
@@ -868,30 +896,82 @@ func (m *dashboardModel) spPickerView() string {
 
 func (m *dashboardModel) helpView() string {
 	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Keybindings")
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("─", 60))
-	pairs := [][2]string{
+	titleStyle := lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("─", 62))
+
+	keyBindings := [][2]string{
 		{"Tab / Shift+Tab", "cycle panes"},
-		{"j / k", "move down / up"},
-		{"gg / G", "top / bottom"},
-		{"s a p Q", "focus Stories / Agents / PRs / QA"},
+		{"j / k  (↓ / ↑)", "navigate rows"},
+		{"gg / G", "jump to top / bottom"},
+		{"s  a  p  Q", "focus Stories / Agents / PRs / QA"},
 		{"d", "toggle Design pane (full-screen)"},
 		{"l", "toggle Logs pane (full-screen)"},
-		{"n", "new story — open Gherkin requirements editor"},
-		{"F", "Superpower picker"},
-		{":", "command mode  (:theme, :reload, :req, :update, :labels, :project, :debug)"},
-		{"r", "refresh data"},
-		{"?", "this help"},
-		{"q / Ctrl+C", "quit"},
+		{"n", "new story → Gherkin requirements wizard"},
+		{"u", "update — re-sync template files"},
+		{"r", "reload all pane data"},
+		{"F", "Superpower picker (fuzzy)"},
+		{"/", "search within active pane"},
+		{"?", "this help overlay"},
+		{"q  /  Ctrl+C", "quit"},
 	}
-	lines := []string{title, sep}
-	for _, p := range pairs {
-		key := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("  %-22s", p[0]))
-		val := lipgloss.NewStyle().Foreground(t.Foreground).Render(p[1])
-		lines = append(lines, key+val)
+
+	cmdRef := [][2]string{
+		{":q  :wq  :q!  :x", "quit"},
+		{":e  :e!  :r  :reload", "reload data"},
+		{":n  :req  :story", "new story wizard"},
+		{":u  :update", "re-sync template"},
+		{":labels", "bootstrap GitHub labels"},
+		{":project", "create GitHub Project v2"},
+		{":theme <name>", "switch colour theme"},
+		{":colo <name>", "alias for :theme"},
+		{":debug", "toggle debug log"},
+		{":help  :h  :?", "this overlay"},
+		{"", ""},
+		{"themes:", "tokyo-night  catppuccin-mocha"},
+		{"", "gruvbox  nord  everforest"},
 	}
-	lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  Press any key to close"))
-	return strings.Join(lines, "\n")
+
+	renderCol := func(rows [][2]string) []string {
+		var out []string
+		for _, p := range rows {
+			if p[0] == "" && p[1] == "" {
+				out = append(out, "")
+				continue
+			}
+			key := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("  %-24s", p[0]))
+			val := lipgloss.NewStyle().Foreground(t.Foreground).Render(p[1])
+			out = append(out, key+val)
+		}
+		return out
+	}
+
+	leftTitle := titleStyle.Render("  Keybindings")
+	rightTitle := titleStyle.Render("  : Commands")
+	leftLines := renderCol(keyBindings)
+	rightLines := renderCol(cmdRef)
+
+	// pad both columns to same length
+	for len(leftLines) < len(rightLines) {
+		leftLines = append(leftLines, "")
+	}
+	for len(rightLines) < len(leftLines) {
+		rightLines = append(rightLines, "")
+	}
+
+	halfW := (m.width - 4) / 2
+	colStyle := lipgloss.NewStyle().Width(halfW)
+
+	var rows []string
+	header := lipgloss.JoinHorizontal(lipgloss.Top,
+		colStyle.Render(leftTitle), colStyle.Render(rightTitle))
+	rows = append(rows, header, sep)
+	for i := range leftLines {
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			colStyle.Render(leftLines[i]), colStyle.Render(rightLines[i]))
+		rows = append(rows, row)
+	}
+	rows = append(rows, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  Press any key to close"))
+	return strings.Join(rows, "\n")
 }
 
 func (m *dashboardModel) narrowView() string {
