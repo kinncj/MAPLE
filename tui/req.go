@@ -41,6 +41,16 @@ func runReq(tools Tools) error {
 	}
 	t, _ := detectOmarchyTheme()
 	m := newReqModel(tools, t)
+
+	// Pick up story content handed off from the dashboard re-edit flow.
+	const handoff = ".claude/state/squad-edit.txt"
+	if data, err := os.ReadFile(handoff); err == nil {
+		m.textarea.SetValue(string(data))
+		m.lastReq = string(data)
+		_ = os.Remove(handoff) // consume so next run starts blank
+		m.step = reqStepEdit
+	}
+
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
@@ -652,7 +662,18 @@ func invokeAI(ai aiOption, prompt string) ([]byte, error) {
 
 func (m *reqModel) convert(requirements string) tea.Cmd {
 	ai := m.selectedAI
+	// snapshot old saved dirs before the async call so we can clean them up
+	var oldDirs []string
+	for _, s := range m.stories {
+		if s.savedTo != "" {
+			oldDirs = append(oldDirs, s.savedTo)
+		}
+	}
 	return func() tea.Msg {
+		// remove old story directories before saving new ones
+		for _, d := range oldDirs {
+			_ = os.RemoveAll(d)
+		}
 		gherkin, err := convertToGherkin(requirements, ai)
 		if err != nil {
 			return reqDoneMsg{err: err}

@@ -26,6 +26,7 @@ type storyRow struct {
 	phase    string
 	ui       bool
 	issue    int
+	path     string // path to Story.md
 }
 
 type prRow struct {
@@ -140,6 +141,13 @@ type dashboardModel struct {
 
 	lastKey    string // for gg double-key detection
 	debugMode  bool   // :debug — tee state to .claude/logs/tui.log
+
+	// story detail overlay
+	showStory      bool
+	storyLines     []string
+	storyScroll    int
+	storyTitle     string
+	storyDir       string // directory of the open story (for re-edit cleanup)
 
 	exitAction dashAction
 }
@@ -334,9 +342,47 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Help overlay
+	// Help overlay — any key closes
 	if m.showHelp {
 		m.showHelp = false
+		return m, nil
+	}
+
+	// Story detail overlay
+	if m.showStory {
+		maxScroll := len(m.storyLines) - (m.height - 14)
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		switch k {
+		case "j", "down":
+			if m.storyScroll < maxScroll {
+				m.storyScroll++
+			}
+		case "k", "up":
+			if m.storyScroll > 0 {
+				m.storyScroll--
+			}
+		case "g":
+			m.storyScroll = 0
+		case "G":
+			m.storyScroll = maxScroll
+		case "e":
+			// Extract Gherkin from story content and write to handoff file
+			// so runReq pre-loads it into the textarea.
+			gherkin := extractGherkinFromLines(m.storyLines)
+			_ = os.MkdirAll(".claude/state", 0o755)
+			_ = os.WriteFile(".claude/state/squad-edit.txt", []byte(gherkin), 0o644)
+			if m.storyDir != "" {
+				_ = os.RemoveAll(m.storyDir)
+				m.storyDir = ""
+			}
+			m.exitAction = dashActionReq
+			m.showStory = false
+			return m, tea.Quit
+		case "q", "esc", "b", "ctrl+c":
+			m.showStory = false
+		}
 		return m, nil
 	}
 
@@ -406,6 +452,10 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab":
 		m.focus = (m.focus - 1 + paneCount) % paneCount
 		m.fullscreen = -1
+	case "enter":
+		if m.focus == paneStories && m.storiesCur < len(m.stories) {
+			m.openStoryDetail(m.stories[m.storiesCur])
+		}
 	case "j", "down":
 		m.moveCursorDown()
 	case "k", "up":
@@ -531,6 +581,66 @@ func (m *dashboardModel) moveCursorBottom() {
 	}
 }
 
+// extractGherkinFromLines pulls the content inside the first ```gherkin ... ``` block.
+// Falls back to returning all lines that look like Gherkin keywords.
+func extractGherkinFromLines(lines []string) string {
+	var inFence bool
+	var out []string
+	for _, l := range lines {
+		t := strings.TrimSpace(l)
+		if !inFence && (t == "```gherkin" || t == "```") {
+			inFence = true
+			continue
+		}
+		if inFence {
+			if t == "```" {
+				break
+			}
+			out = append(out, l)
+		}
+	}
+	if len(out) > 0 {
+		return strings.TrimSpace(strings.Join(out, "\n"))
+	}
+	// No fence found — return any Gherkin-looking lines
+	for _, l := range lines {
+		t := strings.TrimSpace(l)
+		if t == "" {
+			continue
+		}
+		for _, kw := range []string{"Feature:", "Background:", "Scenario", "Given ", "When ", "Then ", "And ", "But ", "@"} {
+			if strings.HasPrefix(t, kw) {
+				out = append(out, l)
+				break
+			}
+		}
+	}
+	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+// openStoryDetail reads a Story.md and sets up the overlay.
+func (m *dashboardModel) openStoryDetail(s storyRow) {
+	raw, err := os.ReadFile(s.path)
+	if err != nil {
+		m.status = "✗ could not read " + s.path
+		m.statusErr = true
+		return
+	}
+	// Strip YAML frontmatter (between --- delimiters)
+	content := string(raw)
+	if strings.HasPrefix(content, "---") {
+		end := strings.Index(content[3:], "\n---")
+		if end >= 0 {
+			content = strings.TrimSpace(content[3+end+4:])
+		}
+	}
+	m.storyLines = strings.Split(content, "\n")
+	m.storyScroll = 0
+	m.storyTitle = s.id
+	m.storyDir = filepath.Dir(s.path)
+	m.showStory = true
+}
+
 func (m *dashboardModel) execCmd(input string) string {
 	parts := strings.Fields(input)
 	if len(parts) == 0 {
@@ -607,6 +717,9 @@ func (m *dashboardModel) View() string {
 	}
 
 	// Overlays (rendered over the grid)
+	if m.showStory {
+		return m.header() + m.storyDetailView() + m.footer()
+	}
 	if m.showHelp {
 		return m.header() + m.helpView() + m.footer()
 	}
@@ -635,8 +748,10 @@ func (m *dashboardModel) header() string {
 
 func (m *dashboardModel) footer() string {
 	t := m.theme
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [j/k] nav · [n] new story · [u] update · [F] superpowers · [/] search · [r] reload · [?] help · [q/:q] quit"
-	if m.searchMode {
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [j/k] nav · [Enter] open story · [n] new · [u] update · [F] superpowers · [?] help · [q] quit"
+	if m.showStory {
+		keys = "  [j/k] scroll · [e] re-edit · [Esc] close"
+	} else if m.searchMode {
 		keys = "  /" + m.searchBuf + "█"
 	} else if m.cmdMode {
 		keys = "  :" + m.cmdBuf + "█"
@@ -894,6 +1009,75 @@ func (m *dashboardModel) spPickerView() string {
 	return strings.Join(lines, "\n")
 }
 
+// storyDetailView renders the selected Story.md as a full-screen overlay.
+func (m *dashboardModel) storyDetailView() string {
+	t := m.theme
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  " + m.storyTitle)
+	dir := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + m.storyDir)
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
+
+	visible := m.height - 14
+	if visible < 4 {
+		visible = 4
+	}
+	end := m.storyScroll + visible
+	if end > len(m.storyLines) {
+		end = len(m.storyLines)
+	}
+	window := m.storyLines[m.storyScroll:end]
+
+	var sb strings.Builder
+	sb.WriteString(title + "\n" + dir + "\n" + sep + "\n\n")
+	for _, l := range window {
+		sb.WriteString("  " + colorizeStoryLine(l, t) + "\n")
+	}
+
+	total := len(m.storyLines)
+	if total > visible {
+		pct := (m.storyScroll * 100) / (total - visible)
+		sb.WriteString(fmt.Sprintf("\n  %s\n",
+			lipgloss.NewStyle().Foreground(t.Muted).Render(
+				fmt.Sprintf("(%d%%)  j/k scroll · e re-edit · Esc close", pct))))
+	} else {
+		sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(t.Muted).Render("e re-edit · Esc close") + "\n")
+	}
+	return sb.String()
+}
+
+// colorizeStoryLine applies minimal markdown-aware colours to a Story.md line.
+func colorizeStoryLine(line string, t Theme) string {
+	trimmed := strings.TrimSpace(line)
+	switch {
+	case strings.HasPrefix(trimmed, "# "):
+		return lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(line)
+	case strings.HasPrefix(trimmed, "## "):
+		return lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render(line)
+	case strings.HasPrefix(trimmed, "### "):
+		return lipgloss.NewStyle().Foreground(t.Warning).Render(line)
+	case strings.HasPrefix(trimmed, "- [ ]"):
+		check := lipgloss.NewStyle().Foreground(t.Muted).Render("- [ ]")
+		rest := lipgloss.NewStyle().Foreground(t.Foreground).Render(line[strings.Index(line, "- [ ]")+5:])
+		return check + rest
+	case strings.HasPrefix(trimmed, "- [x]"), strings.HasPrefix(trimmed, "- [X]"):
+		check := lipgloss.NewStyle().Foreground(t.Success).Render("- [x]")
+		rest := lipgloss.NewStyle().Foreground(t.Muted).Render(line[strings.Index(line, "- [")+5:])
+		return check + rest
+	case strings.HasPrefix(trimmed, "```"):
+		return lipgloss.NewStyle().Foreground(t.Muted).Render(line)
+	case strings.HasPrefix(trimmed, "Feature:"),
+		strings.HasPrefix(trimmed, "Scenario:"),
+		strings.HasPrefix(trimmed, "Given "),
+		strings.HasPrefix(trimmed, "When "),
+		strings.HasPrefix(trimmed, "Then "),
+		strings.HasPrefix(trimmed, "And "),
+		strings.HasPrefix(trimmed, "But "),
+		strings.HasPrefix(trimmed, "@"):
+		return colorizeGherkin(line, t)
+	default:
+		return lipgloss.NewStyle().Foreground(t.Foreground).Render(line)
+	}
+}
+
 func (m *dashboardModel) helpView() string {
 	t := m.theme
 	titleStyle := lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
@@ -1034,6 +1218,7 @@ func parseStoryFile(path string) (storyRow, bool) {
 		id:       fm["id"],
 		slug:     fm["story_slug"],
 		priority: fm["priority"],
+		path:     path,
 	}
 	if r.id == "" {
 		r.id = fm["story_id"]
