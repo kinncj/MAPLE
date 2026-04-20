@@ -104,6 +104,8 @@ type dashboardModel struct {
 	spFilter   string
 	cmdMode    bool
 	cmdBuf     string
+	searchMode bool
+	searchBuf  string
 	status     string
 	statusErr  bool
 
@@ -231,6 +233,27 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := msg.String()
 
+	// Search mode input
+	if m.searchMode {
+		switch k {
+		case "enter", "esc", "ctrl+c":
+			m.searchMode = false
+			if k == "esc" || k == "ctrl+c" {
+				m.searchBuf = ""
+			}
+		case "backspace":
+			if len(m.searchBuf) > 0 {
+				_, size := utf8.DecodeLastRuneInString(m.searchBuf)
+				m.searchBuf = m.searchBuf[:len(m.searchBuf)-size]
+			}
+		default:
+			if len(k) == 1 {
+				m.searchBuf += k
+			}
+		}
+		return m, nil
+	}
+
 	// Command mode input
 	if m.cmdMode {
 		switch k {
@@ -321,6 +344,9 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case ":":
 		m.cmdMode = true
 		m.cmdBuf = ""
+	case "/":
+		m.searchMode = true
+		m.searchBuf = ""
 	case "F":
 		m.showSP = true
 		m.spFilter = ""
@@ -581,8 +607,10 @@ func (m *dashboardModel) header() string {
 
 func (m *dashboardModel) footer() string {
 	t := m.theme
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [d]esign · [l]ogs · [n] new · [F] superpowers · [:req/:update/:labels/:project/:debug] · [?] help · [q] quit"
-	if m.cmdMode {
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [d]esign · [l]ogs · [n] new · [/] search · [F] superpowers · [:req/:update/:labels/:project/:debug] · [?] help · [q] quit"
+	if m.searchMode {
+		keys = "  /" + m.searchBuf + "█"
+	} else if m.cmdMode {
 		keys = "  :" + m.cmdBuf + "█"
 	} else if m.status != "" {
 		col := t.Success

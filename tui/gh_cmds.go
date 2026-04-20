@@ -174,14 +174,15 @@ func runProject(gh string) error {
 	fmt.Printf("  ✓ project.config.yaml updated\n")
 
 	// Bootstrap custom fields
-	if err := bootstrapProjectFields(gh, owner, nodeID); err != nil {
+	if err := bootstrapProjectFields(gh, owner, number); err != nil {
 		fmt.Printf("  ~ custom fields: %v (project was still created)\n", err)
 	}
 	return nil
 }
 
 // bootstrapProjectFields adds the standard AI-Squad custom fields to a Project v2.
-func bootstrapProjectFields(gh, owner, nodeID string) error {
+// number is the integer project number returned by gh project create.
+func bootstrapProjectFields(gh, owner, number string) error {
 	type field struct {
 		name     string
 		dataType string
@@ -202,7 +203,7 @@ func bootstrapProjectFields(gh, owner, nodeID string) error {
 	}
 
 	for _, f := range fields {
-		args := []string{"project", "field-create", nodeID,
+		args := []string{"project", "field-create", number,
 			"--owner", owner,
 			"--name", f.name,
 			"--data-type", f.dataType,

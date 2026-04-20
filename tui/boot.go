@@ -195,6 +195,10 @@ func (m *bootModel) View() string {
 
 	if m.allDone {
 		sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("  Loading dashboard…") + "\n")
+		if !detectTruecolor() {
+			sb.WriteString(lipgloss.NewStyle().Foreground(t.Warning).Render(
+				"  ⚠ 256-color mode detected — theme colors may differ from screenshots") + "\n")
+		}
 	}
 	return sb.String()
 }

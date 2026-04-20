@@ -155,6 +155,25 @@ func detectOmarchyTheme() (Theme, bool) {
 	return t, true
 }
 
+// detectTruecolor returns true when the terminal reports 24-bit color support.
+// Checks COLORTERM=truecolor|24bit and common term programs (iTerm2, Kitty, WezTerm).
+func detectTruecolor() bool {
+	ct := strings.ToLower(os.Getenv("COLORTERM"))
+	if ct == "truecolor" || ct == "24bit" {
+		return true
+	}
+	switch os.Getenv("TERM_PROGRAM") {
+	case "iTerm.app", "kitty", "WezTerm", "Hyper", "vscode":
+		return true
+	}
+	if strings.Contains(os.Getenv("TERM"), "256color") {
+		return false
+	}
+	// Optimistically assume truecolor for unknown terminals rather than
+	// degrading without evidence.
+	return true
+}
+
 // themeByName returns a named theme or falls back to tokyo-night.
 func themeByName(name string) Theme {
 	switch name {
