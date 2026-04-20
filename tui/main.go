@@ -75,14 +75,29 @@ func runInteractive(fsys fs.FS, noAnimate bool) {
 	}
 
 	// If project is initialized, run boot check then launch dashboard.
+	// The dashboard may signal a sub-workflow (e.g. dashActionReq) on exit.
 	if _, err := os.Stat("project.config.yaml"); err == nil {
 		t, ok := runBoot()
-		if ok {
-			if err := runDashboard(t, noAnimate); err != nil {
+		if !ok {
+			return
+		}
+		tools := Detect()
+		for {
+			action, err := runDashboard(t, noAnimate)
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "dashboard: %v\n", err)
+				return
+			}
+			switch action {
+			case dashActionReq:
+				if err := runReq(tools); err != nil {
+					fmt.Fprintf(os.Stderr, "req: %v\n", err)
+				}
+				// loop back to dashboard after req completes
+			default:
+				return
 			}
 		}
-		return
 	}
 
 	// Not yet initialized — show the setup menu.

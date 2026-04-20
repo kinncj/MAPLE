@@ -47,6 +47,15 @@ type spRow struct {
 	path string
 }
 
+// ─── Dashboard exit actions ───────────────────────────────────────────────────
+
+type dashAction int
+
+const (
+	dashActionNone dashAction = iota
+	dashActionReq             // quit dashboard and run req (Gherkin converter)
+)
+
 // ─── Pane IDs ─────────────────────────────────────────────────────────────────
 
 type dashPane int
@@ -121,6 +130,8 @@ type dashboardModel struct {
 
 	shimmerPos int
 	shimmerDir int
+
+	exitAction dashAction
 }
 
 func newDashboard(t Theme, noAnimate bool) *dashboardModel {
@@ -221,6 +232,9 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			result := m.execCmd(m.cmdBuf)
 			m.cmdMode = false
 			m.cmdBuf = ""
+			if m.exitAction != dashActionNone {
+				return m, tea.Quit
+			}
 			if result != "" {
 				m.status = result
 				m.statusErr = strings.HasPrefix(result, "✗")
@@ -293,6 +307,9 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.fullscreen = -1
+	case "n":
+		m.exitAction = dashActionReq
+		return m, tea.Quit
 	case "?":
 		m.showHelp = true
 	case ":":
@@ -472,6 +489,10 @@ func (m *dashboardModel) execCmd(input string) string {
 		m.reload()
 		m.prsLoading = true
 		return "✓ reloading…"
+	case "req", "new", "story":
+		m.exitAction = dashActionReq
+		// return empty so Quit fires on next render cycle
+		return ""
 	case "help":
 		m.showHelp = true
 		return ""
@@ -529,7 +550,7 @@ func (m *dashboardModel) header() string {
 
 func (m *dashboardModel) footer() string {
 	t := m.theme
-	keys := "  [Tab] cycle · [s] stories · [a] agents · [p] PRs · [Q] QA · [d] design · [l] logs · [F] superpowers · [:] cmd · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [d]esign · [l]ogs · [n] new story · [F] superpowers · [:] cmd · [?] help · [q] quit"
 	if m.cmdMode {
 		keys = "  :" + m.cmdBuf + "█"
 	} else if m.status != "" {
@@ -797,8 +818,9 @@ func (m *dashboardModel) helpView() string {
 		{"s a p Q", "focus Stories / Agents / PRs / QA"},
 		{"d", "toggle Design pane (full-screen)"},
 		{"l", "toggle Logs pane (full-screen)"},
+		{"n", "new story — open Gherkin requirements editor"},
 		{"F", "Superpower picker"},
-		{":", "command mode  (:theme, :reload)"},
+		{":", "command mode  (:theme, :reload, :req / :new / :story)"},
 		{"r", "refresh data"},
 		{"?", "this help"},
 		{"q / Ctrl+C", "quit"},
@@ -1146,9 +1168,14 @@ func truncate(s string, n int) string {
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
-func runDashboard(t Theme, noAnimate bool) error {
+// runDashboard runs the dashboard and returns the exit action so the caller
+// can decide what to do next (e.g. launch the req workflow).
+func runDashboard(t Theme, noAnimate bool) (dashAction, error) {
 	m := newDashboard(t, noAnimate)
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	_, err := p.Run()
-	return err
+	final, err := p.Run()
+	if err != nil {
+		return dashActionNone, err
+	}
+	return final.(*dashboardModel).exitAction, nil
 }
