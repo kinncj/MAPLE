@@ -134,6 +134,9 @@ type dashboardModel struct {
 	shimmerPos int
 	shimmerDir int
 
+	lastKey    string // for gg double-key detection
+	debugMode  bool   // :debug — tee state to .claude/logs/tui.log
+
 	exitAction dashAction
 }
 
@@ -366,10 +369,20 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "k", "up":
 		m.moveCursorUp()
 	case "g":
-		m.moveCursorTop()
+		if m.lastKey == "g" {
+			m.moveCursorTop()
+			m.lastKey = ""
+		} else {
+			m.lastKey = "g"
+		}
+		return m, nil
 	case "G":
 		m.moveCursorBottom()
+	default:
+		m.lastKey = ""
+		return m, nil
 	}
+	m.lastKey = ""
 	return m, nil
 }
 
@@ -504,6 +517,13 @@ func (m *dashboardModel) execCmd(input string) string {
 	case "project":
 		m.exitAction = dashActionProject
 		return ""
+	case "debug":
+		m.debugMode = !m.debugMode
+		if m.debugMode {
+			_ = os.MkdirAll(".claude/logs", 0o755)
+			return "✓ debug logging → .claude/logs/tui.log"
+		}
+		return "✓ debug logging off"
 	case "help":
 		m.showHelp = true
 		return ""
@@ -561,7 +581,7 @@ func (m *dashboardModel) header() string {
 
 func (m *dashboardModel) footer() string {
 	t := m.theme
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [d]esign · [l]ogs · [n] new story · [F] superpowers · [:req/:update/:labels/:project] · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [d]esign · [l]ogs · [n] new · [F] superpowers · [:req/:update/:labels/:project/:debug] · [?] help · [q] quit"
 	if m.cmdMode {
 		keys = "  :" + m.cmdBuf + "█"
 	} else if m.status != "" {
@@ -825,13 +845,13 @@ func (m *dashboardModel) helpView() string {
 	pairs := [][2]string{
 		{"Tab / Shift+Tab", "cycle panes"},
 		{"j / k", "move down / up"},
-		{"g / G", "top / bottom"},
+		{"gg / G", "top / bottom"},
 		{"s a p Q", "focus Stories / Agents / PRs / QA"},
 		{"d", "toggle Design pane (full-screen)"},
 		{"l", "toggle Logs pane (full-screen)"},
 		{"n", "new story — open Gherkin requirements editor"},
 		{"F", "Superpower picker"},
-		{":", "command mode  (:theme, :reload, :req, :update, :labels, :project)"},
+		{":", "command mode  (:theme, :reload, :req, :update, :labels, :project, :debug)"},
 		{"r", "refresh data"},
 		{"?", "this help"},
 		{"q / Ctrl+C", "quit"},
@@ -1183,10 +1203,18 @@ func truncate(s string, n int) string {
 // can decide what to do next (e.g. launch the req workflow).
 func runDashboard(t Theme, noAnimate bool) (dashAction, error) {
 	m := newDashboard(t, noAnimate)
+	writeRecoveryMarker("running")
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, err := p.Run()
+	writeRecoveryMarker("exited")
 	if err != nil {
 		return dashActionNone, err
 	}
 	return final.(*dashboardModel).exitAction, nil
+}
+
+func writeRecoveryMarker(state string) {
+	_ = os.MkdirAll(".claude/state", 0o755)
+	data := fmt.Sprintf(`{"state":%q,"ts":%q}`, state, time.Now().UTC().Format(time.RFC3339))
+	_ = os.WriteFile(".claude/state/squad.json", []byte(data+"\n"), 0o644)
 }
