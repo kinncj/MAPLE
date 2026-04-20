@@ -41,7 +41,7 @@ func runReq(tools Tools) error {
 	}
 	t, _ := detectOmarchyTheme()
 	m := newReqModel(tools, t)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
 }
@@ -85,6 +85,7 @@ type reqModel struct {
 	storyCursor  int
 	viewingIdx   int
 	scrollOffset int
+	storyListTop int // Y row where first story item is rendered (for mouse clicks)
 }
 
 type reqDoneMsg struct {
@@ -289,6 +290,23 @@ func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if m.step == reqStepStories && len(m.stories) > 0 {
+				idx := msg.Y - m.storyListTop
+				if idx >= 0 && idx < len(m.stories) {
+					if idx == m.storyCursor {
+						// second click on already-selected row → open
+						m.viewingIdx = idx
+						m.scrollOffset = 0
+						m.step = reqStepViewStory
+					} else {
+						m.storyCursor = idx
+					}
+				}
+			}
+		}
+
 	case reqDoneMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -310,11 +328,27 @@ func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *reqModel) visibleLines() int {
-	v := m.height - 16
+	// compact header = 2 lines, title+sep+blank = 3, footer = 2
+	v := m.height - 7
 	if v < 5 {
 		v = 5
 	}
 	return v
+}
+
+// compactHeader returns a single slim header bar used after the logo animation.
+func (m *reqModel) compactHeader() string {
+	t := m.theme
+	left := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  squad")
+	mid := lipgloss.NewStyle().Foreground(t.Muted).Render(" · requirements")
+	if m.selectedAI.label != "" {
+		badge := lipgloss.NewStyle().
+			Foreground(t.Background).Background(t.Primary).
+			Padding(0, 1).Render(m.selectedAI.label)
+		mid += "  " + badge
+	}
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 60))
+	return left + mid + "\n" + sep + "\n"
 }
 
 // ─── View ─────────────────────────────────────────────────────────────────────
@@ -323,7 +357,7 @@ func (m *reqModel) View() string {
 	t := m.theme
 	var hdr string
 	if m.logoDone {
-		hdr = logo()
+		hdr = m.compactHeader()
 	} else {
 		hdr = logoAnimFrame(m.logoFrame)
 	}
@@ -372,28 +406,17 @@ func (m *reqModel) aiPickerView(t Theme, cursor string) string {
 }
 
 func (m *reqModel) editView(t Theme) string {
-	aiTag := lipgloss.NewStyle().
-		Foreground(t.Background).Background(t.Primary).
-		Padding(0, 1).
-		Render(m.selectedAI.label)
 	charCount := lipgloss.NewStyle().Foreground(t.Muted).
-		Render(fmt.Sprintf("%d chars", len(m.textarea.Value())))
-
-	header := "  " + aiTag + "  " + charCount
-	if len(m.aiOptions) > 1 {
-		switchHint := lipgloss.NewStyle().Foreground(t.Muted).Render("  Tab to switch AI")
-		header += switchHint
-	}
-
+		Render(fmt.Sprintf("  %d chars", len(m.textarea.Value())))
 	help := lipgloss.NewStyle().Foreground(t.Muted).Render(
-		"  Describe a story or a whole epic below.\n" +
+		"  Describe a story or a whole epic.\n" +
 			"  Ctrl+D to convert → Gherkin   Esc to quit")
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Primary).
 		Padding(0, 1).
 		Render(m.textarea.View())
-	return header + "\n\n" + help + "\n\n" + box + "\n"
+	return charCount + "\n\n" + help + "\n\n" + box + "\n"
 }
 
 func (m *reqModel) sendingView(t Theme) string {
@@ -435,6 +458,9 @@ func (m *reqModel) storiesView(t Theme, cursor string) string {
 	sb.WriteString(title + timing + "\n")
 	sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 60)) + "\n\n")
 
+	// compact header(2) + title(1) + sep(1) + blank(1) = row 5
+	m.storyListTop = 5
+
 	for i, s := range m.stories {
 		var savedNote string
 		if s.savedTo != "" {
@@ -442,7 +468,8 @@ func (m *reqModel) storiesView(t Theme, cursor string) string {
 		}
 		if i == m.storyCursor {
 			label := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(s.title)
-			sb.WriteString("  " + cursor + " " + label + savedNote + "\n")
+			enterHint := lipgloss.NewStyle().Foreground(t.Muted).Render("  ↵")
+			sb.WriteString("  " + cursor + " " + label + savedNote + enterHint + "\n")
 		} else {
 			label := lipgloss.NewStyle().Foreground(t.Foreground).Render(s.title)
 			sb.WriteString("     " + label + savedNote + "\n")
@@ -450,7 +477,7 @@ func (m *reqModel) storiesView(t Theme, cursor string) string {
 	}
 
 	sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render(
-		"  j/k Navigate · Enter View · e Edit · R Regenerate · q Quit") + "\n")
+		"  j/k Navigate · Enter/Click View · e Edit · R Regenerate · q Quit") + "\n")
 	return sb.String()
 }
 
