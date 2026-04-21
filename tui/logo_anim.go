@@ -11,7 +11,7 @@ import (
 )
 
 // logoRows is the canonical glyph. DO NOT re-kern or redraw.
-var logoRows = [35]string{
+var logoRows = [36]string{
 	"                                        ▄█▄                                        ",
 	"                                       █████                                       ",
 	"                                      ███████                                      ",
@@ -47,6 +47,7 @@ var logoRows = [35]string{
 	"                                        ▒▒▒▒▒▒                                     ",
 	"                                        ░░░░░░                                     ",
 	"                                        ░░░░░░                                     ",
+	"MAPLE: (M)ulti-Agent · (A)rtifact-Driven · (P)hase-Gated · (L)ocal-First · (E)nforced.",
 }
 
 // logoColor is the Canada red used for the maple leaf logo across all contexts.
@@ -68,7 +69,7 @@ var logoCompactRows = [4]string{
 	"🍁 ▗▖  ▗▖ ▗▄▖ ▗▄▄▖ ▗▖   ▗▄▄▄▖ 🍁",
 	"🍁 ▐▛▚▞▜▌▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌    🍁",
 	"🍁 ▐▌  ▐▌▐▛▀▜▌▐▛▀▘ ▐▌   ▐▛▀▀▘ 🍁",
-	"🍁 ▐▌  ▐▌▐▌ ▐▌▐▌   ▐▙▄▄▖▐▙▄▄▖ 🍁",
+	"🍁 ▐▌  ▐▌▐▌ ▐▌▐▌   ▐▙▄▄▖▐▙▄▄▖ 🍁 (M)ulti-Agent · (A)rtifact-Driven · (P)hase-Gated · (L)ocal-First · (E)nforced.",
 }
 
 // logoCompact returns the 4-line wordmark styled in the given color.
@@ -226,7 +227,7 @@ func printLogoAnimated() {
 	}
 
 	N := len(logoRows)
-	center := N / 2 // row 17
+	center := N / 2                 // row 17
 	green := "\033[38;2;204;17;34m" // #CC1122 in 24-bit
 	dimClr := "\033[2m"
 	reset := "\033[0m"

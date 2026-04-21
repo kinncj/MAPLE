@@ -38,8 +38,8 @@ jobs:
 
       - name: Build
         run: |
-          cp -r template tui/template
-          go build -o maple .
+          rm -f tui/template && cp -rL template tui/template
+          go build -o maple ./tui
 
       - name: Verify binary runs
         run: ./maple --version
@@ -47,11 +47,11 @@ jobs:
       - name: Cross-compile all platforms
         run: |
           mkdir -p dist
-          GOOS=darwin  GOARCH=amd64  go build -o dist/maple-darwin-amd64  .
-          GOOS=darwin  GOARCH=arm64  go build -o dist/maple-darwin-arm64  .
-          GOOS=linux   GOARCH=amd64  go build -o dist/maple-linux-amd64   .
-          GOOS=linux   GOARCH=arm64  go build -o dist/maple-linux-arm64   .
-          GOOS=windows GOARCH=amd64  go build -o dist/maple-windows-amd64.exe .
+          GOOS=darwin  GOARCH=amd64  go build -o dist/maple-darwin-amd64  ./tui
+          GOOS=darwin  GOARCH=arm64  go build -o dist/maple-darwin-arm64  ./tui
+          GOOS=linux   GOARCH=amd64  go build -o dist/maple-linux-amd64   ./tui
+          GOOS=linux   GOARCH=arm64  go build -o dist/maple-linux-arm64   ./tui
+          GOOS=windows GOARCH=amd64  go build -o dist/maple-windows-amd64.exe ./tui
           echo "Cross-compile OK:"
           ls -lh dist/
 
@@ -70,8 +70,8 @@ jobs:
 
       - name: Build maple
         run: |
-          cp -r template tui/template
-          go build -o maple .
+          rm -f tui/template && cp -rL template tui/template
+          go build -o maple ./tui
 
       - name: Configure git identity
         run: |
@@ -87,7 +87,7 @@ jobs:
       - name: maple init (non-interactive)
         run: |
           mkdir /tmp/test-init
-          MAPLE_TEMPLATE="$GITHUB_WORKSPACE/template" ./maple init /tmp/test-init 2>&1 || true
+          MAPLE_TEMPLATE="$GITHUB_WORKSPACE/tui/template" ./maple init /tmp/test-init 2>&1 || true
           # Verify at minimum the binary runs without crashing
           ./maple --version
 

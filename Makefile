@@ -9,17 +9,21 @@ LDFLAGS  = -s -w -X main.version=$(VERSION)
 ## Build the maple TUI binary
 build-tui:
 	@echo "Building maple TUI..."
-	@go build -ldflags="$(LDFLAGS)" -o maple .
+	@rm -f tui/template && cp -rL template tui/template
+	@go build -ldflags="$(LDFLAGS)" -o maple ./tui
+	@rm -rf tui/template && ln -s ../template tui/template
 	@echo "Built: ./maple"
 
 ## Cross-compile maple for all platforms
 build-tui-all:
 	@mkdir -p dist
-	GOOS=darwin  GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-darwin-amd64  .
-	GOOS=darwin  GOARCH=arm64  go build -ldflags="$(LDFLAGS)" -o dist/maple-darwin-arm64  .
-	GOOS=linux   GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-linux-amd64   .
-	GOOS=linux   GOARCH=arm64  go build -ldflags="$(LDFLAGS)" -o dist/maple-linux-arm64   .
-	GOOS=windows GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-windows-amd64.exe .
+	@rm -f tui/template && cp -rL template tui/template
+	GOOS=darwin  GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-darwin-amd64  ./tui
+	GOOS=darwin  GOARCH=arm64  go build -ldflags="$(LDFLAGS)" -o dist/maple-darwin-arm64  ./tui
+	GOOS=linux   GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-linux-amd64   ./tui
+	GOOS=linux   GOARCH=arm64  go build -ldflags="$(LDFLAGS)" -o dist/maple-linux-arm64   ./tui
+	GOOS=windows GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-windows-amd64.exe ./tui
+	@rm -rf tui/template && ln -s ../template tui/template
 	@echo "Binaries in dist/"
 
 ## Run the test suite for this repo
@@ -28,7 +32,7 @@ test:
 
 ## Lint Go code
 lint:
-	@gofmt -e . >/dev/null && echo "gofmt: clean" || (echo "gofmt: issues found" && exit 1)
+	@gofmt -e ./tui >/dev/null && echo "gofmt: clean" || (echo "gofmt: issues found" && exit 1)
 
 ## Print per-story agent invocation counts and estimated costs
 ## Reads .claude/logs/skills.jsonl; safe to run offline (shows cached data)
