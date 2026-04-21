@@ -80,6 +80,15 @@ func main() {
 			fatalf("self-update: %v", err)
 		}
 
+	case "resume-session", "resume":
+		harness := ""
+		if len(args) > 1 {
+			harness = args[1]
+		}
+		if err := runResumeSession(harness); err != nil {
+			fatalf("resume-session: %v", err)
+		}
+
 	default:
 		fmt.Fprintf(os.Stderr, "maple: unknown command %q\n\n", args[0])
 		printHelpStatic()
@@ -154,16 +163,19 @@ func runDashboardLoop(t Theme, noAnimate bool, tools Tools, fsys fs.FS) {
 		switch action {
 		case dashActionOpenAgent, dashActionLaunch:
 			if len(openTarget) > 0 {
-				fmt.Printf("\n  → launching %s  (maple resumes when it exits)\n\n", openTarget[0])
-				cmd := exec.Command(openTarget[0], openTarget[1:]...)
-				cmd.Stdin = os.Stdin
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				_ = cmd.Run()
-				fmt.Println("\n  ← back to maple")
+				if err := spawnInNewTerminal(openTarget); err != nil {
+					// fallback: suspend maple, run in foreground, resume when done
+					fmt.Printf("\n  → launching %s  (maple resumes when it exits)\n\n", openTarget[0])
+					cmd := exec.Command(openTarget[0], openTarget[1:]...)
+					cmd.Stdin = os.Stdin
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
+					_ = cmd.Run()
+					fmt.Println("\n  ← back to maple")
+				}
 				tools = Detect()
 			}
-			// loop back — maple restarts the dashboard
+			// loop back in both cases — maple dashboard restarts
 		case dashActionSuperpower:
 			// superpowers now go through dashActionOpenAgent via the launch overlay;
 			// this path is kept for any external caller that still uses it
@@ -213,6 +225,8 @@ Usage:
   maple labels            Bootstrap GitHub label set
   maple project           Create GitHub Project v2
   maple self-update       Upgrade maple to the latest release
+  maple resume-session    Resume the pinned session for the project
+  maple resume-session claude   Resume specifically the pinned claude session
 
   maple --no-animate      Skip logo animations (SSH / slow terminals)
   maple --version         Print version
@@ -344,6 +358,69 @@ func printSuperpowerLaunch(target []string) {
 	fmt.Printf("Run this inside Claude Code or OpenCode:\n\n")
 	fmt.Printf("  /superpower-runner %s\n\n", name)
 	fmt.Printf("The superpower-runner skill will guide you through each stage.\n\n")
+}
+
+// runResumeSession reads .claude/state/sessions.json and launches the pinned
+// session for the given harness. If harness is "", it prefers claude then opencode.
+func runResumeSession(harness string) error {
+	data, err := os.ReadFile(".claude/state/sessions.json")
+	if err != nil {
+		return fmt.Errorf("no sessions file — use the TUI [o] key to pin a session first\n  (expected .claude/state/sessions.json)")
+	}
+	var sessions map[string]string
+	if err := json.Unmarshal(data, &sessions); err != nil {
+		return fmt.Errorf("corrupt sessions file: %w", err)
+	}
+	if len(sessions) == 0 {
+		return fmt.Errorf("sessions.json is empty — navigate to the Agents pane and press [o] or [p]")
+	}
+
+	if harness == "" {
+		for _, pref := range []string{"claude", "opencode", "copilot"} {
+			if sessions[pref] != "" {
+				harness = pref
+				break
+			}
+		}
+	}
+	if harness == "" {
+		for k := range sessions {
+			harness = k
+			break
+		}
+	}
+
+	id := sessions[harness]
+	if id == "" {
+		var available []string
+		for k, v := range sessions {
+			if v != "" {
+				available = append(available, k)
+			}
+		}
+		return fmt.Errorf("no pinned session for %q\n  available: %s", harness, strings.Join(available, ", "))
+	}
+
+	var args []string
+	switch harness {
+	case "claude":
+		args = []string{"claude", "--resume", id}
+	case "opencode":
+		args = []string{"opencode", "--session", id}
+	default:
+		return fmt.Errorf("unknown harness %q — supported: claude, opencode", harness)
+	}
+
+	short := id
+	if len(short) > 8 {
+		short = short[:8] + "…"
+	}
+	fmt.Printf("resuming %s session %s\n", harness, short)
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func contains(haystack []string, needle string) bool {

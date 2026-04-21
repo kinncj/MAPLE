@@ -7,6 +7,12 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.8.0] — 2026-04-21
+
+### Added
+- **New terminal spawning**: launching a harness (superpower overlay, `L` launcher, `o` open-session) now tries to open it in a new terminal tab/window so maple stays visible. Detection order: tmux → screen → WezTerm → Kitty → macOS iTerm2/Terminal.app → Linux (`x-terminal-emulator`, gnome-terminal, konsole, xterm) → Windows Terminal / cmd. Falls back to suspend-and-resume in the same terminal if none is found (SSH, headless, etc.).
+- **`maple resume-session [harness]`**: resumes the project's pinned session from `.claude/state/sessions.json` directly from the CLI — no need to open the TUI. With no argument, prefers claude then opencode. Pass `claude` or `opencode` to target a specific harness.
+
 ## [4.7.2] — 2026-04-21
 
 ### Fixed
