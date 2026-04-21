@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,15 +18,32 @@ type skillRow struct {
 	url      string // "https://skills.sh/..."
 }
 
+type installedSkillRow struct {
+	name  string
+	pkg   string // source package e.g. "obra/superpowers"
+	agent string // "claude-code", "cursor", etc.
+	scope string // "project" or "global"
+}
+
 type skillsSearchedMsg struct {
 	items    []skillRow
 	err      error
 	searched bool // true = search ran (even if 0 results)
 }
 
+type installedLoadedMsg struct {
+	items []installedSkillRow
+	err   error
+}
+
 type skillInstalledMsg struct {
 	pkg string
 	err error
+}
+
+type skillRemovedMsg struct {
+	name string
+	err  error
 }
 
 var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHF]`)
@@ -57,6 +75,118 @@ func searchSkillsCmd(query string) tea.Cmd {
 		}
 		return skillsSearchedMsg{items: items, searched: true}
 	}
+}
+
+func listInstalledSkillsCmd() tea.Cmd {
+	return func() tea.Msg {
+		var allItems []installedSkillRow
+		for _, scope := range []struct{ flag, label string }{
+			{"", "project"},
+			{"-g", "global"},
+		} {
+			args := []string{"--yes", "skills", "ls", "--json"}
+			if scope.flag != "" {
+				args = append(args, scope.flag)
+			}
+			cmd := exec.Command("npx", args...)
+			cmd.Env = append(os.Environ(), "NO_COLOR=1", "FORCE_COLOR=0")
+			var stdout bytes.Buffer
+			cmd.Stdout = &stdout
+			_ = cmd.Run()
+
+			items := parseInstalledJSON(stdout.String(), scope.label)
+			if len(items) == 0 {
+				// fallback: plain-text parse
+				items = parseInstalledText(stdout.String(), scope.label)
+			}
+			allItems = append(allItems, items...)
+		}
+		return installedLoadedMsg{items: allItems}
+	}
+}
+
+func removeSkillCmd(name string) tea.Cmd {
+	return func() tea.Msg {
+		cmd := exec.Command("npx", "--yes", "skills", "remove", name, "--all", "-y")
+		cmd.Env = append(os.Environ(), "NO_COLOR=1", "FORCE_COLOR=0")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			msg := strings.TrimSpace(stripANSI(string(out)))
+			if msg == "" {
+				msg = err.Error()
+			}
+			return skillRemovedMsg{name: name, err: fmt.Errorf("%s", msg)}
+		}
+		return skillRemovedMsg{name: name}
+	}
+}
+
+func parseInstalledJSON(s, scope string) []installedSkillRow {
+	// Try array of objects first: [{"name":"...","package":"...","agent":"..."}]
+	var arr []struct {
+		Name    string `json:"name"`
+		Package string `json:"package"`
+		Pkg     string `json:"pkg"`
+		Agent   string `json:"agent"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(s)), &arr); err == nil {
+		var rows []installedSkillRow
+		for _, a := range arr {
+			pkg := a.Package
+			if pkg == "" {
+				pkg = a.Pkg
+			}
+			rows = append(rows, installedSkillRow{name: a.Name, pkg: pkg, agent: a.Agent, scope: scope})
+		}
+		return rows
+	}
+
+	// Try map of agent → []skill
+	var m map[string][]struct {
+		Name    string `json:"name"`
+		Package string `json:"package"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(s)), &m); err == nil {
+		var rows []installedSkillRow
+		for agent, skills := range m {
+			for _, sk := range skills {
+				rows = append(rows, installedSkillRow{name: sk.Name, pkg: sk.Package, agent: agent, scope: scope})
+			}
+		}
+		return rows
+	}
+	return nil
+}
+
+func parseInstalledText(s, scope string) []installedSkillRow {
+	// Plain text lines like "  skill-name   owner/repo   agent"
+	var rows []installedSkillRow
+	var curAgent string
+	for _, line := range strings.Split(s, "\n") {
+		stripped := strings.TrimSpace(line)
+		if stripped == "" || strings.HasPrefix(stripped, "SKILLS") || strings.HasPrefix(stripped, "███") {
+			continue
+		}
+		// Agent header: "Project skills (claude-code):"
+		if strings.HasSuffix(stripped, ":") && strings.Contains(stripped, "(") {
+			start := strings.Index(stripped, "(")
+			end := strings.Index(stripped, ")")
+			if start >= 0 && end > start {
+				curAgent = stripped[start+1 : end]
+			}
+			continue
+		}
+		parts := strings.Fields(stripped)
+		if len(parts) >= 1 && !strings.HasPrefix(stripped, "#") {
+			name := parts[0]
+			pkg := ""
+			if len(parts) >= 2 {
+				pkg = parts[1]
+			}
+			rows = append(rows, installedSkillRow{name: name, pkg: pkg, agent: curAgent, scope: scope})
+		}
+	}
+	return rows
 }
 
 func installSkillCmd(pkg string) tea.Cmd {

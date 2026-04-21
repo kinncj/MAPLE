@@ -92,15 +92,20 @@ type dashboardModel struct {
 
 	focus      dashPane
 	fullscreen dashPane // paneDesign or paneLogs, -1 = none
-	showHelp      bool
-	showSkills     bool
-	skillsQuery    string
-	skillsItems    []skillRow
-	skillsCur      int
-	skillsLoading  bool
-	skillsErr      string
-	skillsSearched bool // true after first search attempt
-	npxPath        string // cached npx binary path
+	showHelp        bool
+	showSkills      bool
+	skillsTabSearch bool // false = Installed tab, true = Search tab
+	skillsQuery     string
+	skillsItems     []skillRow
+	skillsCur       int
+	skillsLoading   bool
+	skillsErr       string
+	skillsSearched  bool // true after first search attempt
+	installedSkills []installedSkillRow
+	installedCur    int
+	installedLoading bool
+	installedErr    string
+	npxPath         string // cached npx binary path
 	cmdMode       bool
 	cmdBuf     string
 	searchMode bool
@@ -238,6 +243,25 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showSkills = false
 		return m, m.setStatus("✓ installed "+msg.pkg, false)
 
+	case installedLoadedMsg:
+		m.installedLoading = false
+		if msg.err != nil {
+			m.installedErr = msg.err.Error()
+		} else {
+			m.installedSkills = msg.items
+			m.installedErr = ""
+			m.clampCursor(&m.installedCur, len(m.installedSkills))
+		}
+
+	case skillRemovedMsg:
+		m.installedLoading = false
+		if msg.err != nil {
+			return m, m.setStatus("✗ remove "+msg.name+": "+msg.err.Error(), true)
+		}
+		// Reload installed list
+		m.installedLoading = true
+		return m, tea.Batch(listInstalledSkillsCmd(), m.setStatus("✓ removed "+msg.name, false))
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -304,38 +328,58 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "esc", "ctrl+c", "F":
 			m.showSkills = false
 			m.skillsQuery = ""
-		case "enter":
-			if m.skillsLoading {
-				// ignore while loading
-			} else if len(m.skillsItems) > 0 && m.skillsCur < len(m.skillsItems) {
-				// install selected skill
-				sk := m.skillsItems[m.skillsCur]
-				m.skillsLoading = true
-				return m, installSkillCmd(sk.pkg)
+		case "tab":
+			m.skillsTabSearch = !m.skillsTabSearch
+		case "up", "k":
+			if m.skillsTabSearch {
+				if m.skillsCur > 0 {
+					m.skillsCur--
+				}
 			} else {
-				// search
-				m.skillsLoading = true
-				m.skillsItems = nil
-				m.skillsCur = 0
-				m.skillsErr = ""
-				return m, searchSkillsCmd(m.skillsQuery)
+				if m.installedCur > 0 {
+					m.installedCur--
+				}
+			}
+		case "down", "j":
+			if m.skillsTabSearch {
+				if m.skillsCur < len(m.skillsItems)-1 {
+					m.skillsCur++
+				}
+			} else {
+				if m.installedCur < len(m.installedSkills)-1 {
+					m.installedCur++
+				}
+			}
+		case "d":
+			if !m.skillsTabSearch && !m.installedLoading && len(m.installedSkills) > 0 {
+				sk := m.installedSkills[m.installedCur]
+				m.installedLoading = true
+				return m, removeSkillCmd(sk.name)
+			}
+		case "enter":
+			if m.skillsTabSearch {
+				if m.skillsLoading {
+					// ignore while loading
+				} else if len(m.skillsItems) > 0 && m.skillsCur < len(m.skillsItems) {
+					sk := m.skillsItems[m.skillsCur]
+					m.skillsLoading = true
+					return m, installSkillCmd(sk.pkg)
+				} else {
+					m.skillsLoading = true
+					m.skillsItems = nil
+					m.skillsCur = 0
+					m.skillsErr = ""
+					return m, searchSkillsCmd(m.skillsQuery)
+				}
 			}
 		case "backspace":
-			if len(m.skillsQuery) > 0 {
+			if m.skillsTabSearch && len(m.skillsQuery) > 0 {
 				_, size := utf8.DecodeLastRuneInString(m.skillsQuery)
 				m.skillsQuery = m.skillsQuery[:len(m.skillsQuery)-size]
 				m.skillsItems = nil
 			}
-		case "up", "k":
-			if m.skillsCur > 0 {
-				m.skillsCur--
-			}
-		case "down", "j":
-			if m.skillsCur < len(m.skillsItems)-1 {
-				m.skillsCur++
-			}
 		default:
-			if len(k) == 1 {
+			if m.skillsTabSearch && len(k) == 1 {
 				m.skillsQuery += k
 				m.skillsItems = nil
 			}
@@ -409,11 +453,17 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchBuf = ""
 	case "F":
 		m.showSkills = true
+		m.skillsTabSearch = false
 		m.skillsQuery = ""
 		m.skillsItems = nil
 		m.skillsCur = 0
 		m.skillsErr = ""
 		m.skillsSearched = false
+		m.installedSkills = nil
+		m.installedCur = 0
+		m.installedErr = ""
+		m.installedLoading = true
+		return m, listInstalledSkillsCmd()
 	case "r":
 		m.reload()
 		m.prsLoading = true
@@ -749,12 +799,20 @@ func (m *dashboardModel) footer() string {
 	t := m.theme
 	keys := "  [Tab] cycle · [s/a/p/Q] pane · [j/k] nav · [Enter] open story · [n] new · [u] update · [F] skills.sh · [?] help · [q] quit"
 	if m.showSkills {
-		if m.skillsLoading {
-			keys = "  searching skills.sh…"
-		} else if len(m.skillsItems) > 0 {
-			keys = "  [j/k] navigate · [Enter] install · type to search · Esc close"
+		if !m.skillsTabSearch {
+			if m.installedLoading {
+				keys = "  loading installed skills…"
+			} else {
+				keys = "  [Tab] switch tab · [j/k] navigate · [d] remove · Esc close"
+			}
 		} else {
-			keys = "  type a query · [Enter] search · Esc close"
+			if m.skillsLoading {
+				keys = "  searching skills.sh…"
+			} else if len(m.skillsItems) > 0 {
+				keys = "  [Tab] switch tab · [j/k] navigate · [Enter] install · Esc close"
+			} else {
+				keys = "  [Tab] switch tab · type a query · [Enter] search · Esc close"
+			}
 		}
 	} else if m.showStory {
 		keys = "  [j/k] scroll · [e] re-edit · [Esc] close"
@@ -977,40 +1035,75 @@ func (m *dashboardModel) logsView() string {
 
 func (m *dashboardModel) skillsBrowserView() string {
 	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  Skills Marketplace — skills.sh")
-	search := lipgloss.NewStyle().Foreground(t.Muted).Render("  search: ") +
-		lipgloss.NewStyle().Foreground(t.Foreground).Render(m.skillsQuery+"█")
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
 
-	lines := []string{title, search, sep}
+	// Tab headers
+	installedStyle := lipgloss.NewStyle().Foreground(t.Muted)
+	searchStyle := lipgloss.NewStyle().Foreground(t.Muted)
+	if !m.skillsTabSearch {
+		installedStyle = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Underline(true)
+	} else {
+		searchStyle = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Underline(true)
+	}
+	tabs := "  " + installedStyle.Render("Installed") + "  " + searchStyle.Render("Search")
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
+	lines := []string{tabs, sep}
 
 	if m.npxPath == "" {
 		lines = append(lines,
 			"",
 			lipgloss.NewStyle().Foreground(t.Warning).Render("  npx not found — install Node.js from nodejs.org"),
-			"",
-			lipgloss.NewStyle().Foreground(t.Muted).Render("  Then run: npx skills add obra/superpowers --all -y"),
 		)
-	} else if m.skillsLoading {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  searching…"))
-	} else if m.skillsErr != "" {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Error).Render("  "+m.skillsErr))
-	} else if len(m.skillsItems) == 0 && m.skillsSearched {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  no results — try a different query"))
-	} else if len(m.skillsItems) == 0 {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  type a query and press Enter to search"))
-	} else {
-		cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-		for i, sk := range m.skillsItems {
-			pkg := lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(fmt.Sprintf("%-42s", sk.pkg))
-			installs := lipgloss.NewStyle().Foreground(t.Muted).Render(sk.installs + " installs")
-			if i == m.skillsCur {
-				lines = append(lines, "  "+cursor+" "+pkg+" "+installs)
-				if sk.url != "" {
-					lines = append(lines, "       "+lipgloss.NewStyle().Foreground(t.Muted).Render(sk.url))
+		return strings.Join(lines, "\n")
+	}
+
+	if !m.skillsTabSearch {
+		// ── Installed tab ─────────────────────────────────────────
+		if m.installedLoading {
+			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  loading installed skills…"))
+		} else if m.installedErr != "" {
+			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Error).Render("  "+m.installedErr))
+		} else if len(m.installedSkills) == 0 {
+			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  no skills installed — switch to Search tab to add some"))
+		} else {
+			cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
+			for i, sk := range m.installedSkills {
+				name := lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(fmt.Sprintf("%-24s", sk.name))
+				pkg := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("%-28s", sk.pkg))
+				scope := lipgloss.NewStyle().Foreground(t.Muted).Render(sk.scope)
+				if i == m.installedCur {
+					lines = append(lines, "  "+cursor+" "+name+" "+pkg+" "+scope)
+				} else {
+					lines = append(lines, "      "+name+" "+pkg+" "+scope)
 				}
-			} else {
-				lines = append(lines, "      "+pkg+" "+installs)
+			}
+		}
+	} else {
+		// ── Search tab ────────────────────────────────────────────
+		search := lipgloss.NewStyle().Foreground(t.Muted).Render("  search: ") +
+			lipgloss.NewStyle().Foreground(t.Foreground).Render(m.skillsQuery+"█")
+		lines = append(lines, search)
+
+		if m.skillsLoading {
+			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  searching…"))
+		} else if m.skillsErr != "" {
+			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Error).Render("  "+m.skillsErr))
+		} else if len(m.skillsItems) == 0 && m.skillsSearched {
+			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  no results — try a different query"))
+		} else if len(m.skillsItems) == 0 {
+			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  type a query and press Enter to search"))
+		} else {
+			cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
+			for i, sk := range m.skillsItems {
+				pkg := lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(fmt.Sprintf("%-42s", sk.pkg))
+				installs := lipgloss.NewStyle().Foreground(t.Muted).Render(sk.installs + " installs")
+				if i == m.skillsCur {
+					lines = append(lines, "  "+cursor+" "+pkg+" "+installs)
+					if sk.url != "" {
+						lines = append(lines, "       "+lipgloss.NewStyle().Foreground(t.Muted).Render(sk.url))
+					}
+				} else {
+					lines = append(lines, "      "+pkg+" "+installs)
+				}
 			}
 		}
 	}
