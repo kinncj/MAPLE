@@ -39,6 +39,17 @@ func (p pipelineState) statusIcon() string {
 	}
 }
 
+// approvalPending returns the stage name from .claude/state/approval-pending.txt,
+// or "" if no approval is waiting. The superpower-runner skill writes this file at
+// human-approval gates; the TUI deletes it when the user presses [a].
+func approvalPending() string {
+	data, err := os.ReadFile(".claude/state/approval-pending.txt")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
 func loadPipelineState() (pipelineState, error) {
 	data, err := os.ReadFile(".claude/state/maple.json")
 	if err != nil {

@@ -247,6 +247,32 @@ func loadProjectName() string {
 	return ""
 }
 
+// ─── Pinned sessions ──────────────────────────────────────────────────────────
+
+const sessionsFile = ".claude/state/sessions.json"
+
+// loadPinnedSessions reads the persisted session IDs keyed by tool name.
+func loadPinnedSessions() map[string]string {
+	data, err := os.ReadFile(sessionsFile)
+	if err != nil {
+		return map[string]string{}
+	}
+	var m map[string]string
+	if err := json.Unmarshal(data, &m); err != nil {
+		return map[string]string{}
+	}
+	return m
+}
+
+// savePinnedSession persists a session ID for the given tool (e.g. "claude", "opencode").
+func savePinnedSession(tool, id string) {
+	_ = os.MkdirAll(".claude/state", 0o755)
+	m := loadPinnedSessions()
+	m[tool] = id
+	data, _ := json.Marshal(m)
+	_ = os.WriteFile(sessionsFile, append(data, '\n'), 0o644)
+}
+
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 func str(v interface{}) string {

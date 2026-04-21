@@ -13,6 +13,14 @@ Commands:
 - `/superpower-runner {name}` — Launch a named workflow (e.g. `new-ui-feature`, `api-endpoint`, `bugfix`, `design-refresh`)
 - `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping (**optional** — disabled by default; enable by setting repo variable `ENABLE_SHIP_SAFE=true`)
 
+## RTK Token Optimizer
+
+`rtk` is installed alongside `maple` and wired via a `PreToolUse` hook. It intercepts Bash tool calls and compresses output (build logs, grep results, test output, git diffs) before they reach the LLM context window — reducing token consumption by 60–90% on common dev commands.
+
+This is transparent: no commands change. If `rtk` is not installed, the hook is a no-op.
+
+To disable for a single session: `RTK_DISABLE=1 claude`
+
 Pipeline rules:
 1. Orchestrator never writes code. Delegates to specialist agents.
 2. **A Gherkin story file must exist in `docs/stories/` before any implementation begins.** The story IS the spec.

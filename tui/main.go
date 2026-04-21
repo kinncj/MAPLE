@@ -152,7 +152,7 @@ func runDashboardLoop(t Theme, noAnimate bool, tools Tools, fsys fs.FS) {
 			return
 		}
 		switch action {
-		case dashActionOpenAgent:
+		case dashActionOpenAgent, dashActionLaunch:
 			if len(openTarget) > 0 {
 				cmd := exec.Command(openTarget[0], openTarget[1:]...)
 				cmd.Stdin = os.Stdin

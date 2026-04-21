@@ -53,6 +53,14 @@ github:
   project_number: null    # Set by: maple project bootstrap
   project_node_id: null   # Set by: maple project bootstrap
 
+maple:
+  sessions:
+    # Pinned session IDs — set by the MAPLE TUI (o key auto-pins, p key manual-pins).
+    # Superpowers and the L launcher always route to these sessions when set.
+    claude: ""
+    opencode: ""
+    copilot: ""
+
 dod:
   default:
     - Unit tests green

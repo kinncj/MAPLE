@@ -304,6 +304,17 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 		}
 	}
 
+	// Initialize RTK token optimizer (reduces LLM token use 60-90% via PreToolUse hooks)
+	if tools.RTK != "" {
+		if out, err := exec.Command(tools.RTK, "init").CombinedOutput(); err != nil {
+			log("~ rtk init: " + strings.TrimSpace(string(out)))
+		} else {
+			log("✓ rtk initialized (token optimizer active)")
+		}
+	} else {
+		log("~ rtk not found — install from https://github.com/rtk-ai/rtk for 60–90% token savings")
+	}
+
 	// Install obra/superpowers (the agentic skills framework)
 	if tools.NPX != "" {
 		if out, err := exec.Command(tools.NPX, "--yes", "skills", "add", "obra/superpowers", "--all", "-y").CombinedOutput(); err != nil {

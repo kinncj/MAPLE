@@ -59,6 +59,7 @@ const (
 	dashActionProject             // quit and run project creation
 	dashActionOpenAgent           // quit and exec a session in Claude/OpenCode
 	dashActionSuperpower          // quit and print superpower launch instructions
+	dashActionLaunch              // quit and launch tool with optional command
 )
 
 // ─── Pane IDs ─────────────────────────────────────────────────────────────────
@@ -233,8 +234,18 @@ type dashboardModel struct {
 	superpowerCur    int
 
 	// Pipeline status overlay
-	showPipeline  bool
-	pipelineState pipelineState
+	showPipeline    bool
+	pipelineState   pipelineState
+	approvalPending string // non-empty stage name when .claude/state/approval-pending.txt exists
+
+	// Session launcher overlay
+	showLauncher  bool
+	launcherCur   int    // index into available tools list
+	launcherCmd   string // command typed by user
+	launcherInput bool   // true when user is typing the command
+
+	// Pinned sessions (tool → session ID), loaded from .claude/state/sessions.json
+	pinnedSessions map[string]string
 
 	openTarget []string // command to exec when exitAction == dashActionOpenAgent
 	exitAction dashAction
@@ -260,6 +271,7 @@ func (m *dashboardModel) reload() {
 	m.designTree = loadDesignTree()
 	m.logLines = loadLogLines(200)
 	m.projectName = loadProjectName()
+	m.pinnedSessions = loadPinnedSessions()
 	// clamp cursors
 	m.clampCursor(&m.storiesCur, len(m.stories))
 	m.clampCursor(&m.sessionsCur, len(m.sessions))
@@ -687,9 +699,65 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Pipeline status overlay — any key closes
+	// Pipeline status overlay
 	if m.showPipeline {
+		switch k {
+		case "a":
+			if m.approvalPending != "" {
+				_ = os.Remove(".claude/state/approval-pending.txt")
+				m.approvalPending = ""
+				ps, _ := loadPipelineState()
+				m.pipelineState = ps
+				return m, m.setStatus("✓ approved — pipeline resuming", false)
+			}
+		}
 		m.showPipeline = false
+		return m, nil
+	}
+
+	// Session launcher overlay
+	if m.showLauncher {
+		tools := launcherTools()
+		switch {
+		case m.launcherInput:
+			switch k {
+			case "enter":
+				if len(tools) > 0 && m.launcherCur < len(tools) {
+					tool := tools[m.launcherCur]
+					m.showLauncher = false
+					cmd := buildLaunchCmd(tool, m.launcherCmd, m.pinnedSessions)
+					m.openTarget = cmd
+					m.exitAction = dashActionLaunch
+					return m, tea.Quit
+				}
+			case "esc":
+				m.launcherInput = false
+			case "backspace":
+				if len(m.launcherCmd) > 0 {
+					_, size := utf8.DecodeLastRuneInString(m.launcherCmd)
+					m.launcherCmd = m.launcherCmd[:len(m.launcherCmd)-size]
+				}
+			default:
+				if len(k) == 1 {
+					m.launcherCmd += k
+				}
+			}
+		default:
+			switch k {
+			case "j", "down":
+				if m.launcherCur < len(tools)-1 {
+					m.launcherCur++
+				}
+			case "k", "up":
+				if m.launcherCur > 0 {
+					m.launcherCur--
+				}
+			case "enter":
+				m.launcherInput = true
+			case "q", "esc", "ctrl+c":
+				m.showLauncher = false
+			}
+		}
 		return m, nil
 	}
 
@@ -807,9 +875,27 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = paneStories
 		m.fullscreen = -1
 	case "a":
+		if m.showPipeline && m.approvalPending != "" {
+			_ = os.Remove(".claude/state/approval-pending.txt")
+			m.approvalPending = ""
+			ps, _ := loadPipelineState()
+			m.pipelineState = ps
+			return m, m.setStatus("✓ approved — pipeline resuming", false)
+		}
 		m.focus = paneAgents
 		m.fullscreen = -1
 	case "p":
+		// pin selected session when focus is on Agents pane; otherwise switch to PRs
+		if m.focus == paneAgents && m.sessionsCur < len(m.sessions) {
+			s := m.sessions[m.sessionsCur]
+			id := sessionUUID(s)
+			if id == "" {
+				return m, m.setStatus("✗ cannot pin: no session ID for "+s.source, true)
+			}
+			savePinnedSession(s.source, id)
+			m.pinnedSessions = loadPinnedSessions()
+			return m, m.setStatus("✓ pinned "+s.source+" session", false)
+		}
 		m.focus = panePRs
 		m.fullscreen = -1
 	case "Q":
@@ -845,13 +931,24 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "P":
 		ps, _ := loadPipelineState()
 		m.pipelineState = ps
+		m.approvalPending = approvalPending()
 		m.showPipeline = true
+	case "L":
+		m.launcherCur = 0
+		m.launcherCmd = ""
+		m.launcherInput = false
+		m.showLauncher = true
 	case "o":
 		if m.focus == paneAgents && m.sessionsCur < len(m.sessions) {
 			s := m.sessions[m.sessionsCur]
 			cmd := agentOpenCmd(s)
 			if len(cmd) == 0 {
 				return m, m.setStatus("✗ cannot open source: "+s.source, true)
+			}
+			// auto-pin when opening
+			if id := sessionUUID(s); id != "" {
+				savePinnedSession(s.source, id)
+				m.pinnedSessions = loadPinnedSessions()
 			}
 			m.openTarget = cmd
 			m.exitAction = dashActionOpenAgent
@@ -1115,6 +1212,9 @@ func (m *dashboardModel) View() string {
 	if m.showPipeline {
 		return m.header() + m.pipelineStatusView() + m.footer()
 	}
+	if m.showLauncher {
+		return m.header() + m.launcherView() + m.footer()
+	}
 
 	// Normal 2×2 dashboard
 	return m.header() + m.gridView() + m.footer()
@@ -1141,8 +1241,20 @@ func (m *dashboardModel) footer() string {
 		return "\n" + lipgloss.NewStyle().Foreground(col).Render("  "+m.status) + "\n"
 	}
 
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open in agent (Sessions)/browser (PR) · [S] ship-safe · [x] superpowers · [P] pipeline · [F] skills · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open+pin session · [p] pin session · [L] launch · [S] ship-safe · [x] superpowers · [P] pipeline · [F] skills · [?] help · [q] quit"
 	switch {
+	case m.showLauncher:
+		if m.launcherInput {
+			keys = "  type command · [Enter] launch · [Esc] back"
+		} else {
+			keys = "  [j/k] navigate · [Enter] enter command · [Esc] close"
+		}
+	case m.showPipeline:
+		if m.approvalPending != "" {
+			keys = "  [a] approve stage · any other key closes"
+		} else {
+			keys = "  any key closes"
+		}
 	case m.showSuperpowers:
 		keys = "  [j/k] navigate · [Enter] launch · [Esc] close"
 	case m.showSkills:
@@ -1303,17 +1415,77 @@ func (m *dashboardModel) runShipSafeCmd() tea.Cmd {
 func agentOpenCmd(s sessionRow) []string {
 	switch s.source {
 	case "claude":
-		// s.id is the full JSONL path; the filename stem is the session UUID
-		base := s.id
-		if idx := strings.LastIndex(base, "/"); idx >= 0 {
-			base = base[idx+1:]
+		uuid := sessionUUID(s)
+		if uuid == "" {
+			return nil
 		}
-		uuid := strings.TrimSuffix(base, ".jsonl")
 		return []string{"claude", "--resume", uuid}
 	case "opencode":
 		return []string{"opencode"}
 	default:
 		return nil
+	}
+}
+
+// sessionUUID extracts the UUID from a Claude session row (s.id is the full JSONL path).
+func sessionUUID(s sessionRow) string {
+	if s.source != "claude" {
+		return ""
+	}
+	base := s.id
+	if idx := strings.LastIndex(base, "/"); idx >= 0 {
+		base = base[idx+1:]
+	}
+	return strings.TrimSuffix(base, ".jsonl")
+}
+
+// launcherTools returns a list of tool names available for launching.
+func launcherTools() []string {
+	var tools []string
+	if p, _ := exec.LookPath("claude"); p != "" {
+		tools = append(tools, "claude")
+	}
+	if p, _ := exec.LookPath("opencode"); p != "" {
+		tools = append(tools, "opencode")
+	}
+	if p, _ := exec.LookPath("copilot"); p != "" {
+		tools = append(tools, "copilot")
+	}
+	if len(tools) == 0 {
+		tools = append(tools, "claude") // show as option even if not detected
+	}
+	return tools
+}
+
+// buildLaunchCmd constructs the exec command for launching a tool, resuming a pinned
+// session if one exists, otherwise starting fresh with the given command/prompt.
+func buildLaunchCmd(tool, cmd string, pinned map[string]string) []string {
+	pinnedID := pinned[tool]
+	switch tool {
+	case "claude":
+		if pinnedID != "" {
+			args := []string{"claude", "--resume", pinnedID}
+			if cmd != "" {
+				args = append(args, cmd)
+			}
+			return args
+		}
+		if cmd != "" {
+			return []string{"claude", cmd}
+		}
+		return []string{"claude"}
+	case "opencode":
+		if cmd != "" {
+			return []string{"opencode", cmd}
+		}
+		return []string{"opencode"}
+	case "copilot":
+		if cmd != "" {
+			return []string{"copilot", cmd}
+		}
+		return []string{"copilot"}
+	default:
+		return []string{tool}
 	}
 }
 

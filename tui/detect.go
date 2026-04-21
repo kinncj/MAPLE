@@ -14,6 +14,7 @@ type Tools struct {
 	GH        string // gh CLI path
 	Lefthook  string // lefthook binary path
 	NPX       string // npx (Node.js) — needed for skills marketplace
+	RTK       string // rtk CLI proxy — reduces LLM token consumption 60-90%
 }
 
 // Detect checks which tools are available on PATH.
@@ -25,6 +26,7 @@ func Detect() Tools {
 	t.GH, _ = exec.LookPath("gh")
 	t.Lefthook, _ = exec.LookPath("lefthook")
 	t.NPX, _ = exec.LookPath("npx")
+	t.RTK, _ = exec.LookPath("rtk")
 
 	// Check gh copilot extension (shell-command helper only)
 	if t.GH != "" {
@@ -87,6 +89,7 @@ func (t Tools) Summary() []string {
 	check(t.GH != "", "gh")
 	check(t.Lefthook != "", "lefthook")
 	check(t.NPX != "", "npx")
+	check(t.RTK != "", "rtk")
 
 	var lines []string
 	if len(found) > 0 {

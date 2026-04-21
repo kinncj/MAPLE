@@ -15,6 +15,10 @@ Default agent: `@orchestrator`. It never writes code — delegates everything to
 | `/superpower-runner {name}` | Named workflow: `new-ui-feature`, `api-endpoint`, `bugfix`, `design-refresh` |
 | `/ship-safe` | Run `npx ship-safe audit .` security scan before shipping |
 
+## RTK Token Optimizer
+
+`rtk` is installed alongside `maple`. It hooks into Bash tool calls and compresses output before it reaches the LLM — reducing token use 60–90% on common dev commands (git, grep, build logs, test output). No command changes required. Disable per-session with `RTK_DISABLE=1`.
+
 ## Specialist Agents
 
 | Agent | Responsibility |

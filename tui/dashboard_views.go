@@ -682,10 +682,15 @@ func (m *dashboardModel) pipelineStatusView() string {
 			fmt.Sprintf("  Stage:       %s", lipgloss.NewStyle().Foreground(t.Foreground).Render(ps.Stage)),
 			fmt.Sprintf("  Status:      %s %s", iconStyle.Render(ps.statusIcon()), iconStyle.Render(ps.Status)),
 		)
-		if ps.AwaitingApproval != "" {
+		if ps.AwaitingApproval != "" || m.approvalPending != "" {
+			stage := ps.AwaitingApproval
+			if m.approvalPending != "" {
+				stage = m.approvalPending
+			}
 			bodyLines = append(bodyLines,
 				"",
-				lipgloss.NewStyle().Foreground(t.Accent).Render("  ⏸ Awaiting approval: "+ps.AwaitingApproval),
+				lipgloss.NewStyle().Foreground(t.Accent).Render("  ⏸ Awaiting approval: "+stage),
+				lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("  [a] approve  — advances pipeline to next stage"),
 			)
 		}
 		if ps.UpdatedAt != "" {
@@ -702,6 +707,70 @@ func (m *dashboardModel) pipelineStatusView() string {
 	innerW := m.width - 10
 	if innerW < 40 {
 		innerW = 40
+	}
+	box := lipgloss.NewStyle().
+		Width(innerW).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Primary).
+		Padding(1, 2).
+		Render(inner)
+
+	availH := m.height - 6
+	if availH < 10 {
+		availH = 10
+	}
+	return lipgloss.Place(m.width, availH, lipgloss.Center, lipgloss.Center, box)
+}
+
+// launcherView renders the session launcher overlay (L key).
+func (m *dashboardModel) launcherView() string {
+	t := m.theme
+	tools := launcherTools()
+
+	title := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("[L] Launch Session")
+	var bodyLines []string
+
+	pinnedStyle := lipgloss.NewStyle().Foreground(t.Success)
+	mutedStyle := lipgloss.NewStyle().Foreground(t.Muted)
+	selStyle := lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
+
+	if !m.launcherInput {
+		bodyLines = append(bodyLines, mutedStyle.Render("  Select tool  [j/k] navigate · [Enter] type command · [Esc] close"), "")
+		for i, tool := range tools {
+			cursor := "  "
+			style := mutedStyle
+			if i == m.launcherCur {
+				cursor = "▶ "
+				style = selStyle
+			}
+			pinned := ""
+			if id := m.pinnedSessions[tool]; id != "" {
+				pinned = " " + pinnedStyle.Render("★ pinned: "+id[:8]+"…")
+			}
+			bodyLines = append(bodyLines, cursor+style.Render(tool)+pinned)
+		}
+	} else {
+		tool := ""
+		if m.launcherCur < len(tools) {
+			tool = tools[m.launcherCur]
+		}
+		bodyLines = append(bodyLines,
+			mutedStyle.Render("  Launching: "+selStyle.Render(tool)),
+			"",
+			mutedStyle.Render("  Command (optional — leave empty to open interactively):"),
+			"  "+m.launcherCmd+"█",
+			"",
+			mutedStyle.Render("  [Enter] launch · [Esc] back"),
+		)
+		if id := m.pinnedSessions[tool]; id != "" {
+			bodyLines = append(bodyLines, "", pinnedStyle.Render("  ★ Will resume pinned session "+id[:8]+"…"))
+		}
+	}
+
+	inner := title + "\n\n" + strings.Join(bodyLines, "\n")
+	innerW := m.width - 10
+	if innerW < 50 {
+		innerW = 50
 	}
 	box := lipgloss.NewStyle().
 		Width(innerW).

@@ -96,17 +96,35 @@ When a stage has `gate: human-approval`:
   "updated_at": "<iso8601>"
 }
 ```
-3. Output:
+3. Write the stage name to `.claude/state/approval-pending.txt` so the TUI can surface it:
+```bash
+echo "<stage-name>" > .claude/state/approval-pending.txt
+```
+4. Output:
 ```
 SUPERPOWER PAUSED — awaiting human approval
 Stage:    <stage-name>
 Artifact: <artifact path or description>
 
-Review the output above. When approved, reply "approved" or "continue".
-I will not advance to the next stage until you confirm.
+Approve via the maple TUI ([P] pipeline → [a] approve) or reply "approved" / "continue".
+I will not advance to the next stage until approval is confirmed.
 ```
-4. Wait for human response. Resume only on explicit approval.
-5. On resume: update `maple.json` to `RUNNING`, advance to next stage.
+5. Poll for the approval signal — the TUI deletes the file when the user presses [a]:
+```bash
+until [ ! -f .claude/state/approval-pending.txt ]; do sleep 2; done
+```
+   Also accept an explicit "approved" or "continue" reply in chat as an alternative.
+6. On resume: update `maple.json` to `RUNNING`, advance to next stage.
+
+### Session context
+
+On startup, read `.claude/state/sessions.json` if it exists — it contains pinned session IDs for each harness:
+
+```json
+{ "claude": "<uuid>", "opencode": "<id>", "copilot": "<id>" }
+```
+
+Use the matching session ID when the superpower needs to resume or continue work within an existing agent session. If the file is absent or the relevant key is missing, start a new session normally.
 
 ### 5. Completion
 
@@ -148,17 +166,38 @@ Stop execution. Report to human with the failed stage name and error. Do not att
 
 ## State File Reference
 
-`.claude/state/maple.json` fields:
+All state files live in `.claude/state/`. Both this skill and the maple TUI read and write these files — they are the shared communication channel between the running agent and the dashboard.
 
-| Field | Type | Values |
+### `.claude/state/maple.json`
+
+Written by the skill at every stage transition. The TUI reads it to display pipeline progress. **Do not overwrite fields you don't own** — the TUI writes `state` and `ts` recovery marker fields into this same file; merge your fields on top.
+
+| Field | Owner | Values |
 |---|---|---|
-| `superpower` | string | workflow name |
-| `stage` | string | current stage name |
-| `status` | string | `RUNNING`, `PAUSED`, `DONE`, `FAILED` |
-| `awaiting_approval` | string\|null | stage name blocked on human approval |
-| `pipeline` | string | `standard` if running 8-phase |
-| `started_at` | string | ISO 8601 |
-| `updated_at` | string | ISO 8601 |
+| `superpower` | skill | workflow name |
+| `stage` | skill | current stage name |
+| `status` | skill | `RUNNING`, `PAUSED`, `DONE`, `FAILED` |
+| `awaiting_approval` | skill | stage name blocked on human approval, or `null` |
+| `pipeline` | skill | `standard` if running 8-phase |
+| `started_at` | skill | ISO 8601 |
+| `updated_at` | skill | ISO 8601 |
+| `state` | TUI | `running` or `exited` (recovery marker) |
+| `ts` | TUI | ISO 8601 (recovery marker timestamp) |
+
+### `.claude/state/approval-pending.txt`
+
+Written by the skill: contains the stage name waiting for approval.
+Deleted by the TUI: when the user presses `[a]` in the pipeline overlay.
+The skill polls for deletion; TUI polls for creation.
+
+### `.claude/state/sessions.json`
+
+Written by the TUI: maps harness name → pinned session ID.
+Read by the skill: use pinned session IDs when resuming within an existing session.
+
+```json
+{ "claude": "<uuid>", "opencode": "<id>", "copilot": "<id>" }
+```
 
 ## Skip Conditions
 
