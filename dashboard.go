@@ -1,14 +1,9 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -36,12 +31,13 @@ type prRow struct {
 }
 
 type agentRow struct {
-	agent string
-	op    string
-	file  string
-	ts    string
+	agent     string
+	op        string
+	file      string
+	ts        string
+	source    string // "claude", "opencode", "maple"
+	sessionID string // for session detail drill-down
 }
-
 
 // ─── Dashboard exit actions ───────────────────────────────────────────────────
 
@@ -150,6 +146,13 @@ type dashboardModel struct {
 	storyScroll    int
 	storyTitle     string
 	storyDir       string // directory of the open story (for re-edit cleanup)
+
+	// session detail overlay
+	showSession   bool
+	sessionLines  []string
+	sessionScroll int
+	sessionTitle  string
+	sessionSource string
 
 	exitAction dashAction
 }
@@ -404,6 +407,31 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Session detail overlay
+	if m.showSession {
+		maxScroll := len(m.sessionLines) - (m.height - 14)
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		switch k {
+		case "j", "down":
+			if m.sessionScroll < maxScroll {
+				m.sessionScroll++
+			}
+		case "k", "up":
+			if m.sessionScroll > 0 {
+				m.sessionScroll--
+			}
+		case "g":
+			m.sessionScroll = 0
+		case "G":
+			m.sessionScroll = maxScroll
+		case "q", "esc", "b", "ctrl+c":
+			m.showSession = false
+		}
+		return m, nil
+	}
+
 	// Story detail overlay
 	if m.showStory {
 		maxScroll := len(m.storyLines) - (m.height - 14)
@@ -520,6 +548,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if m.focus == paneStories && m.storiesCur < len(m.stories) {
 			m.openStoryDetail(m.stories[m.storiesCur])
+		} else if m.focus == paneAgents && m.agentsCur < len(m.agents) {
+			m.openSessionDetail(m.agents[m.agentsCur])
 		}
 	case "j", "down":
 		m.moveCursorDown()
@@ -646,66 +676,6 @@ func (m *dashboardModel) moveCursorBottom() {
 	}
 }
 
-// extractGherkinFromLines pulls the content inside the first ```gherkin ... ``` block.
-// Falls back to returning all lines that look like Gherkin keywords.
-func extractGherkinFromLines(lines []string) string {
-	var inFence bool
-	var out []string
-	for _, l := range lines {
-		t := strings.TrimSpace(l)
-		if !inFence && (t == "```gherkin" || t == "```") {
-			inFence = true
-			continue
-		}
-		if inFence {
-			if t == "```" {
-				break
-			}
-			out = append(out, l)
-		}
-	}
-	if len(out) > 0 {
-		return strings.TrimSpace(strings.Join(out, "\n"))
-	}
-	// No fence found — return any Gherkin-looking lines
-	for _, l := range lines {
-		t := strings.TrimSpace(l)
-		if t == "" {
-			continue
-		}
-		for _, kw := range []string{"Feature:", "Background:", "Scenario", "Given ", "When ", "Then ", "And ", "But ", "@"} {
-			if strings.HasPrefix(t, kw) {
-				out = append(out, l)
-				break
-			}
-		}
-	}
-	return strings.TrimSpace(strings.Join(out, "\n"))
-}
-
-// openStoryDetail reads a Story.md and sets up the overlay.
-func (m *dashboardModel) openStoryDetail(s storyRow) {
-	raw, err := os.ReadFile(s.path)
-	if err != nil {
-		m.status = "✗ could not read " + s.path
-		m.statusErr = true
-		return
-	}
-	// Strip YAML frontmatter (between --- delimiters)
-	content := string(raw)
-	if strings.HasPrefix(content, "---") {
-		end := strings.Index(content[3:], "\n---")
-		if end >= 0 {
-			content = strings.TrimSpace(content[3+end+4:])
-		}
-	}
-	m.storyLines = strings.Split(content, "\n")
-	m.storyScroll = 0
-	m.storyTitle = s.id
-	m.storyDir = filepath.Dir(s.path)
-	m.showStory = true
-}
-
 func (m *dashboardModel) execCmd(input string) string {
 	parts := strings.Fields(input)
 	if len(parts) == 0 {
@@ -782,6 +752,9 @@ func (m *dashboardModel) View() string {
 	}
 
 	// Overlays (rendered over the grid)
+	if m.showSession {
+		return m.header() + m.sessionDetailView() + m.footer()
+	}
 	if m.showStory {
 		return m.header() + m.storyDetailView() + m.footer()
 	}
@@ -825,6 +798,8 @@ func (m *dashboardModel) footer() string {
 				keys = "  [Tab] switch tab · type a query · [Enter] search · Esc close"
 			}
 		}
+	} else if m.showSession {
+		keys = "  [j/k] scroll · [Esc] close"
 	} else if m.showStory {
 		keys = "  [j/k] scroll · [e] re-edit · [Esc] close"
 	} else if m.searchMode {
@@ -872,405 +847,6 @@ func (m *dashboardModel) gridView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, top, bot)
 }
 
-// ─── Pane content renderers ───────────────────────────────────────────────────
-
-func (m *dashboardModel) storiesContent(height int) string {
-	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Stories")
-	if len(m.stories) == 0 {
-		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no stories yet — run maple req")
-	}
-	lines := []string{title}
-	cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-	for i, s := range m.stories {
-		if i >= height-2 {
-			break
-		}
-		phaseTag := lipgloss.NewStyle().Foreground(t.Muted).Render(truncate(s.phase, 8))
-		idStr := lipgloss.NewStyle().Foreground(t.Foreground).Render(truncate(s.id, 20))
-		var line string
-		if i == m.storiesCur && m.focus == paneStories {
-			line = cursor + " " + idStr + " " + phaseTag
-		} else {
-			line = "  " + idStr + " " + phaseTag
-		}
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
-}
-
-func (m *dashboardModel) agentsContent(height int) string {
-	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Recent Agents")
-	if len(m.agents) == 0 {
-		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no activity in .claude/logs/")
-	}
-	lines := []string{title}
-	cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-	for i, a := range m.agents {
-		if i >= height-2 {
-			break
-		}
-		name := lipgloss.NewStyle().Foreground(t.Foreground).Render(truncate(a.agent, 14))
-		op := lipgloss.NewStyle().Foreground(t.Muted).Render(truncate(a.op, 16))
-		var line string
-		if i == m.agentsCur && m.focus == paneAgents {
-			line = cursor + " " + name + " " + op
-		} else {
-			line = "  " + name + " " + op
-		}
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
-}
-
-func (m *dashboardModel) prsContent(height int) string {
-	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("PRs")
-	if m.prsLoading {
-		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("loading…")
-	}
-	if m.prsErr != "" {
-		return title + "\n" + lipgloss.NewStyle().Foreground(t.Warning).Render(truncate(m.prsErr, 40))
-	}
-	if len(m.prList) == 0 {
-		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no open PRs")
-	}
-	lines := []string{title}
-	cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-	for i, pr := range m.prList {
-		if i >= height-2 {
-			break
-		}
-		stateCol := t.Success
-		stateIcon := "✓"
-		if pr.state == "OPEN" {
-			stateCol = t.Accent
-			stateIcon = "●"
-		} else if pr.state == "CLOSED" {
-			stateCol = t.Muted
-			stateIcon = "✗"
-		}
-		num := lipgloss.NewStyle().Foreground(stateCol).Render(fmt.Sprintf("#%d %s", pr.number, stateIcon))
-		ttl := lipgloss.NewStyle().Foreground(t.Foreground).Render(truncate(pr.title, 28))
-		var line string
-		if i == m.prsCur && m.focus == panePRs {
-			line = cursor + " " + num + " " + ttl
-		} else {
-			line = "  " + num + " " + ttl
-		}
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
-}
-
-func (m *dashboardModel) qaContent(_ int) string {
-	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("QA / Gherkin")
-	if m.qaFeatures == 0 {
-		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no .feature files in tests/features/")
-	}
-	fLine := lipgloss.NewStyle().Foreground(t.Success).Render(
-		fmt.Sprintf("  %d feature file(s)", m.qaFeatures))
-	sLine := lipgloss.NewStyle().Foreground(t.Foreground).Render(
-		fmt.Sprintf("  %d scenario(s) total", m.qaScenarios))
-	hint := lipgloss.NewStyle().Foreground(t.Muted).Render("  make test-features-sync to regenerate")
-	return strings.Join([]string{title, fLine, sLine, hint}, "\n")
-}
-
-func (m *dashboardModel) designView() string {
-	t := m.theme
-	innerH := m.height - 14
-	if innerH < 4 {
-		innerH = 4
-	}
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Design Artifacts")
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("─", m.width-4))
-	if len(m.designTree) == 0 {
-		return title + "\n" + sep + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("docs/design/ is empty")
-	}
-	lines := []string{title, sep}
-	cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-	start := m.designCur - innerH/2
-	if start < 0 {
-		start = 0
-	}
-	for i, entry := range m.designTree[start:] {
-		if i >= innerH {
-			break
-		}
-		abs := start + i
-		var line string
-		if abs == m.designCur {
-			line = cursor + " " + lipgloss.NewStyle().Foreground(t.Foreground).Render(entry)
-		} else {
-			line = "  " + lipgloss.NewStyle().Foreground(t.Muted).Render(entry)
-		}
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n")
-}
-
-func (m *dashboardModel) logsView() string {
-	t := m.theme
-	innerH := m.height - 14
-	if innerH < 4 {
-		innerH = 4
-	}
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Skill Logs (.claude/logs/skills.jsonl)")
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("─", m.width-4))
-	if len(m.logLines) == 0 {
-		return title + "\n" + sep + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no log entries yet")
-	}
-	lines := []string{title, sep}
-	start := m.logsCur - innerH + 2
-	if start < 0 {
-		start = 0
-	}
-	for i, entry := range m.logLines[start:] {
-		if i >= innerH {
-			break
-		}
-		abs := start + i
-		col := t.Muted
-		if abs == m.logsCur {
-			col = t.Foreground
-		}
-		lines = append(lines, lipgloss.NewStyle().Foreground(col).Render("  "+truncate(entry, m.width-6)))
-	}
-	hint := lipgloss.NewStyle().Foreground(t.Muted).Render(
-		fmt.Sprintf("  j/k scroll · %d/%d", m.logsCur+1, len(m.logLines)))
-	lines = append(lines, hint)
-	return strings.Join(lines, "\n")
-}
-
-func (m *dashboardModel) skillsBrowserView() string {
-	t := m.theme
-
-	// Tab headers
-	installedStyle := lipgloss.NewStyle().Foreground(t.Muted)
-	searchStyle := lipgloss.NewStyle().Foreground(t.Muted)
-	if !m.skillsTabSearch {
-		installedStyle = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Underline(true)
-	} else {
-		searchStyle = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Underline(true)
-	}
-	tabs := "  " + installedStyle.Render("Installed") + "  " + searchStyle.Render("Search")
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
-	lines := []string{tabs, sep}
-
-	if m.npxPath == "" {
-		lines = append(lines,
-			"",
-			lipgloss.NewStyle().Foreground(t.Warning).Render("  npx not found — install Node.js from nodejs.org"),
-		)
-		return strings.Join(lines, "\n")
-	}
-
-	if !m.skillsTabSearch {
-		// ── Installed tab ─────────────────────────────────────────
-		if m.installedLoading {
-			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  loading installed skills…"))
-		} else if m.installedErr != "" {
-			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Error).Render("  "+m.installedErr))
-		} else if len(m.installedSkills) == 0 {
-			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  no skills installed — switch to Search tab to add some"))
-		} else {
-			cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-			for i, sk := range m.installedSkills {
-				name := lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(fmt.Sprintf("%-24s", sk.name))
-				pkg := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("%-28s", sk.pkg))
-				scope := lipgloss.NewStyle().Foreground(t.Muted).Render(sk.scope)
-				if i == m.installedCur {
-					lines = append(lines, "  "+cursor+" "+name+" "+pkg+" "+scope)
-				} else {
-					lines = append(lines, "      "+name+" "+pkg+" "+scope)
-				}
-			}
-		}
-	} else {
-		// ── Search tab ────────────────────────────────────────────
-		search := lipgloss.NewStyle().Foreground(t.Muted).Render("  search: ") +
-			lipgloss.NewStyle().Foreground(t.Foreground).Render(m.skillsQuery+"█")
-		lines = append(lines, search)
-
-		if m.skillsLoading {
-			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  searching…"))
-		} else if m.skillsErr != "" {
-			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Error).Render("  "+m.skillsErr))
-		} else if len(m.skillsItems) == 0 && m.skillsSearched {
-			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  no results — try a different query"))
-		} else if len(m.skillsItems) == 0 {
-			lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  type a query and press Enter to search"))
-		} else {
-			cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-			for i, sk := range m.skillsItems {
-				pkg := lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(fmt.Sprintf("%-42s", sk.pkg))
-				installs := lipgloss.NewStyle().Foreground(t.Muted).Render(sk.installs + " installs")
-				if i == m.skillsCur {
-					lines = append(lines, "  "+cursor+" "+pkg+" "+installs)
-					if sk.url != "" {
-						lines = append(lines, "       "+lipgloss.NewStyle().Foreground(t.Muted).Render(sk.url))
-					}
-				} else {
-					lines = append(lines, "      "+pkg+" "+installs)
-				}
-			}
-		}
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// storyDetailView renders the selected Story.md as a full-screen overlay.
-func (m *dashboardModel) storyDetailView() string {
-	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  " + m.storyTitle)
-	dir := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + m.storyDir)
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
-
-	visible := m.height - 14
-	if visible < 4 {
-		visible = 4
-	}
-	end := m.storyScroll + visible
-	if end > len(m.storyLines) {
-		end = len(m.storyLines)
-	}
-	window := m.storyLines[m.storyScroll:end]
-
-	var sb strings.Builder
-	sb.WriteString(title + "\n" + dir + "\n" + sep + "\n\n")
-	for _, l := range window {
-		sb.WriteString("  " + colorizeStoryLine(l, t) + "\n")
-	}
-
-	total := len(m.storyLines)
-	if total > visible {
-		pct := (m.storyScroll * 100) / (total - visible)
-		sb.WriteString(fmt.Sprintf("\n  %s\n",
-			lipgloss.NewStyle().Foreground(t.Muted).Render(
-				fmt.Sprintf("(%d%%)  j/k scroll · e re-edit · Esc close", pct))))
-	} else {
-		sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(t.Muted).Render("e re-edit · Esc close") + "\n")
-	}
-	return sb.String()
-}
-
-// colorizeStoryLine applies minimal markdown-aware colours to a Story.md line.
-func colorizeStoryLine(line string, t Theme) string {
-	trimmed := strings.TrimSpace(line)
-	switch {
-	case strings.HasPrefix(trimmed, "# "):
-		return lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(line)
-	case strings.HasPrefix(trimmed, "## "):
-		return lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render(line)
-	case strings.HasPrefix(trimmed, "### "):
-		return lipgloss.NewStyle().Foreground(t.Warning).Render(line)
-	case strings.HasPrefix(trimmed, "- [ ]"):
-		check := lipgloss.NewStyle().Foreground(t.Muted).Render("- [ ]")
-		rest := lipgloss.NewStyle().Foreground(t.Foreground).Render(line[strings.Index(line, "- [ ]")+5:])
-		return check + rest
-	case strings.HasPrefix(trimmed, "- [x]"), strings.HasPrefix(trimmed, "- [X]"):
-		check := lipgloss.NewStyle().Foreground(t.Success).Render("- [x]")
-		rest := lipgloss.NewStyle().Foreground(t.Muted).Render(line[strings.Index(line, "- [")+5:])
-		return check + rest
-	case strings.HasPrefix(trimmed, "```"):
-		return lipgloss.NewStyle().Foreground(t.Muted).Render(line)
-	case strings.HasPrefix(trimmed, "Feature:"),
-		strings.HasPrefix(trimmed, "Scenario:"),
-		strings.HasPrefix(trimmed, "Given "),
-		strings.HasPrefix(trimmed, "When "),
-		strings.HasPrefix(trimmed, "Then "),
-		strings.HasPrefix(trimmed, "And "),
-		strings.HasPrefix(trimmed, "But "),
-		strings.HasPrefix(trimmed, "@"):
-		return colorizeGherkin(line, t)
-	default:
-		return lipgloss.NewStyle().Foreground(t.Foreground).Render(line)
-	}
-}
-
-func (m *dashboardModel) helpView() string {
-	t := m.theme
-	titleStyle := lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("─", 62))
-
-	keyBindings := [][2]string{
-		{"Tab / Shift+Tab", "cycle panes"},
-		{"j / k  (↓ / ↑)", "navigate rows"},
-		{"gg / G", "jump to top / bottom"},
-		{"s  a  p  Q", "focus Stories / Agents / PRs / QA"},
-		{"d", "toggle Design pane (full-screen)"},
-		{"l", "toggle Logs pane (full-screen)"},
-		{"n", "new story → Gherkin requirements wizard"},
-		{"u", "update — re-sync template files"},
-		{"r", "reload all pane data"},
-		{"F", "Skills marketplace (skills.sh)"},
-		{"/", "search within active pane"},
-		{"?", "this help overlay"},
-		{"q  /  Ctrl+C", "quit"},
-	}
-
-	cmdRef := [][2]string{
-		{":q  :wq  :q!  :x", "quit"},
-		{":e  :e!  :r  :reload", "reload data"},
-		{":n  :req  :story", "new story wizard"},
-		{":u  :update", "re-sync template"},
-		{":labels", "bootstrap GitHub labels"},
-		{":project", "create GitHub Project v2"},
-		{":theme <name>", "switch colour theme"},
-		{":colo <name>", "alias for :theme"},
-		{":debug", "toggle debug log"},
-		{":help  :h  :?", "this overlay"},
-		{"", ""},
-		{"themes:", "tokyo-night  catppuccin-mocha"},
-		{"", "gruvbox  nord  everforest"},
-	}
-
-	renderCol := func(rows [][2]string) []string {
-		var out []string
-		for _, p := range rows {
-			if p[0] == "" && p[1] == "" {
-				out = append(out, "")
-				continue
-			}
-			key := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("  %-24s", p[0]))
-			val := lipgloss.NewStyle().Foreground(t.Foreground).Render(p[1])
-			out = append(out, key+val)
-		}
-		return out
-	}
-
-	leftTitle := titleStyle.Render("  Keybindings")
-	rightTitle := titleStyle.Render("  : Commands")
-	leftLines := renderCol(keyBindings)
-	rightLines := renderCol(cmdRef)
-
-	// pad both columns to same length
-	for len(leftLines) < len(rightLines) {
-		leftLines = append(leftLines, "")
-	}
-	for len(rightLines) < len(leftLines) {
-		rightLines = append(rightLines, "")
-	}
-
-	halfW := (m.width - 4) / 2
-	colStyle := lipgloss.NewStyle().Width(halfW)
-
-	var rows []string
-	header := lipgloss.JoinHorizontal(lipgloss.Top,
-		colStyle.Render(leftTitle), colStyle.Render(rightTitle))
-	rows = append(rows, header, sep)
-	for i := range leftLines {
-		row := lipgloss.JoinHorizontal(lipgloss.Top,
-			colStyle.Render(leftLines[i]), colStyle.Render(rightLines[i]))
-		rows = append(rows, row)
-	}
-	rows = append(rows, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  Press any key to close"))
-	return strings.Join(rows, "\n")
-}
-
 func (m *dashboardModel) narrowView() string {
 	t := m.theme
 	lines := []string{
@@ -1288,451 +864,6 @@ func (m *dashboardModel) narrowView() string {
 	}
 	lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  q quit"))
 	return strings.Join(lines, "\n")
-}
-
-// ─── Data loaders ─────────────────────────────────────────────────────────────
-
-func loadStories() []storyRow {
-	var rows []storyRow
-	// New format: docs/stories/*/Story.md
-	dirs, _ := filepath.Glob("docs/stories/*/Story.md")
-	for _, p := range dirs {
-		if r, ok := parseStoryFile(p); ok {
-			rows = append(rows, r)
-		}
-	}
-	// Legacy format: docs/stories/*.md (excluding _template.md)
-	files, _ := filepath.Glob("docs/stories/*.md")
-	for _, p := range files {
-		if strings.HasPrefix(filepath.Base(p), "_") {
-			continue
-		}
-		if r, ok := parseStoryFile(p); ok {
-			rows = append(rows, r)
-		}
-	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].id < rows[j].id })
-	return rows
-}
-
-func parseStoryFile(path string) (storyRow, bool) {
-	f, err := os.Open(path)
-	if err != nil {
-		return storyRow{}, false
-	}
-	defer f.Close()
-
-	fm := extractFrontmatter(f)
-	if len(fm) == 0 {
-		return storyRow{}, false
-	}
-
-	r := storyRow{
-		id:       fm["id"],
-		slug:     fm["story_slug"],
-		priority: fm["priority"],
-		path:     path,
-	}
-	if r.id == "" {
-		r.id = fm["story_id"]
-	}
-	if r.id == "" {
-		r.id = filepath.Base(filepath.Dir(path))
-	}
-	r.phase = extractPhaseFromLabels(fm["labels"])
-	if fm["ui"] == "true" {
-		r.ui = true
-	}
-	if n, err := strconv.Atoi(fm["issue_number"]); err == nil {
-		r.issue = n
-	}
-	return r, true
-}
-
-func extractFrontmatter(f *os.File) map[string]string {
-	m := map[string]string{}
-	scanner := bufio.NewScanner(f)
-	inFM := false
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "---" {
-			if !inFM {
-				inFM = true
-				continue
-			}
-			break
-		}
-		if !inFM {
-			continue
-		}
-		idx := strings.Index(line, ":")
-		if idx < 0 {
-			continue
-		}
-		k := strings.TrimSpace(line[:idx])
-		v := strings.TrimSpace(line[idx+1:])
-		v = strings.Trim(v, `"'`)
-		m[k] = v
-	}
-	return m
-}
-
-func extractPhaseFromLabels(labels string) string {
-	// labels field looks like: ["type:feature", "phase:implement"]
-	for _, part := range strings.Split(labels, ",") {
-		part = strings.TrimSpace(part)
-		part = strings.Trim(part, `[]"' `)
-		if strings.HasPrefix(part, "phase:") {
-			return strings.TrimPrefix(part, "phase:")
-		}
-	}
-	return "discover"
-}
-
-func loadPRsCmd() tea.Cmd {
-	return func() tea.Msg {
-		ghPath, err := exec.LookPath("gh")
-		if err != nil {
-			return prsLoadedMsg{err: "gh not found"}
-		}
-		out, err := exec.Command(ghPath, "pr", "list",
-			"--json", "number,title,state",
-			"--limit", "20",
-		).Output()
-		if err != nil {
-			return prsLoadedMsg{err: "gh pr list: " + strings.TrimSpace(string(out))}
-		}
-		var raw []struct {
-			Number int    `json:"number"`
-			Title  string `json:"title"`
-			State  string `json:"state"`
-		}
-		if err := json.Unmarshal(out, &raw); err != nil {
-			return prsLoadedMsg{err: "parse error"}
-		}
-		rows := make([]prRow, len(raw))
-		for i, r := range raw {
-			rows[i] = prRow{r.Number, r.Title, r.State}
-		}
-		return prsLoadedMsg{items: rows}
-	}
-}
-
-func loadAgents() []agentRow {
-	var rows []agentRow
-	seen := map[string]bool{}
-	add := func(r agentRow) {
-		key := r.agent + "|" + r.op + "|" + r.file
-		if seen[key] {
-			return
-		}
-		seen[key] = true
-		rows = append(rows, r)
-	}
-
-	// Primary: MAPLE skills log
-	if data, err := os.ReadFile(".claude/logs/skills.jsonl"); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		for i := len(lines) - 1; i >= 0; i-- {
-			line := strings.TrimSpace(lines[i])
-			if line == "" {
-				continue
-			}
-			var e map[string]interface{}
-			if err := json.Unmarshal([]byte(line), &e); err != nil {
-				continue
-			}
-			agent, _ := e["agent"].(string)
-			if agent == "" {
-				agent, _ = e["skill"].(string)
-			}
-			if agent == "" {
-				continue
-			}
-			add(agentRow{
-				agent: agent,
-				op:    str(e["op"]),
-				file:  str(e["file"]),
-				ts:    str(e["ts"]),
-			})
-		}
-	}
-
-	// Secondary: Claude Code native session logs for the current project
-	rows = append(rows, loadClaudeSessionActivity()...)
-	// Re-deduplicate after merge (loadClaudeSessionActivity has its own seen set
-	// but timestamps may differ from skills.jsonl entries for the same op)
-	final := rows[:0]
-	finalSeen := map[string]bool{}
-	for _, r := range rows {
-		key := r.agent + "|" + r.op + "|" + r.file
-		if finalSeen[key] {
-			continue
-		}
-		finalSeen[key] = true
-		final = append(final, r)
-		if len(final) >= 12 {
-			break
-		}
-	}
-	return final
-}
-
-// loadClaudeSessionActivity reads Claude Code's native session JSONL for the
-// current working directory and extracts recent tool-use activity.
-func loadClaudeSessionActivity() []agentRow {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-
-	// Claude Code encodes the project path by replacing every "/" with "-"
-	encoded := strings.ReplaceAll(cwd, "/", "-")
-	projectDir := filepath.Join(home, ".claude", "projects", encoded)
-
-	entries, err := os.ReadDir(projectDir)
-	if err != nil {
-		return nil
-	}
-
-	// Collect JSONL files sorted newest-first by ModTime
-	type mtime struct {
-		path string
-		t    time.Time
-	}
-	var files []mtime
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
-			continue
-		}
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		files = append(files, mtime{filepath.Join(projectDir, e.Name()), info.ModTime()})
-	}
-	sort.Slice(files, func(i, j int) bool { return files[i].t.After(files[j].t) })
-
-	var rows []agentRow
-	seen := map[string]bool{}
-
-	for _, f := range files {
-		if len(rows) >= 8 {
-			break
-		}
-		data, err := os.ReadFile(f.path)
-		if err != nil {
-			continue
-		}
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		// Walk backward — most recent first
-		for i := len(lines) - 1; i >= 0 && len(rows) < 8; i-- {
-			line := strings.TrimSpace(lines[i])
-			if line == "" {
-				continue
-			}
-			var e map[string]interface{}
-			if err := json.Unmarshal([]byte(line), &e); err != nil {
-				continue
-			}
-			r, ok := claudeEntryToRow(e)
-			if !ok {
-				continue
-			}
-			key := r.agent + "|" + r.op + "|" + r.file
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			rows = append(rows, r)
-		}
-	}
-	return rows
-}
-
-// claudeEntryToRow converts one Claude Code session JSONL entry into an agentRow.
-func claudeEntryToRow(e map[string]interface{}) (agentRow, bool) {
-	ts, _ := e["timestamp"].(string)
-	if ts != "" && len(ts) > 19 {
-		ts = ts[:19] // trim to "2006-01-02T15:04:05"
-	}
-
-	switch e["type"] {
-	case "ai-title":
-		title, _ := e["aiTitle"].(string)
-		if title == "" {
-			return agentRow{}, false
-		}
-		return agentRow{agent: "claude", op: title, ts: ts}, true
-
-	case "last-prompt":
-		prompt, _ := e["lastPrompt"].(string)
-		if prompt == "" {
-			return agentRow{}, false
-		}
-		if len(prompt) > 48 {
-			prompt = prompt[:48] + "…"
-		}
-		return agentRow{agent: "user", op: prompt, ts: ts}, true
-
-	case "user":
-		// Sub-agent tool result entries carry agentType
-		msg, _ := e["message"].(map[string]interface{})
-		if msg == nil {
-			return agentRow{}, false
-		}
-		content, _ := msg["content"].([]interface{})
-		for _, c := range content {
-			cm, _ := c.(map[string]interface{})
-			if cm == nil {
-				continue
-			}
-			agentType, _ := e["agentType"].(string)
-			if agentType == "" {
-				agentType, _ = cm["agentType"].(string)
-			}
-			if agentType != "" {
-				toolCount := ""
-				if v, ok := e["totalToolUseCount"].(float64); ok {
-					toolCount = fmt.Sprintf("%d tools", int(v))
-				}
-				return agentRow{agent: agentType, op: toolCount, ts: ts}, true
-			}
-		}
-
-	case "assistant":
-		msg, _ := e["message"].(map[string]interface{})
-		if msg == nil {
-			return agentRow{}, false
-		}
-		content, _ := msg["content"].([]interface{})
-		for _, c := range content {
-			cm, _ := c.(map[string]interface{})
-			if cm == nil || cm["type"] != "tool_use" {
-				continue
-			}
-			toolName, _ := cm["name"].(string)
-			if toolName == "" {
-				continue
-			}
-			file := ""
-			if inp, ok := cm["input"].(map[string]interface{}); ok {
-				for _, k := range []string{"file_path", "path", "command"} {
-					if v, _ := inp[k].(string); v != "" {
-						file = v
-						if len(file) > 32 {
-							file = "…" + file[len(file)-32:]
-						}
-						break
-					}
-				}
-			}
-			return agentRow{agent: "claude", op: toolName, file: file, ts: ts}, true
-		}
-	}
-	return agentRow{}, false
-}
-
-func str(v interface{}) string {
-	s, _ := v.(string)
-	return s
-}
-
-func loadQA() (files int, scenarios int) {
-	entries, err := filepath.Glob("tests/features/*.feature")
-	if err != nil {
-		return
-	}
-	files = len(entries)
-	for _, p := range entries {
-		data, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-		for _, l := range strings.Split(string(data), "\n") {
-			t := strings.TrimSpace(l)
-			if strings.HasPrefix(t, "Scenario:") || strings.HasPrefix(t, "Scenario Outline:") {
-				scenarios++
-			}
-		}
-	}
-	return
-}
-
-func loadDesignTree() []string {
-	var entries []string
-	_ = filepath.WalkDir("docs/design", func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if filepath.Base(path) == ".gitkeep" {
-			return nil
-		}
-		rel := strings.TrimPrefix(path, "docs/design/")
-		if rel == "" || rel == "docs/design" {
-			return nil
-		}
-		prefix := strings.Repeat("  ", strings.Count(rel, string(os.PathSeparator)))
-		icon := "📄 "
-		if d.IsDir() {
-			icon = "📁 "
-		}
-		entries = append(entries, prefix+icon+filepath.Base(path))
-		return nil
-	})
-	return entries
-}
-
-func loadLogLines(n int) []string {
-	data, err := os.ReadFile(".claude/logs/skills.jsonl")
-	if err != nil {
-		return nil
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	// Pretty-format each JSON line
-	var out []string
-	for _, l := range lines {
-		l = strings.TrimSpace(l)
-		if l == "" {
-			continue
-		}
-		var m map[string]interface{}
-		if err := json.Unmarshal([]byte(l), &m); err != nil {
-			out = append(out, l)
-			continue
-		}
-		parts := []string{}
-		for _, k := range []string{"ts", "agent", "skill", "op", "file", "duration", "error"} {
-			if v, ok := m[k]; ok && v != nil && v != "" {
-				parts = append(parts, fmt.Sprintf("%s=%v", k, v))
-			}
-		}
-		out = append(out, strings.Join(parts, "  "))
-	}
-	return out
-}
-
-
-func loadProjectName() string {
-	data, err := os.ReadFile("project.config.yaml")
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "name:") {
-			n := strings.TrimSpace(strings.TrimPrefix(line, "name:"))
-			return strings.Trim(n, `"'`)
-		}
-	}
-	return ""
 }
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
