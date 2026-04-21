@@ -2,25 +2,31 @@
 
 This example traces a `ui: true` story through the full `new-ui-feature` superpower: Spec-Kit intake → design → 8-phase pipeline → a11y gate.
 
-## Step 1 — Problem Statement
+## Step 1 — Story File (written by Spec-Kit)
+
+Run `/feature user can reset their password via email` in Claude Code. The orchestrator dispatches `@spec-kit`, which writes the Gherkin story directly to `docs/stories/`.
 
 ```
-docs/specs/user-auth-reset-password/PROBLEM.md  (status: approved)
+docs/stories/user-auth-0001.md
 ```
 
-**Who is affected:** Registered users who have forgotten their password.
-**Current situation:** No self-service password reset exists. Users email support.
-**Impact:** ~40 support tickets/week are password resets. 2-day average resolution time.
-**Desired outcome:** User receives a reset link by email within 60 seconds and can set a new password without contacting support.
-
-## Step 2 — Spec (Gherkin)
-
+Frontmatter:
+```yaml
+id: "user-auth-0001"
+title: "User can reset their password via email"
+epic: "user-auth"
+priority: "high"
+ui: true
+adr_required: false
+phase: discover
+labels:
+  - "type:feature"
+  - "priority:high"
+status: draft
+issue_number: null
 ```
-docs/specs/user-auth-reset-password/SPEC.md  (status: approved)
-```
 
-Key acceptance criterion (Gherkin):
-
+Story body (Gherkin):
 ```gherkin
 Feature: Password Reset
 
@@ -35,32 +41,16 @@ Feature: Password Reset
     When they submit the password reset form
     Then they see a generic confirmation message
     And no email is sent
+
+  Scenario: Unauthenticated access to reset endpoint
+    Given the user is not logged in
+    When they attempt to call the password reset endpoint directly
+    Then the response is 401 Unauthorized
 ```
 
-## Step 3 — Story File (emitted by Spec-Kit)
+Human approves story → `status: approved` in frontmatter.
 
-```
-docs/stories/user-auth-reset-password-20250416143000-0001.md
-```
-
-Frontmatter:
-```yaml
-id: "user-auth-0001"
-title: "User can reset their password via email"
-epic: "user-auth"
-priority: "high"
-ui: true
-adr_required: false
-milestone: "v1.0"
-labels:
-  - "type:feature"
-  - "priority:high"
-  - "phase:discover"
-issue_number: null
-issue_url: null
-```
-
-## Step 4 — Design Flow (ui: true gates)
+## Step 2 — Design Flow (ui: true gates)
 
 | Artifact | Location | Status needed |
 |---|---|---|
@@ -69,17 +59,17 @@ issue_url: null
 | Mockup | `docs/design/mockups/user-auth-0001.mockup.tsx` | `approved` |
 | A11y report | `docs/design/mockups/user-auth-0001.a11y.json` | no violations |
 
-## Step 5 — Pipeline
+## Step 3 — Pipeline
 
 Once design gates pass, orchestrator runs standard 8-phase pipeline:
 DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE
 
-## Step 6 — SDLC Gates (pre-push)
+## Step 4 — SDLC Gates (pre-push)
 
 ```
-[frontmatter]    OK    docs/stories/user-auth-reset-password-...-0001.md
+[frontmatter]    OK    docs/stories/user-auth-0001.md
 [design-gate]    OK    wireframe:user-auth-0001  status=approved
 [design-gate]    OK    mockup:user-auth-0001     status=approved
-[a11y-gate]      OK    docs/stories/...  violations=0
-[spec-kit-gate]  OK    user-auth-reset-password  TASKS.md approved
+[a11y-gate]      OK    docs/stories/user-auth-0001.md  violations=0
+[adr-required]   SKIP  adr_required:false
 ```

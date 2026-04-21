@@ -32,7 +32,7 @@ labels:
 
 | Gate | Applies? | Reason |
 |---|---|---|
-| Spec-Kit (PROBLEM/SPEC/PLAN/TASKS) | No | `spike/*` branch |
+| Spec-Kit (story + Gherkin) | No | `spike/*` branch |
 | Wireframe / mockup approval | No | `ui: false` |
 | A11y audit | No | `ui: false` |
 | Frontmatter validation | Yes | Always runs |
@@ -63,7 +63,7 @@ Structure:
 {go / no-go / need more info}
 
 ### Follow-on stories
-- {story title} — feeds back into Spec-Kit as a new PROBLEM.md
+- {story title} — becomes a new story file; use spike findings to inform Gherkin scenarios
 ```
 
 ## Step 4 — Spike DoD

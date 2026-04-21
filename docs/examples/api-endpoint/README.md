@@ -88,5 +88,5 @@ DISCOVER → ARCHITECT (contract) → PLAN → INFRA → IMPLEMENT → VALIDATE 
 [frontmatter]    OK    docs/stories/data-export-...-0001.md
 [design-gate]    SKIP  ui:false — no design gate required
 [a11y-gate]      SKIP  ui:false — no a11y gate required
-[spec-kit-gate]  OK    data-export-export-csv  TASKS.md approved
+[adr-required]   SKIP  adr_required:false
 ```
