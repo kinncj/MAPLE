@@ -43,8 +43,9 @@ esac
 
 # ── Resolve version ────────────────────────────────────────────────────────────
 if [ -z "$VERSION" ]; then
-    # Fetch all releases, filter semver tags, sort by version, pick highest
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases" \
+    # Fetch up to 100 releases (GitHub API max per page), sort by semver, pick highest.
+    # Avoids /releases/latest which sorts by created_at, not version number.
+    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=100" \
         | grep '"tag_name"' \
         | cut -d'"' -f4 \
         | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
