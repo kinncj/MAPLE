@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -1348,6 +1349,14 @@ func runDashboard(t Theme, noAnimate bool) (dashAction, []string, error) {
 
 func writeRecoveryMarker(state string) {
 	_ = os.MkdirAll(".claude/state", 0o755)
-	data := fmt.Sprintf(`{"state":%q,"ts":%q}`, state, time.Now().UTC().Format(time.RFC3339))
-	_ = os.WriteFile(".claude/state/maple.json", []byte(data+"\n"), 0o644)
+	// Merge with existing content so superpower pipeline fields written by the
+	// superpower-runner skill are not overwritten when the TUI starts or exits.
+	merged := map[string]interface{}{}
+	if raw, err := os.ReadFile(".claude/state/maple.json"); err == nil {
+		_ = json.Unmarshal(raw, &merged)
+	}
+	merged["state"] = state
+	merged["ts"] = time.Now().UTC().Format(time.RFC3339)
+	data, _ := json.Marshal(merged)
+	_ = os.WriteFile(".claude/state/maple.json", append(data, '\n'), 0o644)
 }
