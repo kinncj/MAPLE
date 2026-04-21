@@ -1,5 +1,5 @@
 # Template project .gitignore
-# This file is copied into every project scaffolded by ai-squad init.
+# This file is copied into every project scaffolded by maple init.
 
 # Dependencies
 node_modules/
@@ -45,7 +45,7 @@ test-results/
 .claude/settings.local.json
 .claude/logs/
 .claude/pending-sync.jsonl
-.claude/state/squad.json
+.claude/state/maple.json
 
-# AI Squad CLI state (if ai-squad is installed inside the project)
-.ai-squad.json
+# MAPLE CLI state (if maple is installed inside the project)
+.maple.json

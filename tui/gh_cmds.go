@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// runLabels bootstraps the canonical AI-Squad label set in the current repo.
+// runLabels bootstraps the canonical MAPLE label set in the current repo.
 func runLabels(gh string) error {
 	if gh == "" {
 		return fmt.Errorf("gh CLI not found — install it from https://cli.github.com")
@@ -136,7 +136,7 @@ func runProject(gh string) error {
 	// Create project
 	projOut, err := exec.Command(gh, "project", "create",
 		"--owner", owner,
-		"--title", "AI-Squad",
+		"--title", "MAPLE",
 		"--format", "json",
 	).Output()
 	if err != nil {
@@ -157,7 +157,7 @@ func runProject(gh string) error {
 	// Update project.config.yaml
 	cfg := "project.config.yaml"
 	if _, err := os.Stat(cfg); os.IsNotExist(err) {
-		fmt.Printf("  ✗ %s not found — run squad init first\n", cfg)
+		fmt.Printf("  ✗ %s not found — run maple init first\n", cfg)
 		return nil
 	}
 
@@ -172,6 +172,56 @@ func runProject(gh string) error {
 		return err
 	}
 	fmt.Printf("  ✓ project.config.yaml updated\n")
+
+	// Bootstrap custom fields
+	if err := bootstrapProjectFields(gh, owner, number); err != nil {
+		fmt.Printf("  ~ custom fields: %v (project was still created)\n", err)
+	}
+	return nil
+}
+
+// bootstrapProjectFields adds the standard MAPLE custom fields to a Project v2.
+// number is the integer project number returned by gh project create.
+func bootstrapProjectFields(gh, owner, number string) error {
+	type field struct {
+		name     string
+		dataType string
+		options  []string // for SINGLE_SELECT
+	}
+	fields := []field{
+		{name: "Epic", dataType: "TEXT"},
+		{name: "Phase", dataType: "SINGLE_SELECT", options: []string{
+			"discover", "architect", "plan", "infra", "implement", "validate", "document", "gate",
+		}},
+		{name: "Type", dataType: "SINGLE_SELECT", options: []string{
+			"feature", "bug", "spike", "chore", "docs", "refactor", "hotfix",
+		}},
+		{name: "Specialist", dataType: "SINGLE_SELECT", options: []string{
+			"frontend", "backend", "infra", "data", "ux", "qa",
+		}},
+		{name: "ADR Required", dataType: "SINGLE_SELECT", options: []string{"yes", "no"}},
+	}
+
+	for _, f := range fields {
+		args := []string{"project", "field-create", number,
+			"--owner", owner,
+			"--name", f.name,
+			"--data-type", f.dataType,
+		}
+		if len(f.options) > 0 {
+			args = append(args, "--single-select-options", strings.Join(f.options, ","))
+		}
+		out, err := exec.Command(gh, args...).CombinedOutput()
+		if err != nil {
+			if strings.Contains(string(out), "already exists") {
+				fmt.Printf("    ~ field %q already exists\n", f.name)
+			} else {
+				fmt.Printf("    ✗ field %q: %s\n", f.name, strings.TrimSpace(string(out)))
+			}
+		} else {
+			fmt.Printf("    ✓ field %q\n", f.name)
+		}
+	}
 	return nil
 }
 

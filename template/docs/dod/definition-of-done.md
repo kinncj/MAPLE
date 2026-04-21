@@ -1,7 +1,7 @@
 # Definition of Done
 
 > Derived from `project.config.yaml` → `dod.default`. Edit that file to customise
-> per-project, then re-run `ai-squad init` or update this file manually.
+> per-project, then re-run `maple init` or update this file manually.
 > `pre-push` hook blocks if this file is missing.
 
 ## Standard stories

@@ -1,6 +1,6 @@
-# squad — AI Squad CLI
+# maple — MAPLE CLI
 
-`squad` is the command-line entry point for AI Squad. It initialises a project with the full agent/skill/hook setup and provides a requirements-to-Gherkin helper for fast story creation.
+`maple` is the command-line entry point for MAPLE. It initialises a project with the full agent/skill/hook setup and provides a requirements-to-Gherkin helper for fast story creation.
 
 The template is **embedded in the binary** — no separate template directory needed after installing a released build.
 
@@ -16,23 +16,23 @@ No runtime dependencies beyond the Go standard library and the Bubble Tea family
 From the **repo root** (preferred):
 
 ```bash
-make build-tui       # syncs template/ → tui/template/, then builds → ./squad
+make build-tui       # syncs template/ → tui/template/, then builds → ./maple
 ```
 
 Or manually:
 
 ```bash
 make sync-template   # copies template/ → tui/template/
-cd tui && go build -ldflags "-X main.version=$(git describe --tags --always)" -o ../squad .
+cd tui && go build -ldflags "-X main.version=$(git describe --tags --always)" -o ../maple .
 ```
 
 Cross-compile all platforms:
 
 ```bash
 make build-tui-all
-# produces: squad-darwin-amd64, squad-darwin-arm64,
-#           squad-linux-amd64,  squad-linux-arm64,
-#           squad-windows-amd64.exe
+# produces: maple-darwin-amd64, maple-darwin-arm64,
+#           maple-linux-amd64,  maple-linux-arm64,
+#           maple-windows-amd64.exe
 ```
 
 ## Install
@@ -40,15 +40,15 @@ make build-tui-all
 **Option A — move to system bin:**
 
 ```bash
-sudo mv squad /usr/local/bin/squad
+sudo mv maple /usr/local/bin/maple
 ```
 
 **Option B — personal install (recommended):**
 
 ```bash
-mkdir -p ~/.tools/ai-squad/bin
-mv squad ~/.tools/ai-squad/bin/squad
-echo 'export PATH="$HOME/.tools/ai-squad/bin:$PATH"' >> ~/.zshrc
+mkdir -p ~/.tools/maple/bin
+mv maple ~/.tools/maple/bin/maple
+echo 'export PATH="$HOME/.tools/maple/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -68,15 +68,15 @@ irm https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.ps1 |
 
 | Command | Description |
 |---|---|
-| `squad init` | Set up AI Squad in the current directory |
-| `squad init --force` | Overwrite existing files |
-| `squad req` | Write requirements and generate a Gherkin story |
-| `squad labels` | Bootstrap the canonical GitHub label set |
-| `squad project` | Create a GitHub Project v2 and update project.config.yaml |
-| `squad --version` | Print version |
-| `squad --help` | Show usage |
+| `maple init` | Set up MAPLE in the current directory |
+| `maple init --force` | Overwrite existing files |
+| `maple req` | Write requirements and generate a Gherkin story |
+| `maple labels` | Bootstrap the canonical GitHub label set |
+| `maple project` | Create a GitHub Project v2 and update project.config.yaml |
+| `maple --version` | Print version |
+| `maple --help` | Show usage |
 
-## squad init
+## maple init
 
 Detects which AI tools are installed (`claude`, `copilot`, `opencode`) and copies the matching template files:
 
@@ -92,9 +92,9 @@ Existing files are never overwritten (use `--force` to override).
 
 ## Template resolution
 
-`squad init` finds the template in this order:
+`maple init` finds the template in this order:
 
-1. `AI_SQUAD_TEMPLATE` env var (resolved to absolute path)
+1. `MAPLE_TEMPLATE` env var (resolved to absolute path)
 2. `<binary_dir>/template/` if it exists on disk (dev checkout)
 3. `./template/` in cwd (running from repo root)
 4. **Embedded** — always works for released binaries (no external files needed)

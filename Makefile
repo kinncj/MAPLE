@@ -1,40 +1,38 @@
-# Makefile — ai-squad repo root
-# Targets for building, testing, and maintaining the ai-squad platform itself.
+# Makefile — maple repo root
+# Targets for building, testing, and maintaining the MAPLE platform itself.
 # For targets in your project template, see template/Makefile.
-.PHONY: build-tui build-tui-all sync-template test lint sdlc-report sdlc-rotate-logs clean help
+.PHONY: build-tui build-tui-all test lint sdlc-report sdlc-rotate-logs clean help
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS  = -s -w -X main.version=$(VERSION)
 
-## Sync template/ into tui/template/ for embedding
-sync-template:
-	@rm -rf tui/template
-	@cp -r template tui/template
-	@echo "Template synced to tui/template/"
+## Build the maple TUI binary
+build-tui:
+	@echo "Building maple TUI..."
+	@rm -f tui/template && cp -rL template tui/template
+	@go build -ldflags="$(LDFLAGS)" -o maple ./tui
+	@rm -rf tui/template && ln -s ../template tui/template
+	@echo "Built: ./maple"
 
-## Build the squad TUI binary
-build-tui: sync-template
-	@echo "Building squad TUI..."
-	@cd tui && go build -ldflags="$(LDFLAGS)" -o ../squad .
-	@echo "Built: ./squad"
-
-## Cross-compile squad for all platforms
-build-tui-all: sync-template
+## Cross-compile maple for all platforms
+build-tui-all:
 	@mkdir -p dist
-	GOOS=darwin  GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-darwin-amd64  .
-	GOOS=darwin  GOARCH=arm64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-darwin-arm64  .
-	GOOS=linux   GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-linux-amd64   .
-	GOOS=linux   GOARCH=arm64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-linux-arm64   .
-	GOOS=windows GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/squad-windows-amd64.exe .
+	@rm -f tui/template && cp -rL template tui/template
+	GOOS=darwin  GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-darwin-amd64  ./tui
+	GOOS=darwin  GOARCH=arm64  go build -ldflags="$(LDFLAGS)" -o dist/maple-darwin-arm64  ./tui
+	GOOS=linux   GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-linux-amd64   ./tui
+	GOOS=linux   GOARCH=arm64  go build -ldflags="$(LDFLAGS)" -o dist/maple-linux-arm64   ./tui
+	GOOS=windows GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-windows-amd64.exe ./tui
+	@rm -rf tui/template && ln -s ../template tui/template
 	@echo "Binaries in dist/"
 
 ## Run the test suite for this repo
 test:
 	@bash tests/cli/test_ai_squad.sh
 
-## Lint Go TUI code
+## Lint Go code
 lint:
-	@cd tui && gofmt -e . >/dev/null && echo "gofmt: clean" || (echo "gofmt: issues found" && exit 1)
+	@gofmt -e ./tui >/dev/null && echo "gofmt: clean" || (echo "gofmt: issues found" && exit 1)
 
 ## Print per-story agent invocation counts and estimated costs
 ## Reads .claude/logs/skills.jsonl; safe to run offline (shows cached data)
@@ -44,7 +42,7 @@ sdlc-report:
 		echo "Run some agent workflows first."; \
 		exit 0; \
 	fi
-	@echo "=== AI-Squad SDLC Cost Report ==="
+	@echo "=== MAPLE SDLC Cost Report ==="
 	@echo ""
 	@python3 scripts/sdlc-report.py .claude/logs/skills.jsonl 2>/dev/null || \
 		python3 -c " \
@@ -63,18 +61,16 @@ sdlc-rotate-logs:
 
 ## Remove built binaries
 clean:
-	@rm -f squad dist/squad-*
-	@rm -rf tui/template
+	@rm -f maple dist/maple-*
 	@echo "Cleaned."
 
 ## Show available targets
 help:
 	@echo ""
-	@echo "  make build-tui          Build squad TUI binary"
+	@echo "  make build-tui          Build maple TUI binary"
 	@echo "  make build-tui-all      Cross-compile for darwin/linux/windows"
-	@echo "  make sync-template      Sync template/ into tui/template/ for embedding"
 	@echo "  make test               Run test suite (218 tests)"
-	@echo "  make lint               Lint TUI Go code"
+	@echo "  make lint               Lint Go code"
 	@echo "  make sdlc-report        Print cost + invocation report"
 	@echo "  make sdlc-rotate-logs   Rotate .claude/logs/ (keep last 5)"
 	@echo "  make clean              Remove built binaries"

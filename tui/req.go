@@ -1,18 +1,19 @@
 package main
 
 import (
-"fmt"
-"os"
-"os/exec"
-"path/filepath"
-"regexp"
-"strings"
-"time"
-"unicode"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+	"unicode"
 
-"github.com/charmbracelet/bubbles/textarea"
-tea "github.com/charmbracelet/bubbletea"
-"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // ─── Requirements command ─────────────────────────────────────────────────────
@@ -20,28 +21,39 @@ tea "github.com/charmbracelet/bubbletea"
 // availableAITools returns tools that support arbitrary prompt → text generation.
 // gh copilot (explain/suggest) is excluded — it only handles shell commands.
 func availableAITools(tools Tools) []aiOption {
-var opts []aiOption
-if tools.Claude != "" {
-opts = append(opts, aiOption{"Claude Code", "claude", tools.Claude})
-}
-if tools.Copilot != "" {
-opts = append(opts, aiOption{"GitHub Copilot", "copilot", tools.Copilot})
-}
-if tools.OpenCode != "" {
-opts = append(opts, aiOption{"OpenCode", "opencode", tools.OpenCode})
-}
-return opts
+	var opts []aiOption
+	if tools.Claude != "" {
+		opts = append(opts, aiOption{"Claude Code", "claude", tools.Claude})
+	}
+	if tools.Copilot != "" {
+		opts = append(opts, aiOption{"GitHub Copilot", "copilot", tools.Copilot})
+	}
+	if tools.OpenCode != "" {
+		opts = append(opts, aiOption{"OpenCode", "opencode", tools.OpenCode})
+	}
+	return opts
 }
 
 func runReq(tools Tools) error {
-opts := availableAITools(tools)
-if len(opts) == 0 {
-return fmt.Errorf("no AI tool available — install claude, copilot, or opencode")
-}
-m := newReqModel(tools)
-p := tea.NewProgram(m, tea.WithAltScreen())
-_, err := p.Run()
-return err
+	opts := availableAITools(tools)
+	if len(opts) == 0 {
+		return fmt.Errorf("no AI tool available — install claude, copilot, or opencode")
+	}
+	t, _ := detectOmarchyTheme()
+	m := newReqModel(tools, t)
+
+	// Pick up story content handed off from the dashboard re-edit flow.
+	const handoff = ".claude/state/maple-edit.txt"
+	if data, err := os.ReadFile(handoff); err == nil {
+		m.textarea.SetValue(string(data))
+		m.lastReq = string(data)
+		_ = os.Remove(handoff) // consume so next run starts blank
+		m.step = reqStepEdit
+	}
+
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	_, err := p.Run()
+	return err
 }
 
 // ─── Model ────────────────────────────────────────────────────────────────────
@@ -49,364 +61,531 @@ return err
 type reqStep int
 
 const (
-reqStepPickAI   reqStep = iota // shown only when >1 AI tool available
-reqStepEdit                    // textarea for requirements
-reqStepSending                 // waiting for AI
-reqStepStories                 // list of converted stories
-reqStepViewStory               // full content of one story
+	reqStepPickAI   reqStep = iota // shown only when >1 AI tool available
+	reqStepEdit                    // textarea for requirements
+	reqStepSending                 // waiting for AI
+	reqStepStories                 // list of converted stories
+	reqStepViewStory               // full content of one story
 )
 
 type gherkinStory struct {
-title   string
-gherkin string
-savedTo string
+	title   string
+	gherkin string
+	savedTo string
 }
 
 type reqModel struct {
-tools        Tools
-aiOptions    []aiOption
-selectedAI   aiOption
-aiCursor     int
-textarea     textarea.Model
-step         reqStep
-err          error
-width        int
-height       int
-logoFrame    int
-logoDone     bool
-stories      []gherkinStory
-storyCursor  int
-viewingIdx   int
-scrollOffset int
+	theme        Theme
+	tools        Tools
+	aiOptions    []aiOption
+	selectedAI   aiOption
+	aiCursor     int
+	textarea     textarea.Model
+	lastReq      string // saved so R can regenerate
+	step         reqStep
+	spinner      spinner.Model
+	sendingStart time.Time
+	sendingTick  int
+	err          error
+	width        int
+	height       int
+	logoFrame    int
+	logoDone     bool
+	stories      []gherkinStory
+	storyCursor  int
+	viewingIdx   int
+	scrollOffset int
+	storyListTop int // Y row where first story item is rendered (for mouse clicks)
 }
 
 type reqDoneMsg struct {
-stories []gherkinStory
-err     error
+	stories []gherkinStory
+	err     error
 }
 
-func newReqModel(tools Tools) *reqModel {
-ta := textarea.New()
-ta.Placeholder = "Describe what you need…\n\nExamples:\n  As a user I want to export filtered results as CSV\n  so that I can share them with stakeholders offline.\n\n  The export must respect active filters.\n  Only the last 90 days of data should be included.\n  The file must be downloadable immediately."
-ta.Focus()
-ta.SetWidth(80)
-ta.SetHeight(20)
-ta.ShowLineNumbers = false
+type sendingTickMsg struct{}
 
-opts := availableAITools(tools)
-firstStep := reqStepEdit
-if len(opts) > 1 {
-firstStep = reqStepPickAI
+func sendingTick() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg { return sendingTickMsg{} })
 }
 
-var selected aiOption
-if len(opts) > 0 {
-selected = opts[0]
-}
+func newReqModel(tools Tools, t Theme) *reqModel {
+	ta := textarea.New()
+	ta.Placeholder = "Describe what you need…\n\nExamples:\n  As a user I want to export filtered results as CSV\n  so that I can share them with stakeholders offline.\n\n  The export must respect active filters.\n  Only the last 90 days of data should be included.\n  The file must be downloadable immediately."
+	ta.Focus()
+	ta.SetWidth(80)
+	ta.SetHeight(20)
+	ta.ShowLineNumbers = false
 
-return &reqModel{
-tools:      tools,
-aiOptions:  opts,
-selectedAI: selected,
-textarea:   ta,
-step:       firstStep,
-}
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(t.Accent)
+
+	opts := availableAITools(tools)
+	firstStep := reqStepEdit
+	if len(opts) > 1 {
+		firstStep = reqStepPickAI
+	}
+
+	var selected aiOption
+	if len(opts) > 0 {
+		selected = opts[0]
+	}
+
+	return &reqModel{
+		theme:      t,
+		tools:      tools,
+		aiOptions:  opts,
+		selectedAI: selected,
+		textarea:   ta,
+		spinner:    s,
+		step:       firstStep,
+	}
 }
 
 func (m *reqModel) Init() tea.Cmd {
-return tea.Batch(textarea.Blink, logoTick(0))
+	return tea.Batch(textarea.Blink, logoTick(0))
 }
 
 func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-switch msg := msg.(type) {
-case tea.WindowSizeMsg:
-m.width = msg.Width
-m.height = msg.Height
-m.textarea.SetWidth(msg.Width - 4)
-m.textarea.SetHeight(msg.Height - 12)
-// Clamp scroll offset after resize
-if m.step == reqStepViewStory && len(m.stories) > 0 {
-lines := strings.Split(m.stories[m.viewingIdx].gherkin, "\n")
-maxScroll := len(lines) - m.visibleLines()
-if maxScroll < 0 {
-maxScroll = 0
-}
-if m.scrollOffset > maxScroll {
-m.scrollOffset = maxScroll
-}
-}
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.textarea.SetWidth(msg.Width - 4)
+		m.textarea.SetHeight(msg.Height - 12)
+		if m.step == reqStepViewStory && len(m.stories) > 0 {
+			lines := strings.Split(m.stories[m.viewingIdx].gherkin, "\n")
+			maxScroll := len(lines) - m.visibleLines()
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			if m.scrollOffset > maxScroll {
+				m.scrollOffset = maxScroll
+			}
+		}
 
-case logoTickMsg:
-if !m.logoDone {
-m.logoFrame++
-if m.logoFrame >= logoFrameCount {
-m.logoDone = true
-} else {
-return m, logoTick(m.logoFrame)
-}
-}
+	case logoTickMsg:
+		if !m.logoDone {
+			m.logoFrame++
+			if m.logoFrame >= logoFrameCount {
+				m.logoDone = true
+			} else {
+				return m, logoTick(m.logoFrame)
+			}
+		}
 
-case tea.KeyMsg:
-if !m.logoDone {
-return m, nil
-}
+	case spinner.TickMsg:
+		if m.step == reqStepSending {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
 
-switch m.step {
-case reqStepPickAI:
-switch msg.String() {
-case "up", "k":
-if m.aiCursor > 0 {
-m.aiCursor--
-}
-case "down", "j":
-if m.aiCursor < len(m.aiOptions)-1 {
-m.aiCursor++
-}
-case "enter", " ":
-m.selectedAI = m.aiOptions[m.aiCursor]
-m.step = reqStepEdit
-return m, textarea.Blink
-case "ctrl+c", "q", "esc":
-return m, tea.Quit
-}
-return m, nil
+	case sendingTickMsg:
+		if m.step == reqStepSending {
+			m.sendingTick++
+			return m, sendingTick()
+		}
 
-case reqStepEdit:
-switch msg.Type {
-case tea.KeyCtrlD:
-req := strings.TrimSpace(m.textarea.Value())
-if req == "" {
-return m, nil
-}
-m.step = reqStepSending
-return m, m.convert(req)
-case tea.KeyCtrlC, tea.KeyEsc:
-return m, tea.Quit
-}
+	case tea.KeyMsg:
+		if !m.logoDone {
+			return m, nil
+		}
 
-case reqStepStories:
-n := len(m.stories)
-switch msg.String() {
-case "up", "k":
-if m.storyCursor > 0 {
-m.storyCursor--
-}
-case "down", "j":
-if m.storyCursor < n-1 {
-m.storyCursor++
-}
-case "enter", " ":
-m.viewingIdx = m.storyCursor
-m.scrollOffset = 0
-m.step = reqStepViewStory
-case "e":
-// Back to editor to refine
-m.textarea.SetValue("")
-m.step = reqStepEdit
-return m, textarea.Blink
-case "q", "esc":
-return m, tea.Quit
-}
-return m, nil
+		switch m.step {
+		case reqStepPickAI:
+			switch msg.String() {
+			case "up", "k":
+				if m.aiCursor > 0 {
+					m.aiCursor--
+				}
+			case "down", "j":
+				if m.aiCursor < len(m.aiOptions)-1 {
+					m.aiCursor++
+				}
+			case "enter", " ":
+				m.selectedAI = m.aiOptions[m.aiCursor]
+				m.step = reqStepEdit
+				return m, textarea.Blink
+			case "ctrl+c", "q", "esc":
+				return m, tea.Quit
+			}
+			return m, nil
 
-case reqStepViewStory:
-story := m.stories[m.viewingIdx]
-lines := strings.Split(story.gherkin, "\n")
-visible := m.visibleLines()
-maxScroll := len(lines) - visible
-if maxScroll < 0 {
-maxScroll = 0
-}
-switch msg.String() {
-case "up", "k":
-if m.scrollOffset > 0 {
-m.scrollOffset--
-}
-case "down", "j":
-if m.scrollOffset < maxScroll {
-m.scrollOffset++
-}
-case "b", "esc":
-m.scrollOffset = 0
-m.step = reqStepStories
-case "q":
-return m, tea.Quit
-}
-return m, nil
-}
+		case reqStepEdit:
+			switch msg.Type {
+			case tea.KeyCtrlD:
+				req := strings.TrimSpace(m.textarea.Value())
+				if req == "" {
+					return m, nil
+				}
+				m.lastReq = req
+				m.step = reqStepSending
+				m.sendingStart = time.Now()
+				m.sendingTick = 0
+				return m, tea.Batch(m.spinner.Tick, sendingTick(), m.convert(req))
+			case tea.KeyCtrlC, tea.KeyEsc:
+				return m, tea.Quit
+			}
 
-case reqDoneMsg:
-if msg.err != nil {
-m.err = msg.err
-m.step = reqStepStories // show error in stories view
-return m, nil
-}
-m.stories = msg.stories
-m.storyCursor = 0
-m.step = reqStepStories
-}
+		case reqStepStories:
+			n := len(m.stories)
+			switch msg.String() {
+			case "up", "k":
+				if m.storyCursor > 0 {
+					m.storyCursor--
+				}
+			case "down", "j":
+				if m.storyCursor < n-1 {
+					m.storyCursor++
+				}
+			case "enter", " ":
+				m.viewingIdx = m.storyCursor
+				m.scrollOffset = 0
+				m.step = reqStepViewStory
+			case "e":
+				// keep previous text — let user refine
+				m.step = reqStepEdit
+				return m, textarea.Blink
+			case "R":
+				if m.lastReq != "" {
+					m.step = reqStepSending
+					m.sendingStart = time.Now()
+					m.sendingTick = 0
+					return m, tea.Batch(m.spinner.Tick, sendingTick(), m.convert(m.lastReq))
+				}
+			case "q", "esc":
+				return m, tea.Quit
+			}
+			return m, nil
 
-if m.step == reqStepEdit {
-var cmd tea.Cmd
-m.textarea, cmd = m.textarea.Update(msg)
-return m, cmd
-}
-return m, nil
+		case reqStepViewStory:
+			story := m.stories[m.viewingIdx]
+			lines := strings.Split(story.gherkin, "\n")
+			visible := m.visibleLines()
+			maxScroll := len(lines) - visible
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			switch msg.String() {
+			case "up", "k":
+				if m.scrollOffset > 0 {
+					m.scrollOffset--
+				}
+			case "down", "j":
+				if m.scrollOffset < maxScroll {
+					m.scrollOffset++
+				}
+			case "g":
+				m.scrollOffset = 0
+			case "G":
+				m.scrollOffset = maxScroll
+			case "]", "tab", "l":
+				if m.viewingIdx < len(m.stories)-1 {
+					m.viewingIdx++
+					m.scrollOffset = 0
+				}
+			case "[", "shift+tab", "h":
+				if m.viewingIdx > 0 {
+					m.viewingIdx--
+					m.scrollOffset = 0
+				}
+			case "b", "esc":
+				m.scrollOffset = 0
+				m.step = reqStepStories
+			case "q":
+				return m, tea.Quit
+			}
+			return m, nil
+		}
+
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if m.step == reqStepStories && len(m.stories) > 0 {
+				idx := msg.Y - m.storyListTop
+				if idx >= 0 && idx < len(m.stories) {
+					if idx == m.storyCursor {
+						// second click on already-selected row → open
+						m.viewingIdx = idx
+						m.scrollOffset = 0
+						m.step = reqStepViewStory
+					} else {
+						m.storyCursor = idx
+					}
+				}
+			}
+		}
+
+	case reqDoneMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			m.step = reqStepStories
+			return m, nil
+		}
+		m.err = nil
+		m.stories = msg.stories
+		m.storyCursor = 0
+		m.step = reqStepStories
+	}
+
+	if m.step == reqStepEdit {
+		var cmd tea.Cmd
+		m.textarea, cmd = m.textarea.Update(msg)
+		return m, cmd
+	}
+	return m, nil
 }
 
 func (m *reqModel) visibleLines() int {
-// Reserve: logo (~9) + title (2) + footer (3)
-v := m.height - 14
-if v < 5 {
-v = 5
+	// compact header = 2 lines, title+sep+blank = 3, footer = 2
+	v := m.height - 7
+	if v < 5 {
+		v = 5
+	}
+	return v
 }
-return v
+
+// compactHeader returns a single slim header bar used after the logo animation.
+func (m *reqModel) compactHeader() string {
+	t := m.theme
+	left := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  maple")
+	mid := lipgloss.NewStyle().Foreground(t.Muted).Render(" · requirements")
+	if m.selectedAI.label != "" {
+		badge := lipgloss.NewStyle().
+			Foreground(t.Background).Background(t.Primary).
+			Padding(0, 1).Render(m.selectedAI.label)
+		mid += "  " + badge
+	}
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 60))
+	return left + mid + "\n" + sep + "\n"
 }
+
+// ─── View ─────────────────────────────────────────────────────────────────────
 
 func (m *reqModel) View() string {
-t := tokyoNight()
-var hdr string
-if m.logoDone {
-hdr = logo()
-} else {
-hdr = logoAnimFrame(m.logoFrame)
+	t := m.theme
+	var hdr string
+	if m.logoDone {
+		hdr = m.compactHeader()
+	} else {
+		hdr = logoAnimFrame(m.logoFrame)
+	}
+
+	cursor := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("❯")
+
+	switch m.step {
+	case reqStepPickAI:
+		return hdr + m.aiPickerView(t, cursor)
+
+	case reqStepEdit:
+		return hdr + m.editView(t)
+
+	case reqStepSending:
+		return hdr + m.sendingView(t)
+
+	case reqStepStories:
+		if m.err != nil {
+			return hdr + m.errorView(t)
+		}
+		return hdr + m.storiesView(t, cursor)
+
+	case reqStepViewStory:
+		return hdr + m.storyDetailView(t)
+	}
+	return ""
 }
 
-cursor := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("❯")
-
-switch m.step {
-case reqStepPickAI:
-var sb strings.Builder
-title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Select AI tool")
-sb.WriteString("  " + title + "\n")
-sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 40)) + "\n\n")
-for i, opt := range m.aiOptions {
-kind := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + opt.kind)
-if i == m.aiCursor {
-label := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(fmt.Sprintf("%-20s", opt.label))
-sb.WriteString("  " + cursor + " " + label + kind + "\n")
-} else {
-label := lipgloss.NewStyle().Foreground(t.Foreground).Render(fmt.Sprintf("%-20s", opt.label))
-sb.WriteString("     " + label + kind + "\n")
+func (m *reqModel) aiPickerView(t Theme, cursor string) string {
+	var sb strings.Builder
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Select AI tool")
+	sb.WriteString("  " + title + "\n")
+	sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 44)) + "\n\n")
+	for i, opt := range m.aiOptions {
+		kind := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + opt.kind)
+		if i == m.aiCursor {
+			label := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(fmt.Sprintf("%-22s", opt.label))
+			sb.WriteString("  " + cursor + " " + label + kind + "\n")
+		} else {
+			label := lipgloss.NewStyle().Foreground(t.Foreground).Render(fmt.Sprintf("%-22s", opt.label))
+			sb.WriteString("     " + label + kind + "\n")
+		}
+	}
+	sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("  j/k Navigate · Enter Select · q Quit") + "\n")
+	return sb.String()
 }
+
+func (m *reqModel) editView(t Theme) string {
+	charCount := lipgloss.NewStyle().Foreground(t.Muted).
+		Render(fmt.Sprintf("  %d chars", len(m.textarea.Value())))
+	help := lipgloss.NewStyle().Foreground(t.Muted).Render(
+		"  Describe a story or a whole epic.\n" +
+			"  Ctrl+D to convert → Gherkin   Esc to quit")
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Primary).
+		Padding(0, 1).
+		Render(m.textarea.View())
+	return charCount + "\n\n" + help + "\n\n" + box + "\n"
 }
-sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("  ↑/↓ Navigate   Enter Select   q Quit") + "\n")
-return hdr + sb.String()
 
-case reqStepEdit:
-ai := lipgloss.NewStyle().Foreground(t.Muted).Render("  AI: " + m.selectedAI.label)
-help := lipgloss.NewStyle().Foreground(t.Muted).Render(
-"  Type your requirements below — describe a story or a whole epic.\n" +
-"  Ctrl+D to convert → Gherkin   Esc to go back")
-box := lipgloss.NewStyle().
-Border(lipgloss.RoundedBorder()).
-BorderForeground(t.Primary).
-Padding(0, 1).
-Render(m.textarea.View())
-return hdr + ai + "\n\n" + help + "\n\n" + box + "\n"
-
-case reqStepSending:
-ai := lipgloss.NewStyle().Foreground(t.Muted).Render("  AI: " + m.selectedAI.label)
-return hdr + ai + "\n\n" +
-lipgloss.NewStyle().Foreground(t.Accent).Render("  Converting to Gherkin…") + "\n"
-
-case reqStepStories:
-if m.err != nil {
-return hdr + "\n\n" +
-lipgloss.NewStyle().Foreground(t.Error).Render("  ✗ "+m.err.Error()) + "\n\n" +
-lipgloss.NewStyle().Foreground(t.Muted).Render("  e edit again   q back to menu") + "\n"
+func (m *reqModel) sendingView(t Theme) string {
+	elapsed := time.Since(m.sendingStart).Round(time.Second)
+	aiTag := lipgloss.NewStyle().
+		Foreground(t.Background).Background(t.Primary).
+		Padding(0, 1).
+		Render(m.selectedAI.label)
+	line1 := "  " + aiTag
+	line2 := "  " + m.spinner.View() +
+		lipgloss.NewStyle().Foreground(t.Accent).Render(" Converting to Gherkin…") +
+		"  " + lipgloss.NewStyle().Foreground(t.Muted).Render(elapsed.String())
+	hint := lipgloss.NewStyle().Foreground(t.Muted).Render("  This may take 10–30 seconds.")
+	return line1 + "\n\n" + line2 + "\n" + hint + "\n"
 }
-return hdr + m.storiesView(t, cursor)
 
-case reqStepViewStory:
-return hdr + m.storyDetailView(t)
-}
-return ""
+func (m *reqModel) errorView(t Theme) string {
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Error).
+		Padding(0, 1).
+		Width(m.width - 6).
+		Render(lipgloss.NewStyle().Foreground(t.Error).Render(m.err.Error()))
+	hint := lipgloss.NewStyle().Foreground(t.Muted).Render("  e edit again   q quit")
+	return "\n" + box + "\n\n" + hint + "\n"
 }
 
 func (m *reqModel) storiesView(t Theme, cursor string) string {
-var sb strings.Builder
-count := len(m.stories)
-noun := "story"
-if count != 1 {
-noun = "stories"
-}
-title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).
-Render(fmt.Sprintf("  %d %s generated", count, noun))
-sb.WriteString(title + "\n")
-sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 54)) + "\n\n")
+	var sb strings.Builder
+	count := len(m.stories)
+	noun := "story"
+	if count != 1 {
+		noun = "stories"
+	}
+	elapsed := time.Since(m.sendingStart).Round(time.Second)
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).
+		Render(fmt.Sprintf("  %d %s generated", count, noun))
+	timing := lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("  in %s", elapsed))
+	sb.WriteString(title + timing + "\n")
+	sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 60)) + "\n\n")
 
-for i, s := range m.stories {
-var savedNote string
-if s.savedTo != "" {
-savedNote = lipgloss.NewStyle().Foreground(t.Muted).Render("  " + s.savedTo)
-}
-if i == m.storyCursor {
-label := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(s.title)
-sb.WriteString("  " + cursor + " " + label + savedNote + "\n")
-} else {
-label := lipgloss.NewStyle().Foreground(t.Foreground).Render(s.title)
-sb.WriteString("     " + label + savedNote + "\n")
-}
-}
+	// compact header(2) + title(1) + sep(1) + blank(1) = row 5
+	m.storyListTop = 5
 
-sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render(
-"  ↑/↓ Navigate   Enter View   e Edit again   q Back to menu") + "\n")
-return sb.String()
+	for i, s := range m.stories {
+		var savedNote string
+		if s.savedTo != "" {
+			savedNote = "  " + lipgloss.NewStyle().Foreground(t.Success).Render("✓ "+s.savedTo)
+		}
+		if i == m.storyCursor {
+			label := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(s.title)
+			enterHint := lipgloss.NewStyle().Foreground(t.Muted).Render("  ↵")
+			sb.WriteString("  " + cursor + " " + label + savedNote + enterHint + "\n")
+		} else {
+			label := lipgloss.NewStyle().Foreground(t.Foreground).Render(s.title)
+			sb.WriteString("     " + label + savedNote + "\n")
+		}
+	}
+
+	sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render(
+		"  j/k Navigate · Enter/Click View · e Edit · R Regenerate · q Quit") + "\n")
+	return sb.String()
 }
 
 func (m *reqModel) storyDetailView(t Theme) string {
-story := m.stories[m.viewingIdx]
-var sb strings.Builder
+	story := m.stories[m.viewingIdx]
+	total := len(m.stories)
+	var sb strings.Builder
 
-title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  " + story.title)
-sb.WriteString(title + "\n")
-if story.savedTo != "" {
-saved := lipgloss.NewStyle().Foreground(t.Success).Render("  ✓ " + story.savedTo)
-sb.WriteString(saved + "\n")
-}
-sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 54)) + "\n\n")
+	// Title + nav indicator
+	nav := lipgloss.NewStyle().Foreground(t.Muted).
+		Render(fmt.Sprintf("  story %d/%d  [/] next  h prev", m.viewingIdx+1, total))
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  " + story.title)
+	sb.WriteString(title + "\n" + nav + "\n")
+	if story.savedTo != "" {
+		saved := lipgloss.NewStyle().Foreground(t.Success).Render("  ✓ saved → " + story.savedTo)
+		sb.WriteString(saved + "\n")
+	}
+	sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 60)) + "\n\n")
 
-lines := strings.Split(story.gherkin, "\n")
-visible := m.visibleLines()
-end := m.scrollOffset + visible
-if end > len(lines) {
-end = len(lines)
-}
-window := lines[m.scrollOffset:end]
+	// Scrollable Gherkin with syntax highlighting
+	lines := strings.Split(story.gherkin, "\n")
+	visible := m.visibleLines()
+	end := m.scrollOffset + visible
+	if end > len(lines) {
+		end = len(lines)
+	}
+	window := lines[m.scrollOffset:end]
 
-for _, l := range window {
-sb.WriteString("  " + lipgloss.NewStyle().Foreground(t.Foreground).Render(l) + "\n")
+	for _, l := range window {
+		sb.WriteString("  " + colorizeGherkin(l, t) + "\n")
+	}
+
+	// Scroll indicator
+	lineCount := len(lines)
+	if lineCount > visible {
+		pct := (m.scrollOffset * 100) / (lineCount - visible)
+		sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).
+			Render(fmt.Sprintf("  (%d%%)  j/k Scroll · gg/G top/bottom · b/Esc Back · q Quit", pct)) + "\n")
+	} else {
+		sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).
+			Render("  j/k Scroll · b/Esc Back · q Quit") + "\n")
+	}
+	return sb.String()
 }
 
-// Scroll indicator
-total := len(lines)
-scrollPct := ""
-if total > visible {
-pct := (m.scrollOffset * 100) / (total - visible)
-scrollPct = fmt.Sprintf(" (%d%%)", pct)
-}
-sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render(
-fmt.Sprintf("  ↑/↓ j/k Scroll%s   b/Esc Back to list   q Quit", scrollPct)) + "\n")
-return sb.String()
-}
+// colorizeGherkin applies theme colours to a single Gherkin line.
+func colorizeGherkin(line string, t Theme) string {
+	trimmed := strings.TrimSpace(line)
+	indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
 
-func (m *reqModel) convert(requirements string) tea.Cmd {
-ai := m.selectedAI
-return func() tea.Msg {
-gherkin, err := convertToGherkin(requirements, ai)
-if err != nil {
-return reqDoneMsg{err: err}
-}
-stories := parseStories(gherkin)
-for i := range stories {
-savedTo, saveErr := saveStory(stories[i].title, stories[i].gherkin, i+1)
-if saveErr == nil {
-stories[i].savedTo = savedTo
-}
-}
-return reqDoneMsg{stories: stories}
-}
+	switch {
+	case strings.HasPrefix(trimmed, "Feature:"):
+		kw := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Feature:")
+		rest := lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(trimmed[len("Feature:"):])
+		return indent + kw + rest
+	case strings.HasPrefix(trimmed, "Background:"):
+		return indent + lipgloss.NewStyle().Foreground(t.Warning).Bold(true).Render(trimmed)
+	case strings.HasPrefix(trimmed, "Scenario Outline:"):
+		kw := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("Scenario Outline:")
+		rest := lipgloss.NewStyle().Foreground(t.Foreground).Render(trimmed[len("Scenario Outline:"):])
+		return indent + kw + rest
+	case strings.HasPrefix(trimmed, "Scenario:"):
+		kw := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("Scenario:")
+		rest := lipgloss.NewStyle().Foreground(t.Foreground).Render(trimmed[len("Scenario:"):])
+		return indent + kw + rest
+	case strings.HasPrefix(trimmed, "Given "):
+		kw := lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("Given")
+		rest := lipgloss.NewStyle().Foreground(t.Foreground).Render(trimmed[5:])
+		return indent + kw + rest
+	case strings.HasPrefix(trimmed, "When "):
+		kw := lipgloss.NewStyle().Foreground(t.Warning).Bold(true).Render("When")
+		rest := lipgloss.NewStyle().Foreground(t.Foreground).Render(trimmed[4:])
+		return indent + kw + rest
+	case strings.HasPrefix(trimmed, "Then "):
+		kw := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Then")
+		rest := lipgloss.NewStyle().Foreground(t.Foreground).Render(trimmed[4:])
+		return indent + kw + rest
+	case strings.HasPrefix(trimmed, "And "):
+		kw := lipgloss.NewStyle().Foreground(t.Muted).Bold(true).Render("And")
+		rest := lipgloss.NewStyle().Foreground(t.Foreground).Render(trimmed[3:])
+		return indent + kw + rest
+	case strings.HasPrefix(trimmed, "But "):
+		kw := lipgloss.NewStyle().Foreground(t.Muted).Bold(true).Render("But")
+		rest := lipgloss.NewStyle().Foreground(t.Foreground).Render(trimmed[3:])
+		return indent + kw + rest
+	case strings.HasPrefix(trimmed, "Examples:"):
+		return indent + lipgloss.NewStyle().Foreground(t.Warning).Render(trimmed)
+	case strings.HasPrefix(trimmed, "|"):
+		// Table rows — mute the pipes, normal text
+		return indent + lipgloss.NewStyle().Foreground(t.Muted).Render("|") +
+			lipgloss.NewStyle().Foreground(t.Foreground).Render(trimmed[1:])
+	case strings.HasPrefix(trimmed, "@"):
+		return indent + lipgloss.NewStyle().Foreground(t.Accent).Render(trimmed)
+	case strings.HasPrefix(trimmed, "#"):
+		return indent + lipgloss.NewStyle().Foreground(t.Muted).Render(trimmed)
+	default:
+		return indent + lipgloss.NewStyle().Foreground(t.Foreground).Render(trimmed)
+	}
 }
 
 // ─── AI conversion ────────────────────────────────────────────────────────────
@@ -442,44 +621,72 @@ Requirements:
 %s`
 
 func convertToGherkin(requirements string, ai aiOption) (string, error) {
-prompt := fmt.Sprintf(gherkinPrompt, requirements)
-out, err := invokeAI(ai, prompt)
-if err != nil {
-return "", fmt.Errorf("%s: %w", ai.label, err)
-}
-return strings.TrimSpace(string(out)), nil
+	prompt := fmt.Sprintf(gherkinPrompt, requirements)
+	out, err := invokeAI(ai, prompt)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", ai.label, err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // invokeAI runs the selected AI tool and returns its stdout output.
 // The prompt is passed as a positional argument (not stdin) to avoid inheriting
 // the Bubble Tea raw-mode terminal state in the subprocess.
 func invokeAI(ai aiOption, prompt string) ([]byte, error) {
-var cmd *exec.Cmd
-switch ai.kind {
-case "claude":
-// -p = --print (non-interactive), prompt is positional arg.
-// --output-format text suppresses JSON wrappers.
-// --no-session-persistence avoids writing session files.
-cmd = exec.Command(ai.path, "-p", "--output-format", "text", "--no-session-persistence", prompt)
-case "copilot":
-// --prompt <text> is the non-interactive flag for the GitHub Copilot CLI.
-cmd = exec.Command(ai.path, "--prompt", prompt)
-case "opencode":
-cmd = exec.Command(ai.path, "run")
-cmd.Stdin = strings.NewReader(prompt)
-default:
-return nil, fmt.Errorf("unsupported AI tool: %s", ai.kind)
+	var cmd *exec.Cmd
+	switch ai.kind {
+	case "claude":
+		// -p = --print (non-interactive), prompt is positional arg.
+		// --output-format text suppresses JSON wrappers.
+		// --no-session-persistence avoids writing session files.
+		cmd = exec.Command(ai.path, "-p", "--output-format", "text", "--no-session-persistence", prompt)
+	case "copilot":
+		cmd = exec.Command(ai.path, "--prompt", prompt)
+	case "opencode":
+		cmd = exec.Command(ai.path, "run")
+		cmd.Stdin = strings.NewReader(prompt)
+	default:
+		return nil, fmt.Errorf("unsupported AI tool: %s", ai.kind)
+	}
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg == "" {
+			msg = err.Error()
+		}
+		return nil, fmt.Errorf("%s", msg)
+	}
+	return out, nil
 }
 
-out, err := cmd.CombinedOutput()
-if err != nil {
-msg := strings.TrimSpace(string(out))
-if msg == "" {
-msg = err.Error()
-}
-return nil, fmt.Errorf("%s", msg)
-}
-return out, nil
+func (m *reqModel) convert(requirements string) tea.Cmd {
+	ai := m.selectedAI
+	// snapshot old saved dirs before the async call so we can clean them up
+	var oldDirs []string
+	for _, s := range m.stories {
+		if s.savedTo != "" {
+			oldDirs = append(oldDirs, s.savedTo)
+		}
+	}
+	return func() tea.Msg {
+		// remove old story directories before saving new ones
+		for _, d := range oldDirs {
+			_ = os.RemoveAll(d)
+		}
+		gherkin, err := convertToGherkin(requirements, ai)
+		if err != nil {
+			return reqDoneMsg{err: err}
+		}
+		stories := parseStories(gherkin)
+		for i := range stories {
+			savedTo, saveErr := saveStory(stories[i].title, stories[i].gherkin, i+1)
+			if saveErr == nil {
+				stories[i].savedTo = savedTo
+			}
+		}
+		return reqDoneMsg{stories: stories}
+	}
 }
 
 // ─── Story parsing ────────────────────────────────────────────────────────────
@@ -489,65 +696,65 @@ var storyHeaderRe = regexp.MustCompile(`(?m)^=== STORY: (.+?) ===$`)
 // parseStories splits AI output into individual gherkinStory values.
 // If no === STORY: === delimiters are found the whole output is treated as one story.
 func parseStories(output string) []gherkinStory {
-matches := storyHeaderRe.FindAllStringIndex(output, -1)
-if len(matches) == 0 {
-return []gherkinStory{{
-title:   extractFeatureTitle(output),
-gherkin: stripFences(strings.TrimSpace(output)),
-}}
-}
+	matches := storyHeaderRe.FindAllStringIndex(output, -1)
+	if len(matches) == 0 {
+		return []gherkinStory{{
+			title:   extractFeatureTitle(output),
+			gherkin: stripFences(strings.TrimSpace(output)),
+		}}
+	}
 
-var stories []gherkinStory
-for i, match := range matches {
-titleMatch := storyHeaderRe.FindStringSubmatch(output[match[0]:match[1]])
-title := strings.TrimSpace(titleMatch[1])
+	var stories []gherkinStory
+	for i, match := range matches {
+		titleMatch := storyHeaderRe.FindStringSubmatch(output[match[0]:match[1]])
+		title := strings.TrimSpace(titleMatch[1])
 
-start := match[1]
-if start < len(output) && output[start] == '\n' {
-start++
-}
-var content string
-if i+1 < len(matches) {
-content = output[start:matches[i+1][0]]
-} else {
-content = output[start:]
-}
-stories = append(stories, gherkinStory{
-title:   title,
-gherkin: stripFences(strings.TrimSpace(content)),
-})
-}
-return stories
+		start := match[1]
+		if start < len(output) && output[start] == '\n' {
+			start++
+		}
+		var content string
+		if i+1 < len(matches) {
+			content = output[start:matches[i+1][0]]
+		} else {
+			content = output[start:]
+		}
+		stories = append(stories, gherkinStory{
+			title:   title,
+			gherkin: stripFences(strings.TrimSpace(content)),
+		})
+	}
+	return stories
 }
 
 // extractFeatureTitle pulls the Feature: name from gherkin text, or returns "Untitled".
 func extractFeatureTitle(s string) string {
-for _, l := range strings.Split(s, "\n") {
-l = strings.TrimSpace(l)
-if strings.HasPrefix(l, "Feature:") {
-t := strings.TrimSpace(strings.TrimPrefix(l, "Feature:"))
-if t != "" {
-return t
-}
-}
-}
-return "Untitled"
+	for _, l := range strings.Split(s, "\n") {
+		l = strings.TrimSpace(l)
+		if strings.HasPrefix(l, "Feature:") {
+			t := strings.TrimSpace(strings.TrimPrefix(l, "Feature:"))
+			if t != "" {
+				return t
+			}
+		}
+	}
+	return "Untitled"
 }
 
 func stripFences(s string) string {
-lines := strings.Split(s, "\n")
-var out []string
-for i, l := range lines {
-trimmed := strings.TrimSpace(l)
-if i == 0 && (trimmed == "```gherkin" || trimmed == "```") {
-continue
-}
-if i == len(lines)-1 && trimmed == "```" {
-continue
-}
-out = append(out, l)
-}
-return strings.Join(out, "\n")
+	lines := strings.Split(s, "\n")
+	var out []string
+	for i, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if i == 0 && (trimmed == "```gherkin" || trimmed == "```") {
+			continue
+		}
+		if i == len(lines)-1 && trimmed == "```" {
+			continue
+		}
+		out = append(out, l)
+	}
+	return strings.Join(out, "\n")
 }
 
 // ─── Story file writer ────────────────────────────────────────────────────────
@@ -560,22 +767,22 @@ return strings.Join(out, "\n")
 //	    <slug>.feature          ← pure Gherkin (extracted, for test runners)
 //	    <slug>_steps.py         ← behave step stubs (generated once, never overwritten)
 func saveStory(title, gherkin string, idx int) (string, error) {
-slug := slugify(title)
-ts := time.Now().Format("20060102150405")
-storyDir := filepath.Clean(fmt.Sprintf("docs/stories/%s-%s-%04d", slug, ts, idx))
-cucumberDir := filepath.Join(storyDir, "cucumber")
+	slug := slugify(title)
+	ts := time.Now().Format("20060102150405")
+	storyDir := filepath.Clean(fmt.Sprintf("docs/stories/%s-%s-%04d", slug, ts, idx))
+	cucumberDir := filepath.Join(storyDir, "cucumber")
 
-if err := os.MkdirAll(cucumberDir, 0755); err != nil {
-return "", err
-}
+	if err := os.MkdirAll(cucumberDir, 0755); err != nil {
+		return "", err
+	}
 
-displayTitle := title
-if len(displayTitle) > 80 {
-displayTitle = displayTitle[:80]
-}
+	displayTitle := title
+	if len(displayTitle) > 80 {
+		displayTitle = displayTitle[:80]
+	}
 
-// ── Story.md ─────────────────────────────────────────────────────────────
-storyContent := fmt.Sprintf(`---
+	// ── Story.md ─────────────────────────────────────────────────────────────
+	storyContent := fmt.Sprintf(`---
 id: "%s-%04d"
 title: "%s"
 epic: "%s"
@@ -609,38 +816,38 @@ created_at: "%s"
 
 (populated by adr-author agent)
 `,
-slug, idx, displayTitle, slug, time.Now().Format(time.RFC3339),
-displayTitle, gherkin,
-)
+		slug, idx, displayTitle, slug, time.Now().Format(time.RFC3339),
+		displayTitle, gherkin,
+	)
 
-storyPath := filepath.Join(storyDir, "Story.md")
-if err := os.WriteFile(storyPath, []byte(storyContent), 0644); err != nil {
-return storyDir, err
-}
+	storyPath := filepath.Join(storyDir, "Story.md")
+	if err := os.WriteFile(storyPath, []byte(storyContent), 0644); err != nil {
+		return storyDir, err
+	}
 
-// ── cucumber/<slug>.feature ───────────────────────────────────────────────
-featurePath := filepath.Join(cucumberDir, slug+".feature")
-if err := os.WriteFile(featurePath, []byte(gherkin+"\n"), 0644); err != nil {
-return storyDir, err
-}
+	// ── cucumber/<slug>.feature ───────────────────────────────────────────────
+	featurePath := filepath.Join(cucumberDir, slug+".feature")
+	if err := os.WriteFile(featurePath, []byte(gherkin+"\n"), 0644); err != nil {
+		return storyDir, err
+	}
 
-// ── cucumber/<slug>_steps.py  (generated once, never overwritten) ─────────
-stepsPath := filepath.Join(cucumberDir, slug+"_steps.py")
-if _, err := os.Stat(stepsPath); os.IsNotExist(err) {
-steps := extractSteps(gherkin)
-if len(steps) > 0 {
-_ = os.WriteFile(stepsPath, []byte(generateStepDefs(displayTitle, steps)), 0644)
-}
-}
+	// ── cucumber/<slug>_steps.py  (generated once, never overwritten) ─────────
+	stepsPath := filepath.Join(cucumberDir, slug+"_steps.py")
+	if _, err := os.Stat(stepsPath); os.IsNotExist(err) {
+		steps := extractSteps(gherkin)
+		if len(steps) > 0 {
+			_ = os.WriteFile(stepsPath, []byte(generateStepDefs(displayTitle, steps)), 0644)
+		}
+	}
 
-return storyDir, nil
+	return storyDir, nil
 }
 
 // ─── Gherkin step extraction & stub generation ────────────────────────────────
 
 type stepLine struct {
-keyword string // given | when | then
-text    string
+	keyword string // given | when | then
+	text    string
 }
 
 var stepLineRe = regexp.MustCompile(`^\s+(Given|When|Then|And|But)\s+(.+)$`)
@@ -648,74 +855,74 @@ var stepLineRe = regexp.MustCompile(`^\s+(Given|When|Then|And|But)\s+(.+)$`)
 // extractSteps parses unique Given/When/Then steps from a Gherkin block.
 // And/But steps are normalised to the last main keyword.
 func extractSteps(gherkin string) []stepLine {
-var steps []stepLine
-seen := map[string]bool{}
-last := "given"
-for _, line := range strings.Split(gherkin, "\n") {
-m := stepLineRe.FindStringSubmatch(line)
-if m == nil {
-continue
-}
-kw, text := m[1], strings.TrimSpace(m[2])
-var decorator string
-switch kw {
-case "And", "But":
-decorator = last
-default:
-decorator = strings.ToLower(kw)
-last = decorator
-}
-key := decorator + "|" + text
-if !seen[key] {
-seen[key] = true
-steps = append(steps, stepLine{keyword: decorator, text: text})
-}
-}
-return steps
+	var steps []stepLine
+	seen := map[string]bool{}
+	last := "given"
+	for _, line := range strings.Split(gherkin, "\n") {
+		m := stepLineRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		kw, text := m[1], strings.TrimSpace(m[2])
+		var decorator string
+		switch kw {
+		case "And", "But":
+			decorator = last
+		default:
+			decorator = strings.ToLower(kw)
+			last = decorator
+		}
+		key := decorator + "|" + text
+		if !seen[key] {
+			seen[key] = true
+			steps = append(steps, stepLine{keyword: decorator, text: text})
+		}
+	}
+	return steps
 }
 
 // generateStepDefs produces a behave step definitions skeleton.
 func generateStepDefs(featureTitle string, steps []stepLine) string {
-var sb strings.Builder
-sb.WriteString("# Step definitions for: " + featureTitle + "\n")
-sb.WriteString("# Framework: behave  https://behave.readthedocs.io\n")
-sb.WriteString("# Each stub raises NotImplementedError until implemented.\n")
-sb.WriteString("from behave import given, when, then  # noqa: F401\n\n\n")
-for _, s := range steps {
-fn := stepFuncName(s.text)
-sb.WriteString(fmt.Sprintf("@%s(u%q)\n", s.keyword, s.text))
-sb.WriteString(fmt.Sprintf("def %s(context):\n", fn))
-sb.WriteString(fmt.Sprintf("    raise NotImplementedError(u\"STEP: %s %s\")\n\n\n", s.keyword, s.text))
-}
-return sb.String()
+	var sb strings.Builder
+	sb.WriteString("# Step definitions for: " + featureTitle + "\n")
+	sb.WriteString("# Framework: behave  https://behave.readthedocs.io\n")
+	sb.WriteString("# Each stub raises NotImplementedError until implemented.\n")
+	sb.WriteString("from behave import given, when, then  # noqa: F401\n\n\n")
+	for _, s := range steps {
+		fn := stepFuncName(s.text)
+		sb.WriteString(fmt.Sprintf("@%s(u%q)\n", s.keyword, s.text))
+		sb.WriteString(fmt.Sprintf("def %s(context):\n", fn))
+		sb.WriteString(fmt.Sprintf("    raise NotImplementedError(u\"STEP: %s %s\")\n\n\n", s.keyword, s.text))
+	}
+	return sb.String()
 }
 
 func stepFuncName(text string) string {
-re := regexp.MustCompile(`[^a-z0-9]+`)
-s := strings.ToLower(text)
-s = re.ReplaceAllString(s, "_")
-s = strings.Trim(s, "_")
-runes := []rune(s)
-if len(runes) > 60 {
-runes = runes[:60]
-for len(runes) > 0 && runes[len(runes)-1] == '_' {
-runes = runes[:len(runes)-1]
-}
-}
-return "step_" + string(runes)
+	re := regexp.MustCompile(`[^a-z0-9]+`)
+	s := strings.ToLower(text)
+	s = re.ReplaceAllString(s, "_")
+	s = strings.Trim(s, "_")
+	runes := []rune(s)
+	if len(runes) > 60 {
+		runes = runes[:60]
+		for len(runes) > 0 && runes[len(runes)-1] == '_' {
+			runes = runes[:len(runes)-1]
+		}
+	}
+	return "step_" + string(runes)
 }
 
 func slugify(s string) string {
-s = strings.ToLower(s)
-re := regexp.MustCompile(`[^a-z0-9]+`)
-s = re.ReplaceAllString(s, "-")
-s = strings.Trim(s, "-")
-runes := []rune(s)
-if len(runes) > 40 {
-runes = runes[:40]
-for len(runes) > 0 && !unicode.IsLetter(runes[len(runes)-1]) && !unicode.IsDigit(runes[len(runes)-1]) {
-runes = runes[:len(runes)-1]
-}
-}
-return string(runes)
+	s = strings.ToLower(s)
+	re := regexp.MustCompile(`[^a-z0-9]+`)
+	s = re.ReplaceAllString(s, "-")
+	s = strings.Trim(s, "-")
+	runes := []rune(s)
+	if len(runes) > 40 {
+		runes = runes[:40]
+		for len(runes) > 0 && !unicode.IsLetter(runes[len(runes)-1]) && !unicode.IsDigit(runes[len(runes)-1]) {
+			runes = runes[:len(runes)-1]
+		}
+	}
+	return string(runes)
 }

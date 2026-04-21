@@ -11,7 +11,7 @@ Bootstrap and sync GitHub labels and milestones idempotently. Labels and milesto
 
 ## Label Bootstrap
 
-Use this at project start (`ai-squad labels`) and in CI to guarantee label state.
+Use this at project start (`maple labels`) and in CI to guarantee label state.
 
 ```bash
 # Idempotent label create-or-update

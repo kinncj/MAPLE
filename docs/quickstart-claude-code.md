@@ -1,6 +1,6 @@
 # Quickstart — Claude Code
 
-Get from zero to a running feature pipeline using **Claude Code** and AI Squad.
+Get from zero to a running feature pipeline using **Claude Code** and MAPLE.
 
 ---
 
@@ -12,151 +12,121 @@ Get from zero to a running feature pipeline using **Claude Code** and AI Squad.
 | [GitHub CLI](https://cli.github.com) | `brew install gh` |
 | [Git](https://git-scm.com) | pre-installed on macOS/Linux |
 | [Go 1.22+](https://go.dev) | `brew install go` *(only to build from source)* |
-| [Node.js](https://nodejs.org) | `brew install node` *(Playwright E2E tests)* |
+| [Node.js](https://nodejs.org) | `brew install node` *(Playwright E2E tests + npx skills)* |
 | [Docker](https://docker.com) | [docker.com/get-started](https://docker.com/get-started) |
 
 ---
 
-## 1. Install `squad`
+## 1. Install `maple`
 
-**From source (preferred):**
+**Pre-built binary (recommended):**
 
 ```bash
-git clone https://github.com/kinncj/AI-Squad.git ai-squad
-cd ai-squad
-make build-tui           # produces ./squad
+curl -fsSL https://raw.githubusercontent.com/kinncj/maple/main/scripts/install.sh | bash
 ```
 
-Add to your PATH — pick one:
+Installs to `~/.tools/maple/bin/`. Add to your shell profile:
 
 ```bash
-# Option A: move to a system bin
-sudo mv squad /usr/local/bin/squad
-
-# Option B: add repo directory to PATH (useful during development)
-export PATH="$PWD:$PATH"   # add to ~/.zshrc / ~/.bashrc to persist
-
-# Option C: install to ~/.tools/ai-squad/bin (recommended for personal installs)
-mkdir -p ~/.tools/ai-squad/bin
-mv squad ~/.tools/ai-squad/bin/squad
-echo 'export PATH="$HOME/.tools/ai-squad/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+export PATH="$HOME/.tools/maple/bin:$PATH"
 ```
 
-**From a release (no Go required):**
+**From source:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.sh | bash
-# installs to ~/.tools/ai-squad/bin/ and prints PATH instructions
+git clone https://github.com/kinncj/maple.git
+cd maple
+make build-tui           # produces ./maple
+export PATH="$PWD:$PATH"
 ```
 
-Verify:
+Verify: `maple --version`
+
+---
+
+## 2. Scaffold your project
 
 ```bash
-squad --version
+cd your-project-directory
+maple init
+```
+
+`maple init` copies agents, skills, hooks, Makefile stubs, and docs structure into the current directory. It also installs `obra/superpowers` via `npx skills` if Node.js is available.
+
+After init, `maple` launches the boot check and drops you into the dashboard.
+
+---
+
+## 3. Customize the Makefile
+
+The Makefile ships with stubs. Open `Makefile` and replace the recipe bodies with your stack's commands:
+
+```makefile
+build:
+    npm run build      # or: dotnet build, cargo build, etc.
+
+test:
+    npx vitest run tests/unit
+
+test-integration:
+    npx vitest run tests/integration
+
+test-e2e:
+    npx playwright test tests/e2e/
 ```
 
 ---
 
-## 2. Scaffold a project
+## 4. Bootstrap GitHub
 
-```bash
-mkdir my-project && cd my-project
-git init
-squad init
+Authenticate with the GitHub CLI, then from the `maple` dashboard:
+
+```
+:labels     # create MAPLE phase labels on the repo
+:project    # create a GitHub Project v2 board
 ```
 
-`squad init` detects which AI tools are installed and copies the matching agent definitions, skills, hooks, Makefile, and config. Existing files are never overwritten.
-
-```bash
-squad labels       # bootstrap GitHub label set (requires gh auth login)
-squad project      # create a GitHub Project v2 (optional)
-```
+Or from the CLI: `maple labels` / `maple project`.
 
 ---
 
-## 3. Write your first requirement
+## 5. Write your first story
 
-```bash
-squad req
-```
-
-Type your requirement in plain text, press `Ctrl+D`. AI Squad converts it to a Gherkin story saved under `docs/stories/`.
+Press `n` in the dashboard (or run `maple req`) to open the Gherkin requirements wizard. Walk through the prompts — the wizard produces a story file at `docs/stories/{slug}/Story.md` with embedded Gherkin and links it to a GitHub Issue.
 
 ---
 
-## 4. Run the pipeline
+## 6. Run a feature
 
-Open Claude Code in your project directory:
+Open the project in **Claude Code**:
 
 ```bash
-claude
+claude .
 ```
 
 Then run:
 
 ```
-/feature "describe your feature here"
+/feature "short description of what you want to build"
 ```
 
-The orchestrator drives all 8 phases: DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE. It pauses at each human-approval gate and surfaces results as GitHub Issues.
+The orchestrator takes over: DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE. Each phase produces artifacts in `docs/specs/{feature-slug}/`. Human gates at Phase 1 and 2 pause for your approval.
 
 ---
 
-## Rubber Duck (second opinion)
-
-Claude Code invokes `@rubber-duck` automatically at three checkpoints:
-
-1. **After plan** — before implementation starts
-2. **After complex multi-file implementations** — before tests run
-3. **After tests written** — before executing them
-
-You can also trigger it manually: just ask Claude to "critique your work" or "get a second opinion."
-
----
-
-## Available commands
+## Commands reference
 
 | Command | What it does |
 |---|---|
-| `/feature "description"` | Full 8-phase pipeline from discovery to PR |
+| `/feature "description"` | Full 8-phase pipeline |
 | `/bugfix "description"` | Reproduce → fix → validate → CHANGELOG |
-| `/validate` | Run full test suite (skips discovery/architecture) |
+| `/validate` | Run full test suite via `make test-all` |
 | `/tdd "requirement"` | Single RED → GREEN → REFACTOR cycle |
 
 ---
 
-## Project structure after `squad init`
+## Next steps
 
-```
-my-project/
-├── .claude/
-│   ├── agents/          # 35 agent definitions (incl. rubber-duck)
-│   ├── commands/        # /feature, /bugfix, /validate, /tdd
-│   ├── hooks/           # pre/post tool-use enforcement
-│   └── skills/          # 32 reusable skill files
-├── .opencode/           # Mirror for OpenCode
-├── .github/
-│   ├── copilot-instructions.md   # Copilot CLI rules
-│   └── instructions/             # path-specific rules
-├── CLAUDE.md            # Project rules loaded on every Claude Code session
-├── Makefile             # build/test/lint contract
-├── project.config.yaml  # stack detection, SDLC mode
-└── docs/stories/        # Gherkin stories (source of truth)
-```
-
----
-
-## Troubleshooting
-
-**`squad: command not found`**
-Check your PATH. If you used Option C above: `source ~/.zshrc` then retry.
-
-**`claude: command not found`**
-`npm install -g @anthropic-ai/claude-code`
-
-**Agent skips a phase gate**
-Ensure `CLAUDE.md` is present in your project root — it contains the project rules the orchestrator reads on every session start.
-
-**Hook blocked my commit**
-The pre-bash hook runs SDLC gates before every `git commit`. Fix the reported issue (failing test, missing frontmatter, secret in staged files) and retry.
+- [The 8-Phase Pipeline](./pipeline.md) — what happens inside each phase
+- [The Agents](./agents.md) — full roster and how to add custom agents
+- [Customization Guide](./customization.md) — skills, themes, Makefile tweaks

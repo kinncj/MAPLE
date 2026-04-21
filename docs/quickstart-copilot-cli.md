@@ -1,6 +1,6 @@
 # Quickstart — GitHub Copilot CLI
 
-Get from zero to a running feature pipeline using **GitHub Copilot CLI** (`copilot`) and AI Squad.
+Get from zero to a running feature pipeline using **GitHub Copilot CLI** and MAPLE.
 
 ---
 
@@ -8,177 +8,114 @@ Get from zero to a running feature pipeline using **GitHub Copilot CLI** (`copil
 
 | Tool | Install |
 |---|---|
-| [GitHub Copilot CLI](https://github.com/features/copilot/cli) | `gh extension install github/gh-copilot` |
 | [GitHub CLI](https://cli.github.com) | `brew install gh` |
+| [Copilot CLI extension](https://github.com/github/gh-copilot) | `gh extension install github/gh-copilot` |
 | [Git](https://git-scm.com) | pre-installed on macOS/Linux |
 | [Go 1.22+](https://go.dev) | `brew install go` *(only to build from source)* |
-| [Node.js](https://nodejs.org) | `brew install node` *(Playwright E2E tests)* |
+| [Node.js](https://nodejs.org) | `brew install node` *(Playwright E2E tests + npx skills)* |
 | [Docker](https://docker.com) | [docker.com/get-started](https://docker.com/get-started) |
 
-Authenticate:
+---
+
+## 1. Install `maple`
+
+**Pre-built binary (recommended):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kinncj/maple/main/scripts/install.sh | bash
+```
+
+Installs to `~/.tools/maple/bin/`. Add to your shell profile:
+
+```bash
+export PATH="$HOME/.tools/maple/bin:$PATH"
+```
+
+**From source:**
+
+```bash
+git clone https://github.com/kinncj/maple.git
+cd maple
+make build-tui           # produces ./maple
+export PATH="$PWD:$PATH"
+```
+
+Verify: `maple --version`
+
+---
+
+## 2. Scaffold your project
+
+```bash
+cd your-project-directory
+maple init
+```
+
+`maple init` copies `.github/copilot-instructions.md` along with agents, skills, hooks, Makefile stubs, and docs structure into the current directory.
+
+---
+
+## 3. Customize the Makefile
+
+The Makefile ships with stubs. Open `Makefile` and replace the recipe bodies with your stack's commands before running any feature pipeline.
+
+---
+
+## 4. Bootstrap GitHub
 
 ```bash
 gh auth login
-gh copilot --version     # verify Copilot CLI is working
+maple labels    # create MAPLE phase labels on the repo
+maple project   # create a GitHub Project v2 board
 ```
 
 ---
 
-## 1. Install `squad`
+## 5. Write your first story
 
-**From source (preferred):**
+Press `n` in the `maple` dashboard to open the Gherkin requirements wizard, or run `maple req` directly. The wizard produces a story file at `docs/stories/{slug}/Story.md` with embedded Gherkin and links it to a GitHub Issue.
+
+---
+
+## 6. Run a feature
 
 ```bash
-git clone https://github.com/kinncj/AI-Squad.git ai-squad
-cd ai-squad
-make build-tui           # produces ./squad
+gh copilot suggest "/feature short description of what you want to build"
 ```
 
-Add to your PATH — pick one:
+Or use the `experimental` mode for cross-model review:
 
 ```bash
-# Option A: move to a system bin
-sudo mv squad /usr/local/bin/squad
-
-# Option B: add repo directory to PATH (useful during development)
-export PATH="$PWD:$PATH"   # add to ~/.zshrc / ~/.bashrc to persist
-
-# Option C: install to ~/.tools/ai-squad/bin (recommended)
-mkdir -p ~/.tools/ai-squad/bin
-mv squad ~/.tools/ai-squad/bin/squad
-echo 'export PATH="$HOME/.tools/ai-squad/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+gh copilot suggest --experimental "/feature short description"
 ```
 
-**From a release (no Go required):**
+The orchestrator pipeline follows the same 8 phases as in Claude Code. Artifacts land in `docs/specs/{feature-slug}/`.
+
+---
+
+## Rubber Duck reviewer
+
+MAPLE includes a `rubber-duck` prompt that invokes Copilot's built-in cross-model reviewer. Enable it at plan, code, and test checkpoints:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.sh | bash
-```
-
-Verify:
-
-```bash
-squad --version
+gh copilot suggest "/validate"   # triggers rubber-duck review before FINAL GATE
 ```
 
 ---
 
-## 2. Scaffold a project
-
-```bash
-mkdir my-project && cd my-project
-git init
-squad init
-squad labels       # bootstrap GitHub label set
-```
-
----
-
-## 3. Write your first requirement
-
-```bash
-squad req
-```
-
-Type your requirement in plain text, press `Ctrl+D` to generate a Gherkin story saved under `docs/stories/`.
-
----
-
-## 4. Open Copilot CLI and enable Rubber Duck
-
-```bash
-copilot
-```
-
-Enable experimental mode for the **Rubber Duck** second-opinion reviewer:
-
-```
-/experimental
-```
-
-Then select a Claude model from the model picker. Rubber Duck will automatically use GPT-5.4 as the cross-family reviewer.
-
----
-
-## 5. Run the pipeline
-
-```
-/feature "describe your feature here"
-```
-
-The orchestrator agent (`@orchestrator`) drives all 8 phases. It pauses at human-approval gates and updates GitHub Issues as it goes.
-
----
-
-## Rubber Duck
-
-Copilot CLI's built-in Rubber Duck activates **automatically** at three checkpoints when `/experimental` is enabled:
-
-| Checkpoint | What it catches |
-|---|---|
-| After plan (Phase 3) | Missing components, wrong task ordering, flawed TDD sequencing |
-| After complex multi-file implementation | Logic bugs, cross-file contract breaks, missing error handling |
-| After writing tests | Weak assertions, missing scenarios, JS mock antipatterns |
-
-You can also trigger it manually at any time — just say "critique your work" or "get a second opinion."
-
-> **Without `/experimental`:** The `@rubber-duck` agent defined in `.github/copilot-instructions.md` provides equivalent coverage — the orchestrator invokes it at the same three checkpoints.
-
----
-
-## Skills
-
-AI Squad skills load automatically from `.github/extensions/` and `.claude/skills/`. All skill files have the required YAML frontmatter (`name:` + `description:`) for Copilot CLI.
-
-Reference a skill in your session:
-
-```
-use the rubber-duck skill to review this plan
-use the tdd-workflow skill
-```
-
----
-
-## Available commands
+## Commands reference
 
 | Command | What it does |
 |---|---|
-| `/feature "description"` | Full 8-phase pipeline from discovery to PR |
+| `/feature "description"` | Full 8-phase pipeline |
 | `/bugfix "description"` | Reproduce → fix → validate → CHANGELOG |
-| `/validate` | Run full test suite (skips discovery/architecture) |
+| `/validate` | Run full test suite |
 | `/tdd "requirement"` | Single RED → GREEN → REFACTOR cycle |
 
 ---
 
-## Project structure after `squad init`
+## Next steps
 
-```
-my-project/
-├── .github/
-│   ├── copilot-instructions.md   # Copilot CLI rules (loaded automatically)
-│   └── instructions/             # path-specific rules for stories, etc.
-├── .claude/
-│   ├── agents/                   # 35 agent definitions
-│   └── skills/                   # 32 skill files (all with YAML frontmatter)
-├── .opencode/                    # Mirror for OpenCode
-├── Makefile
-├── project.config.yaml
-└── docs/stories/                 # Gherkin stories
-```
-
----
-
-## Troubleshooting
-
-**`copilot: command not found`**
-Install: `gh extension install github/gh-copilot` then `gh copilot --version`.
-
-**Skill shows "missing or malformed YAML frontmatter"**
-Each skill file must start with `---\nname: skill-name\ndescription: ...\n---`. All AI Squad skills already have this — if you added a custom skill, add the frontmatter.
-
-**Rubber Duck not appearing**
-Type `/experimental` in your Copilot CLI session and make sure a Claude model is selected in the model picker.
-
-**Agent doesn't follow pipeline phases**
-Ensure `.github/copilot-instructions.md` is present — it's the enforcement file Copilot CLI reads for project-level rules.
+- [The 8-Phase Pipeline](./pipeline.md)
+- [The Agents](./agents.md)
+- [Customization Guide](./customization.md)

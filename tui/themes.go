@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -130,6 +134,44 @@ func everforest() Theme {
 		"#7fbbb3", "#d699b6", "#a7c080", "#dbbc7f", "#e67e80",
 		"#859289", "#2d353b", "#d3c6aa",
 	)
+}
+
+// detectOmarchyTheme reads ~/.config/omarchy/current/theme and maps it to a
+// built-in theme. Returns (theme, true) if detected, (tokyo-night, false) otherwise.
+func detectOmarchyTheme() (Theme, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return tokyoNight(), false
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".config", "omarchy", "current", "theme"))
+	if err != nil {
+		return tokyoNight(), false
+	}
+	name := strings.TrimSpace(strings.ToLower(string(data)))
+	// Strip path components — Omarchy stores "catppuccin/mocha" or just "catppuccin-mocha"
+	name = filepath.Base(name)
+	name = strings.ReplaceAll(name, "/", "-")
+	t := themeByName(name)
+	return t, true
+}
+
+// detectTruecolor returns true when the terminal reports 24-bit color support.
+// Checks COLORTERM=truecolor|24bit and common term programs (iTerm2, Kitty, WezTerm).
+func detectTruecolor() bool {
+	ct := strings.ToLower(os.Getenv("COLORTERM"))
+	if ct == "truecolor" || ct == "24bit" {
+		return true
+	}
+	switch os.Getenv("TERM_PROGRAM") {
+	case "iTerm.app", "kitty", "WezTerm", "Hyper", "vscode":
+		return true
+	}
+	if strings.Contains(os.Getenv("TERM"), "256color") {
+		return false
+	}
+	// Optimistically assume truecolor for unknown terminals rather than
+	// degrading without evidence.
+	return true
 }
 
 // themeByName returns a named theme or falls back to tokyo-night.

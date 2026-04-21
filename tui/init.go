@@ -62,6 +62,7 @@ type initModel struct {
 }
 
 type initDoneMsg struct{ logs []string; err error }
+type initAutoDoneMsg struct{}
 
 func newInitModel(tools Tools, fsys fs.FS, force bool, fromMenu bool) *initModel {
 	s := spinner.New()
@@ -135,6 +136,12 @@ func (m *initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.step = stepDone
 		m.logs = msg.logs
 		m.err = msg.err
+		if m.err == nil {
+			return m, tea.Tick(800*time.Millisecond, func(time.Time) tea.Msg { return initAutoDoneMsg{} })
+		}
+
+	case initAutoDoneMsg:
+		return m, tea.Quit
 	}
 	return m, nil
 }
@@ -166,7 +173,7 @@ func (m *initModel) View() string {
 		return header + body + "\n" + prompt + "\n"
 
 	case stepRun:
-		return header + "\n" + m.spinner.View() + "  Setting up AI-Squad...\n"
+		return header + "\n" + m.spinner.View() + "  Setting up MAPLE...\n"
 
 	case stepDone:
 		if m.err != nil {
@@ -174,16 +181,12 @@ func (m *initModel) View() string {
 			return header + msg + "\n"
 		}
 		var sb strings.Builder
-		sb.WriteString(lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("\n✓ AI-Squad initialized\n\n"))
+		sb.WriteString(lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("\n✓ MAPLE initialized\n\n"))
 		for _, l := range m.logs {
 			sb.WriteString("  " + l + "\n")
 		}
 		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render(
-			"Next steps:\n" +
-				"  • Open your project in Claude Code, OpenCode, or Copilot CLI\n" +
-				"  • Run: squad req  — to write requirements and generate a story\n" +
-				"  • Run: squad labels  — to bootstrap GitHub labels\n"))
+		sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("Opening dashboard…"))
 		return header + sb.String() + "\n"
 	}
 	return ""
@@ -227,11 +230,22 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 		return logs, err
 	}
 
-	// Always copy: docs structure, Makefile, scripts, .github
+	// Makefile gets special treatment: only the MAPLE-managed section is updated
+	// on force (update) so user customisations are preserved.
+	makefileDst := filepath.Join(cwd, "Makefile")
+	if force {
+		if err := patchMakefile(fsys, makefileDst); err != nil {
+			log("✗ Makefile (patch): " + err.Error())
+		} else {
+			log("↺ Makefile (MAPLE section updated)")
+		}
+	}
+
+	// Always copy: docs structure, scripts, .github (Makefile handled above)
 	pairs := []struct{ src, dst string }{
 		{"docs", "docs"},
 		{"scripts", "scripts"},
-		{"Makefile", "Makefile"},
+		{"Makefile", "Makefile"}, // skipped on first copy if already exists when force=false
 		{"lefthook.yml", "lefthook.yml"},
 		{".github", ".github"},
 	}
@@ -287,6 +301,17 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 		} else {
 			log("✓ lefthook hooks wired")
 		}
+	}
+
+	// Install obra/superpowers (the agentic skills framework)
+	if tools.NPX != "" {
+		if out, err := exec.Command(tools.NPX, "--yes", "skills", "add", "obra/superpowers", "--all", "-y").CombinedOutput(); err != nil {
+			log("~ superpowers: " + strings.TrimSpace(string(out)) + " (install manually: npx skills add obra/superpowers --all -y)")
+		} else {
+			log("✓ obra/superpowers installed via skills")
+		}
+	} else {
+		log("~ superpowers: npx not found — run later: npx skills add obra/superpowers --all -y")
 	}
 
 	return logs, nil
@@ -360,6 +385,49 @@ func writeFromFS(fsys fs.FS, src, dst string, force bool) error {
 		_ = os.Chmod(dst, 0755)
 	}
 	return nil
+}
+
+// patchMakefile updates only the MAPLE-managed section of the user's Makefile.
+// It reads the template Makefile to extract the section between the MAPLE markers,
+// then replaces that section in the user's existing file (or appends it if absent).
+func patchMakefile(fsys fs.FS, dstPath string) error {
+	const beginMarker = "# ─── BEGIN MAPLE MANAGED"
+	const endMarker = "# ─── END MAPLE MANAGED"
+
+	// Read template MAPLE section
+	tmplBytes, err := fs.ReadFile(fsys, "Makefile")
+	if err != nil {
+		return fmt.Errorf("read template Makefile: %w", err)
+	}
+	tmpl := string(tmplBytes)
+	tStart := strings.Index(tmpl, beginMarker)
+	tEnd := strings.Index(tmpl, endMarker)
+	if tStart < 0 || tEnd < 0 {
+		return fmt.Errorf("MAPLE markers not found in template Makefile")
+	}
+	mapleSection := tmpl[tStart : tEnd+len(endMarker)]
+
+	// Read existing user Makefile (if any)
+	existing, err := os.ReadFile(dstPath)
+	if os.IsNotExist(err) {
+		// First time — write the full template
+		return os.WriteFile(dstPath, tmplBytes, 0644)
+	}
+	if err != nil {
+		return err
+	}
+	cur := string(existing)
+
+	eStart := strings.Index(cur, beginMarker)
+	eEnd := strings.Index(cur, endMarker)
+	if eStart >= 0 && eEnd >= 0 {
+		// Replace existing MAPLE section
+		cur = cur[:eStart] + mapleSection + cur[eEnd+len(endMarker):]
+	} else {
+		// Append MAPLE section (not present yet)
+		cur = strings.TrimRight(cur, "\n") + "\n\n" + mapleSection + "\n"
+	}
+	return os.WriteFile(dstPath, []byte(cur), 0644)
 }
 
 func projectConfigYAML(name string) string {

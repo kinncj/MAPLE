@@ -1,4 +1,4 @@
-# Copilot CLI Instructions — AI Squad
+# Copilot CLI Instructions — MAPLE
 
 ## Agent System
 

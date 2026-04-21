@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/kinncj/AI-Development-Squad-Template/main/template/.claude/schemas/project.config.schema.json",
-  "title": "AI Squad Project Configuration",
-  "description": "Project-level configuration for the AI Development Squad platform (project.config.yaml).",
+  "title": "MAPLE Project Configuration",
+  "description": "Project-level configuration for the MAPLE platform (project.config.yaml).",
   "type": "object",
   "required": ["project"],
   "additionalProperties": false,
@@ -116,17 +116,17 @@
     },
     "github": {
       "type": "object",
-      "description": "GitHub integration settings. Populated by `ai-squad labels` and `ai-squad project bootstrap`.",
+      "description": "GitHub integration settings. Populated by `maple labels` and `maple project bootstrap`.",
       "additionalProperties": false,
       "properties": {
         "project_number": {
           "type": ["integer", "null"],
-          "description": "GitHub Project v2 number (numeric ID, not node ID). Set by `ai-squad project bootstrap`.",
+          "description": "GitHub Project v2 number (numeric ID, not node ID). Set by `maple project bootstrap`.",
           "default": null
         },
         "project_node_id": {
           "type": ["string", "null"],
-          "description": "GitHub Project v2 GraphQL node ID. Set by `ai-squad project bootstrap`.",
+          "description": "GitHub Project v2 GraphQL node ID. Set by `maple project bootstrap`.",
           "default": null
         }
       }
