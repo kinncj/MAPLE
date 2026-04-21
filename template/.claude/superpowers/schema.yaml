@@ -1,7 +1,7 @@
 # Superpower Schema
 # Each superpower is a named composition of skills and agents.
 # Superpowers live in template/.claude/superpowers/<name>.yaml
-# The TUI (squad) auto-discovers all YAML files here and binds them.
+# The TUI (maple) auto-discovers all YAML files here and binds them.
 
 # ─── Required fields ──────────────────────────────────────────────────────────
 

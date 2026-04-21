@@ -90,7 +90,7 @@ def run_superpower(sp, user_inputs):
         if "gate" in stage:
             # human-approval gate — halt execution
             print(f"[superpower] GATE  Human approval required: {label}")
-            print(f"[superpower] PAUSED — resume by running: squad :resume {sp['name']}")
+            print(f"[superpower] PAUSED — resume by running: maple :resume {sp['name']}")
             return "paused"
 
         elif "agent" in stage:
@@ -125,7 +125,7 @@ def dispatch_agent(agent_name, stage_inputs, user_inputs):
 
 ## Resume After Gate
 
-Superpower state is persisted in `.claude/state/squad.json`:
+Superpower state is persisted in `.claude/state/maple.json`:
 
 ```json
 {
@@ -138,8 +138,8 @@ Superpower state is persisted in `.claude/state/squad.json`:
 
 Resume command (from TUI or CLI):
 ```bash
-squad :resume new-ui-feature
-# Reads .claude/state/squad.json, continues from current_stage
+maple :resume new-ui-feature
+# Reads .claude/state/maple.json, continues from current_stage
 ```
 
 ## Failure Modes
@@ -159,7 +159,7 @@ squad :resume new-ui-feature
 [superpower] STAGE 1/11: Spec intake: PROBLEM → SPEC → PLAN → TASKS → story files
 [superpower] STAGE 2/11: Await TASKS.md approval before design begins
 [superpower] GATE   Human approval required
-[superpower] PAUSED — resume with: squad :resume new-ui-feature
+[superpower] PAUSED — resume with: maple :resume new-ui-feature
 [superpower] SKIP   stage 5/11: Visual identity  (when=identity.tokens_missing → false)
 [superpower] COMPLETE  new-ui-feature
 ```

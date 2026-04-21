@@ -1,4 +1,4 @@
-# Contributing to AI Development Squad Template
+# Contributing to MAPLE
 
 Thank you for contributing. This is an open-source project licensed under AGPLv3.
 
@@ -12,7 +12,7 @@ Thank you for contributing. This is an open-source project licensed under AGPLv3
 | **Improved agent prompts** | Sharpen existing agent instructions, tool restrictions, or escalation rules |
 | **New skills** | Add a `SKILL.md` for a tool or workflow not yet covered |
 | **New commands** | Add a `/command.md` for a common pipeline pattern |
-| **CLI improvements** | Improve `scripts/ai-squad` (new subcommands, UX, error handling) |
+| **CLI improvements** | Improve `scripts/maple` (new subcommands, UX, error handling) |
 | **Tests** | Add tests in `tests/` for new or existing functionality |
 | **Documentation** | Improve `README.md`, `ARTICLE.md`, or agent descriptions |
 | **Bug fixes** | Fix incorrect model IDs, broken frontmatter, bad shell syntax |
@@ -41,9 +41,9 @@ bash tests/run_all.sh
 ```
 .
 ├── scripts/
-│   └── ai-squad              # Global CLI (init · labels · project)
-├── tui/                      # squad TUI binary (Go + Bubble Tea)
-├── template/                 # Everything copied on ai-squad init
+│   └── maple              # Global CLI (init · labels · project)
+├── tui/                      # maple TUI binary (Go + Bubble Tea)
+├── template/                 # Everything copied on maple init
 │   ├── .claude/agents/       # 34 Claude Code agent definitions
 │   ├── .claude/commands/     # slash commands
 │   ├── .claude/skills/       # 31 skill files
@@ -80,7 +80,7 @@ Every pull request runs:
 | Job | What it checks |
 |---|---|
 | **Lint** | `shellcheck` on all `.sh` files |
-| **CLI Tests** | `ai-squad help`, `init`, file count assertions |
+| **CLI Tests** | `maple help`, `init`, file count assertions |
 | **Template Validation** | Structure, agent frontmatter, skills, commands |
 | **Model ID Audit** | No stale date-suffixed IDs; Orchestrator/Architect use Opus |
 

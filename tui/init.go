@@ -166,7 +166,7 @@ func (m *initModel) View() string {
 		return header + body + "\n" + prompt + "\n"
 
 	case stepRun:
-		return header + "\n" + m.spinner.View() + "  Setting up AI-Squad...\n"
+		return header + "\n" + m.spinner.View() + "  Setting up MAPLE...\n"
 
 	case stepDone:
 		if m.err != nil {
@@ -174,7 +174,7 @@ func (m *initModel) View() string {
 			return header + msg + "\n"
 		}
 		var sb strings.Builder
-		sb.WriteString(lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("\n✓ AI-Squad initialized\n\n"))
+		sb.WriteString(lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("\n✓ MAPLE initialized\n\n"))
 		for _, l := range m.logs {
 			sb.WriteString("  " + l + "\n")
 		}
@@ -182,8 +182,8 @@ func (m *initModel) View() string {
 		sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render(
 			"Next steps:\n" +
 				"  • Open your project in Claude Code, OpenCode, or Copilot CLI\n" +
-				"  • Run: squad req  — to write requirements and generate a story\n" +
-				"  • Run: squad labels  — to bootstrap GitHub labels\n"))
+				"  • Run: maple req  — to write requirements and generate a story\n" +
+				"  • Run: maple labels  — to bootstrap GitHub labels\n"))
 		return header + sb.String() + "\n"
 	}
 	return ""

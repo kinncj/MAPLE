@@ -18,19 +18,19 @@ jobs:
         include:
           - goos: darwin
             goarch: amd64
-            artifact: squad-darwin-amd64.tar.gz
+            artifact: maple-darwin-amd64.tar.gz
           - goos: darwin
             goarch: arm64
-            artifact: squad-darwin-arm64.tar.gz
+            artifact: maple-darwin-arm64.tar.gz
           - goos: linux
             goarch: amd64
-            artifact: squad-linux-amd64.tar.gz
+            artifact: maple-linux-amd64.tar.gz
           - goos: linux
             goarch: arm64
-            artifact: squad-linux-arm64.tar.gz
+            artifact: maple-linux-arm64.tar.gz
           - goos: windows
             goarch: amd64
-            artifact: squad-windows-amd64.zip
+            artifact: maple-windows-amd64.zip
 
     steps:
       - uses: actions/checkout@v4
@@ -56,15 +56,15 @@ jobs:
           [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
           go build -C tui \
             -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
-            -o "../dist/squad${EXT}" .
+            -o "../dist/maple${EXT}" .
 
       - name: Archive
         run: |
           cd dist
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            zip squad-windows-amd64.zip squad.exe
+            zip maple-windows-amd64.zip maple.exe
           else
-            tar -czf squad-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz squad
+            tar -czf maple-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz maple
           fi
 
       - uses: actions/upload-artifact@v4
@@ -97,11 +97,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/squad-darwin-amd64.tar.gz
-            dist/squad-darwin-arm64.tar.gz
-            dist/squad-linux-amd64.tar.gz
-            dist/squad-linux-arm64.tar.gz
-            dist/squad-windows-amd64.zip
+            dist/maple-darwin-amd64.tar.gz
+            dist/maple-darwin-arm64.tar.gz
+            dist/maple-linux-amd64.tar.gz
+            dist/maple-linux-arm64.tar.gz
+            dist/maple-windows-amd64.zip
             dist/checksums.txt
             scripts/install.sh
             scripts/install.ps1

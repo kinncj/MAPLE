@@ -1,6 +1,6 @@
 # The 8-Phase Pipeline
 
-The AI Development Squad runs every feature through a fixed, phase-gated pipeline. No phase can be skipped. Three consecutive failures on any task escalate to a human.
+MAPLE runs every feature through a fixed, phase-gated pipeline. No phase can be skipped. Three consecutive failures on any task escalate to a human.
 
 ```mermaid
 flowchart LR

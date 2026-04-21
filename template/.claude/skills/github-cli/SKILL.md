@@ -202,7 +202,7 @@ gh release view {tag}
 ## Labels & Milestones
 
 ```bash
-# Bootstrap AI-Squad labels (idempotent)
+# Bootstrap MAPLE labels (idempotent)
 bash scripts/bootstrap-labels.sh
 
 # List labels
@@ -238,7 +238,7 @@ gh search prs "{query}" --repo {owner}/{repo} --state open
 
 ---
 
-## Issue Lifecycle (AI Squad Standard)
+## Issue Lifecycle (MAPLE Standard)
 
 | Event | Label added | Label removed | Comment |
 |---|---|---|---|

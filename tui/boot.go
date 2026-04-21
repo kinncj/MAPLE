@@ -66,7 +66,7 @@ func checkGHAuth() error {
 
 func checkProjectConfig() error {
 	if _, err := os.Stat("project.config.yaml"); err != nil {
-		return fmt.Errorf("not found — run `squad init`")
+		return fmt.Errorf("not found — run `maple init`")
 	}
 	return nil
 }

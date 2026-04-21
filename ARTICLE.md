@@ -1,4 +1,4 @@
-# Building an AI Development Squad: Orchestrated Multi-Agent Systems with Claude Code and OpenCode
+# Building MAPLE: Orchestrated Multi-Agent Systems with Claude Code and OpenCode
 
 *A practical guide to running an orchestrated, phase-gated, TDD-enforced development pipeline with 27 specialist agents using your GitHub Copilot Enterprise and Claude Code Max subscriptions.*
 
@@ -973,7 +973,7 @@ Notebook structure (setup → data loading → EDA → modeling → visualizatio
 
 **File:** `skills/github-cli/SKILL.md`
 
-Teaches agents how to manage GitHub issues, PRs, labels, milestones, and workflows using the `gh` CLI. This is the backbone of the squad's project management — agents create and update issues as they progress through the pipeline.
+Teaches agents how to manage GitHub issues, PRs, labels, milestones, and workflows using the `gh` CLI. This is the backbone of the MAPLE team's project management — agents create and update issues as they progress through the pipeline.
 
 **Issue lifecycle managed by agents:**
 
@@ -1291,7 +1291,7 @@ Path-scoping edits (e.g., "QA can only edit `tests/**`") is a prompt convention,
 │   └── scripts/
 │       └── seed-test.sh
 ├── scripts/
-│   └── ai-squad
+│   └── maple
 └── CHANGELOG.md
 ```
 
@@ -1367,7 +1367,7 @@ flowchart TB
 @dotnet make the test at tests/unit/UserRegistrationTests.cs pass
 
 # Swarm mode (Claude Code only)
-ai-squad swarm full
+maple swarm full
 ```
 
 ---
@@ -1376,27 +1376,27 @@ ai-squad swarm full
 
 The template ships two executable scripts.
 
-### `scripts/ai-squad` — The Global CLI
+### `scripts/maple` — The Global CLI
 
-Install the template globally once, then use `ai-squad` from any directory:
+Install the template globally once, then use `maple` from any directory:
 
 ```bash
-git clone https://github.com/kinncj/AI-Development-Squad-Template.git ~/.ai-squad
-echo 'export PATH="$HOME/.ai-squad/scripts:$PATH"' >> ~/.zshrc  # or ~/.bashrc
+git clone https://github.com/kinncj/AI-Development-Squad-Template.git ~/.maple
+echo 'export PATH="$HOME/.maple/scripts:$PATH"' >> ~/.zshrc  # or ~/.bashrc
 source ~/.zshrc
 ```
 
 | Command | What it does |
 |---|---|
-| `ai-squad init [project-name]` | Scaffold template into new or current directory, git init, npm install, optional labels |
-| `ai-squad labels [owner/repo]` | Create all GitHub issue labels for the squad pipeline |
-| `ai-squad swarm full` | Launch all plan.md tasks in parallel Zellij tabs |
-| `ai-squad swarm tasks 1 3 5` | Launch specific task numbers |
-| `ai-squad swarm agent @dotnet "prompt"` | Run a single named agent |
+| `maple init [project-name]` | Scaffold template into new or current directory, git init, npm install, optional labels |
+| `maple labels [owner/repo]` | Create all GitHub issue labels for the MAPLE pipeline |
+| `maple swarm full` | Launch all plan.md tasks in parallel Zellij tabs |
+| `maple swarm tasks 1 3 5` | Launch specific task numbers |
+| `maple swarm agent @dotnet "prompt"` | Run a single named agent |
 
 ```bash
 #!/usr/bin/env bash
-# ai-squad — AI Development Squad CLI
+# maple — MAPLE CLI
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 Kinn Coelho Juliao <kinncj@protonmail.com>
 set -euo pipefail
@@ -1405,20 +1405,20 @@ TEMPLATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLAN_FILE="${PLAN_FILE:-docs/specs/current/plan.md}"
 ```bash
 #!/usr/bin/env bash
-# ai-squad — AI Development Squad CLI
+# maple — MAPLE CLI
 #
 # Install globally:
-#   git clone https://github.com/kinncj/AI-Development-Squad-Template.git ~/.ai-squad
-#   echo 'export PATH="$HOME/.ai-squad/scripts:$PATH"' >> ~/.zshrc
+#   git clone https://github.com/kinncj/AI-Development-Squad-Template.git ~/.maple
+#   echo 'export PATH="$HOME/.maple/scripts:$PATH"' >> ~/.zshrc
 #   source ~/.zshrc
 #
 # Usage:
-#   ai-squad init   [project-name]          Scaffold template into new or current directory
-#   ai-squad labels [owner/repo]            Create GitHub labels in current repo
-#   ai-squad swarm  full                    Launch all plan tasks in parallel Zellij tabs
-#   ai-squad swarm  tasks <n> [n...]        Launch specific task numbers
-#   ai-squad swarm  agent <@name> <prompt>  Run a single named agent
-#   ai-squad help                           Show this help
+#   maple init   [project-name]          Scaffold template into new or current directory
+#   maple labels [owner/repo]            Create GitHub labels in current repo
+#   maple swarm  full                    Launch all plan tasks in parallel Zellij tabs
+#   maple swarm  tasks <n> [n...]        Launch specific task numbers
+#   maple swarm  agent <@name> <prompt>  Run a single named agent
+#   maple help                           Show this help
 #
 # Copyright (C) 2025 Kinn Coelho Juliao <kinncj@protonmail.com>
 # SPDX-License-Identifier: AGPL-3.0-or-later
@@ -1443,7 +1443,7 @@ HR="  ${D}$(printf '─%.0s' {1..60})${R}"
 # ─── UI primitives ────────────────────────────────────────────────────────────
 header() {
   printf "\n"
-  printf "  ${B}${BMGT}AI Development Squad${R}  ${D}·${R}  ${B}%s${R}\n" "$1"
+  printf "  ${B}${BMGT}MAPLE${R}  ${D}·${R}  ${B}%s${R}\n" "$1"
   printf "%b\n\n" "$HR"
 }
 
@@ -1520,7 +1520,7 @@ DEPS
   cd "$TARGET_DIR"
   git init -q
   git add -A
-  git commit -q -m "chore: initialize from AI Development Squad Template
+  git commit -q -m "chore: initialize from MAPLE Template
 
 Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Source:    $(basename "$TEMPLATE_DIR")"
@@ -1565,7 +1565,7 @@ cmd_labels() {
   [[ -z "$REPO" ]] && \
     REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)
   [[ -z "$REPO" ]] && \
-    fail "Could not detect repository.  Pass owner/repo as argument:\n     ai-squad labels owner/repo"
+    fail "Could not detect repository.  Pass owner/repo as argument:\n     maple labels owner/repo"
 
   info "Repository  " "$REPO"
 
@@ -1672,7 +1672,7 @@ cmd_swarm() {
       done
       printf "%b\n\n" "$HR"
 
-      local LAYOUT; LAYOUT="$(mktemp "${TMPDIR:-/tmp}/ai-squad-layout.XXXXXX.kdl")"
+      local LAYOUT; LAYOUT="$(mktemp "${TMPDIR:-/tmp}/maple-layout.XXXXXX.kdl")"
       printf 'layout {\n' > "$LAYOUT"
       for i in "${!TASKS[@]}"; do
         task="${TASKS[$i]}"; agent=$(_parse_agent "$task"); desc=$(_parse_desc "$task" "$agent")
@@ -1691,7 +1691,7 @@ cmd_swarm() {
       ;;
 
     tasks)
-      [[ $# -eq 0 ]] && fail "Specify task numbers.  Usage: ai-squad swarm tasks 1 3 5"
+      [[ $# -eq 0 ]] && fail "Specify task numbers.  Usage: maple swarm tasks 1 3 5"
       local TASK_NUMS=("$@")
       local SESSION="swarm-$(date +%s)"
 
@@ -1707,7 +1707,7 @@ cmd_swarm() {
       info "Tasks  " "${TASK_NUMS[*]}"
       printf "\n%b\n" "$HR"
 
-      local LAYOUT; LAYOUT="$(mktemp "${TMPDIR:-/tmp}/ai-squad-layout.XXXXXX.kdl")"
+      local LAYOUT; LAYOUT="$(mktemp "${TMPDIR:-/tmp}/maple-layout.XXXXXX.kdl")"
       printf 'layout {\n' > "$LAYOUT"
       local PANE=0 NUM task agent desc
 
@@ -1737,7 +1737,7 @@ cmd_swarm() {
       ;;
 
     agent)
-      [[ $# -lt 2 ]] && fail "Usage: ai-squad swarm agent @agent-name \"prompt\""
+      [[ $# -lt 2 ]] && fail "Usage: maple swarm agent @agent-name \"prompt\""
       local AGENT="$1"; shift
       local PROMPT="$*"
       local SESSION="swarm-$(date +%s)"
@@ -1749,7 +1749,7 @@ cmd_swarm() {
       info "Agent " "$AGENT"
       info "Prompt" "$PROMPT"
 
-      local LAYOUT; LAYOUT="$(mktemp "${TMPDIR:-/tmp}/ai-squad-layout.XXXXXX.kdl")"
+      local LAYOUT; LAYOUT="$(mktemp "${TMPDIR:-/tmp}/maple-layout.XXXXXX.kdl")"
       local _n_esc; _n_esc="$(_kdl_escape "${AGENT#@}")"
       local _p_esc; _p_esc="$(_kdl_escape "$PROMPT")"
       printf 'layout {\n    tab name="%s" focus=true {\n        pane command="claude" {\n            args "--agent" "%s" "%s"\n        }\n    }\n}\n' \
@@ -1764,7 +1764,7 @@ cmd_swarm() {
     help | *)
       header "Swarm  —  Help"
       printf "  ${B}USAGE${R}\n\n"
-      printf "    ${D}ai-squad swarm${R} ${B}<subcommand>${R} ${D}[arguments]${R}\n\n"
+      printf "    ${D}maple swarm${R} ${B}<subcommand>${R} ${D}[arguments]${R}\n\n"
       printf "%b\n" "$HR"
       printf "  ${BCYN}full${R}\n"
       printf "  ${D}    Launch all unchecked tasks from:${R}\n"
@@ -1784,7 +1784,7 @@ cmd_help() {
   header "Help"
 
   printf "  ${B}USAGE${R}\n\n"
-  printf "    ${D}ai-squad${R} ${B}<command>${R} ${D}[arguments]${R}\n"
+  printf "    ${D}maple${R} ${B}<command>${R} ${D}[arguments]${R}\n"
 
   printf "\n%b\n" "$HR"
   printf "  ${B}COMMANDS${R}\n\n"
@@ -1793,29 +1793,29 @@ cmd_help() {
   printf "  ${D}    Scaffold the template into a new or existing directory${R}\n\n"
 
   printf "  ${BCYN}labels${R}  ${D}[owner/repo]${R}\n"
-  printf "  ${D}    Create GitHub issue labels for the squad pipeline${R}\n\n"
+  printf "  ${D}    Create GitHub issue labels for the MAPLE pipeline${R}\n\n"
 
   printf "  ${BCYN}swarm${R}   ${D}<full | tasks <n...> | agent <@name> <prompt>>${R}\n"
   printf "  ${D}    Launch agents in parallel Zellij tabs (Claude Code only)${R}\n"
-  printf "  ${D}    Run: ai-squad swarm help  for details${R}\n\n"
+  printf "  ${D}    Run: maple swarm help  for details${R}\n\n"
 
   printf "%b\n" "$HR"
   printf "  ${B}EXAMPLES${R}\n\n"
 
   printf "  ${D}# New project${R}\n"
-  printf "  ${BCYN}ai-squad${R} ${B}init${R} my-project\n\n"
+  printf "  ${BCYN}maple${R} ${B}init${R} my-project\n\n"
 
   printf "  ${D}# Create labels after connecting a remote repo${R}\n"
-  printf "  ${BCYN}ai-squad${R} ${B}labels${R}\n\n"
+  printf "  ${BCYN}maple${R} ${B}labels${R}\n\n"
 
   printf "  ${D}# Run all plan tasks in parallel${R}\n"
-  printf "  ${BCYN}ai-squad${R} ${B}swarm full${R}\n\n"
+  printf "  ${BCYN}maple${R} ${B}swarm full${R}\n\n"
 
   printf "  ${D}# Run specific tasks${R}\n"
-  printf "  ${BCYN}ai-squad${R} ${B}swarm tasks${R} 1 3 5\n\n"
+  printf "  ${BCYN}maple${R} ${B}swarm tasks${R} 1 3 5\n\n"
 
   printf "  ${D}# Single agent${R}\n"
-  printf "  ${BCYN}ai-squad${R} ${B}swarm agent${R} @dotnet ${D}\"make OrderTests.cs pass\"${R}\n"
+  printf "  ${BCYN}maple${R} ${B}swarm agent${R} @dotnet ${D}\"make OrderTests.cs pass\"${R}\n"
 
   printf "\n%b\n" "$HR"
   printf "  ${D}Template:  %s${R}\n\n" "$TEMPLATE_DIR"
@@ -1829,7 +1829,7 @@ case "${1:-help}" in
   help | -h | --help) cmd_help ;;
   *)
     printf "\n  ${BRED}✗${R}  Unknown command: ${B}%s${R}\n" "$1" >&2
-    printf "  ${D}Run${R} ${B}ai-squad help${R} ${D}for available commands.${R}\n\n" >&2
+    printf "  ${D}Run${R} ${B}maple help${R} ${D}for available commands.${R}\n\n" >&2
     exit 1
     ;;
 esac
@@ -1865,7 +1865,7 @@ HR="  ${D}$(printf '─%.0s' {1..60})${R}"
 # ─── UI primitives ────────────────────────────────────────────────────────────
 header() {
   printf "\n"
-  printf "  ${B}${BMGT}AI Development Squad${R}  ${D}·${R}  ${B}%s${R}\n" "$1"
+  printf "  ${B}${BMGT}MAPLE${R}  ${D}·${R}  ${B}%s${R}\n" "$1"
   printf "%b\n\n" "$HR"
 }
 
@@ -1951,7 +1951,7 @@ printf "  ${BGRN}✓${R}  ${B}Test database seeded.${R}\n\n"
 ### `Makefile` — The 13-Target Contract
 
 ```makefile
-# Makefile — Multi-agent squad contract
+# Makefile — MAPLE multi-agent contract
 # All agents, CI/CD, and the Orchestrator use these targets.
 # Stack-specific commands go in the recipe bodies.
 # DO NOT remove targets — agents depend on them.

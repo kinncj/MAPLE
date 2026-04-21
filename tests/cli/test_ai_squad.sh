@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# tests/cli/test_ai_squad.sh — CLI smoke tests for ai-squad
+# tests/cli/test_ai_squad.sh — CLI smoke tests for maple
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLI="$REPO_ROOT/scripts/ai-squad"
+CLI="$REPO_ROOT/scripts/maple"
 TEMPLATE_DIR="$REPO_ROOT/template"
 PASS=0
 FAIL=0
@@ -35,15 +35,15 @@ printf "\n\033[1m  CLI Tests\033[0m  →  %s\n\n" "$CLI"
 
 # 1. Executable
 if [[ -x "$CLI" ]]; then
-  ok "ai-squad is executable"
+  ok "maple is executable"
 else
-  fail "ai-squad is not executable"
+  fail "maple is not executable"
 fi
 
 # 2. help exits 0
-assert_exit_ok  "ai-squad help exits 0"         "$CLI" help
-assert_exit_ok  "ai-squad --help exits 0"       "$CLI" --help
-assert_exit_ok  "ai-squad -h exits 0"           "$CLI" -h
+assert_exit_ok  "maple help exits 0"         "$CLI" help
+assert_exit_ok  "maple --help exits 0"       "$CLI" --help
+assert_exit_ok  "maple -h exits 0"           "$CLI" -h
 
 # 3. Unknown command exits non-zero
 assert_exit_fail "unknown command exits non-zero" "$CLI" totally-not-a-command
@@ -127,29 +127,29 @@ else
   fail "opencode.json still contains a top-level model field"
 fi
 
-# 12. ai-squad help output does not mention swarm
+# 12. maple help output does not mention swarm
 MAIN_HELP=$("$CLI" help 2>&1 || true)
 if printf '%s' "$MAIN_HELP" | grep -qi 'swarm'; then
-  fail "ai-squad help still mentions 'swarm'"
+  fail "maple help still mentions 'swarm'"
 else
-  ok "ai-squad help contains no swarm references"
+  ok "maple help contains no swarm references"
 fi
 
-# 13. ai-squad help lists init, labels, and project commands
+# 13. maple help lists init, labels, and project commands
 if printf '%s' "$MAIN_HELP" | grep -q 'init' && \
    printf '%s' "$MAIN_HELP" | grep -q 'labels' && \
    printf '%s' "$MAIN_HELP" | grep -q 'project'; then
-  ok "ai-squad help lists init, labels, and project commands"
+  ok "maple help lists init, labels, and project commands"
 else
-  fail "ai-squad help is missing init, labels, or project"
+  fail "maple help is missing init, labels, or project"
 fi
 
-# 14. ai-squad project command exists and exits non-zero without a repo (no gh auth in CI)
+# 14. maple project command exists and exits non-zero without a repo (no gh auth in CI)
 PROJECT_OUT=$("$CLI" project 2>&1 || true)
 if printf '%s' "$PROJECT_OUT" | grep -qiE 'repository|owner|project|Could not'; then
-  ok "ai-squad project command exists and produces meaningful output"
+  ok "maple project command exists and produces meaningful output"
 else
-  fail "ai-squad project command missing or silent"
+  fail "maple project command missing or silent"
 fi
 
 # 15. template includes story template
@@ -183,8 +183,8 @@ fi
 GITIGNORE_CONTENT=$(cat "$TEMPLATE_DIR/.gitignore")
 if printf '%s' "$GITIGNORE_CONTENT" | grep -q '.claude/logs/' && \
    printf '%s' "$GITIGNORE_CONTENT" | grep -q 'pending-sync.jsonl' && \
-   printf '%s' "$GITIGNORE_CONTENT" | grep -q '.claude/state/squad.json'; then
-  ok ".gitignore includes .claude/logs/, pending-sync.jsonl, state/squad.json"
+   printf '%s' "$GITIGNORE_CONTENT" | grep -q '.claude/state/maple.json'; then
+  ok ".gitignore includes .claude/logs/, pending-sync.jsonl, state/maple.json"
 else
   fail ".gitignore missing one or more Claude runtime entries"
 fi
@@ -436,7 +436,7 @@ for platform in claude opencode; do
   fi
 done
 
-for keyword in "stages" "when:" "gate:" "human-approval" "pipeline" "PAUSED" "squad.json"; do
+for keyword in "stages" "when:" "gate:" "human-approval" "pipeline" "PAUSED" "maple.json"; do
   if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/superpower-runner/SKILL.md"; then
     ok "superpower-runner covers: $keyword"
   else
@@ -479,8 +479,8 @@ for theme in tokyoNight catppuccinMocha gruvbox nord everforest; do
   fi
 done
 
-# squad binary commands documented in README
-for cmd in "squad init" "squad req" "squad labels" "squad project"; do
+# maple binary commands documented in README
+for cmd in "maple init" "maple req" "maple labels" "maple project"; do
   if grep -q "$cmd" tui/README.md; then
     ok "tui README documents: $cmd"
   else
@@ -488,20 +488,20 @@ for cmd in "squad init" "squad req" "squad labels" "squad project"; do
   fi
 done
 
-# squad binary builds and responds to --help
-SQUAD_BIN="$REPO_ROOT/squad"
-if [[ -f "$SQUAD_BIN" ]] || (cd "$REPO_ROOT/tui" && go build -o "$SQUAD_BIN" . 2>/dev/null); then
-  ok "squad binary builds"
-  SQUAD_HELP=$("$SQUAD_BIN" --help 2>&1 || true)
+# maple binary builds and responds to --help
+MAPLE_BIN="$REPO_ROOT/maple"
+if [[ -f "$MAPLE_BIN" ]] || (cd "$REPO_ROOT/tui" && go build -o "$MAPLE_BIN" . 2>/dev/null); then
+  ok "maple binary builds"
+  MAPLE_HELP=$("$MAPLE_BIN" --help 2>&1 || true)
   for cmd in "init" "req" "labels" "project"; do
-    if printf '%s' "$SQUAD_HELP" | grep -q "$cmd"; then
-      ok "squad --help lists: $cmd"
+    if printf '%s' "$MAPLE_HELP" | grep -q "$cmd"; then
+      ok "maple --help lists: $cmd"
     else
-      fail "squad --help missing: $cmd"
+      fail "maple --help missing: $cmd"
     fi
   done
 else
-  fail "squad binary failed to build"
+  fail "maple binary failed to build"
 fi
 
 # ─── Phase VII: Enforcement ───────────────────────────────────────────────────

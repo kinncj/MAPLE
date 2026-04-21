@@ -7,7 +7,7 @@ Spec-Kit + Design Suite + 8-phase pipeline + TUI workflow.
 
 ## Story: Export Filtered Results as CSV
 
-### 1. Intake via `squad req`
+### 1. Intake via `maple req`
 
 Launch the TUI and select **Requirements**. Type the problem statement:
 
@@ -74,7 +74,7 @@ Orchestrator detects `ui: true` in stories 0042 and automatically dispatches
 └─────────────────────────────────────────────────────────────┘
 ```
 
-User approves in TUI (`squad` → Stories pane → Enter → approve).
+User approves in TUI (`maple` → Stories pane → Enter → approve).
 
 Since no `tokens.json` exists, `@visual-identity-designer` is dispatched,
 producing `docs/design/identity/palette.json` and `docs/design/identity/tokens.json`.
@@ -108,7 +108,7 @@ Key checkpoints:
 
 ### 5. Monitoring in the TUI
 
-While work is in progress, `squad` dashboard shows:
+While work is in progress, `maple` dashboard shows:
 
 ```
 ┌─ Stories ─────────────────────┐  ┌─ Recent Agents ────────────────────┐

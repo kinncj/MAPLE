@@ -172,7 +172,7 @@ gh project item-list "$PROJECT_NUMBER" \
 
 | Condition | Action |
 |---|---|
-| `project_node_id` missing from config | Run `ai-squad project` to bootstrap. Stop until resolved. |
+| `project_node_id` missing from config | Run `maple project` to bootstrap. Stop until resolved. |
 | Item already on board | Query before adding. `gh project item-list` and check content URL. Skip if present. |
 | Field ID not found | Re-fetch fields. Field names are case-sensitive. |
 | Option ID not found | List available options from field metadata. Do not guess. |

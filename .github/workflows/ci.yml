@@ -18,8 +18,8 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
 
-      - name: Lint ai-squad CLI
-        run: shellcheck -x scripts/ai-squad
+      - name: Lint maple CLI
+        run: shellcheck -x scripts/maple
 
       - name: Lint test scripts
         run: find tests -name "*.sh" -exec shellcheck -x {} +
@@ -39,19 +39,19 @@ jobs:
       - name: Build
         run: |
           cp -r template tui/template
-          go build -C tui -o ../squad .
+          go build -C tui -o ../maple .
 
       - name: Verify binary runs
-        run: ./squad --version
+        run: ./maple --version
 
       - name: Cross-compile all platforms
         run: |
           mkdir -p dist
-          GOOS=darwin  GOARCH=amd64  go build -C tui -o ../dist/squad-darwin-amd64  .
-          GOOS=darwin  GOARCH=arm64  go build -C tui -o ../dist/squad-darwin-arm64  .
-          GOOS=linux   GOARCH=amd64  go build -C tui -o ../dist/squad-linux-amd64   .
-          GOOS=linux   GOARCH=arm64  go build -C tui -o ../dist/squad-linux-arm64   .
-          GOOS=windows GOARCH=amd64  go build -C tui -o ../dist/squad-windows-amd64.exe .
+          GOOS=darwin  GOARCH=amd64  go build -C tui -o ../dist/maple-darwin-amd64  .
+          GOOS=darwin  GOARCH=arm64  go build -C tui -o ../dist/maple-darwin-arm64  .
+          GOOS=linux   GOARCH=amd64  go build -C tui -o ../dist/maple-linux-amd64   .
+          GOOS=linux   GOARCH=arm64  go build -C tui -o ../dist/maple-linux-arm64   .
+          GOOS=windows GOARCH=amd64  go build -C tui -o ../dist/maple-windows-amd64.exe .
           echo "Cross-compile OK:"
           ls -lh dist/
 
@@ -68,28 +68,28 @@ jobs:
           go-version-file: tui/go.mod
           cache-dependency-path: tui/go.sum
 
-      - name: Build squad
+      - name: Build maple
         run: |
           cp -r template tui/template
-          go build -C tui -o ../squad .
+          go build -C tui -o ../maple .
 
       - name: Configure git identity
         run: |
-          git config --global user.email "ai-squad@noreply"
-          git config --global user.name "AI Development Squad"
+          git config --global user.email "maple@noreply"
+          git config --global user.name "MAPLE"
 
-      - name: squad --version
-        run: ./squad --version
+      - name: maple --version
+        run: ./maple --version
 
-      - name: squad --help
-        run: ./squad --help
+      - name: maple --help
+        run: ./maple --help
 
-      - name: squad init (non-interactive)
+      - name: maple init (non-interactive)
         run: |
           mkdir /tmp/test-init
-          AI_SQUAD_TEMPLATE="$GITHUB_WORKSPACE/template" ./squad init /tmp/test-init 2>&1 || true
+          MAPLE_TEMPLATE="$GITHUB_WORKSPACE/template" ./maple init /tmp/test-init 2>&1 || true
           # Verify at minimum the binary runs without crashing
-          ./squad --version
+          ./maple --version
 
       - name: Run test suite
         run: bash tests/cli/test_ai_squad.sh

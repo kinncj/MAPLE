@@ -1,6 +1,6 @@
 # Customization Guide
 
-This guide covers how to tailor the AI Development Squad template to your specific stack — adding agents, adjusting models, and restricting what each agent can do.
+This guide covers how to tailor the MAPLE template to your specific stack — adding agents, adjusting models, and restricting what each agent can do.
 
 ---
 
@@ -182,7 +182,7 @@ test-e2e:
 The 13-target contract (`build`, `test`, `test-integration`, `test-e2e`, `test-contract`, `test-all`, `lint`, `security-scan`, `fmt`, `containers-up`, `containers-down`, `seed-test`, `migrate`) must remain intact — agents rely on these names.
 
 
-This guide covers how to tailor the AI Development Squad template to your specific stack — adding agents, adjusting models, and restricting what each agent can do.
+This guide covers how to tailor the MAPLE template to your specific stack — adding agents, adjusting models, and restricting what each agent can do.
 
 ---
 
@@ -311,7 +311,7 @@ Provider model ID strings:
 | GitHub Copilot Enterprise | Claude Sonnet 4.5 | `github-copilot/claude-sonnet-4.5` |
 | GitHub Copilot Enterprise | GPT-4.1 | `copilot/gpt-4.1` |
 
-Re-run `ai-squad init` (answer the provider prompts) to automatically rewrite all 34 agent files for your subscription.
+Re-run `maple init` (answer the provider prompts) to automatically rewrite all 34 agent files for your subscription.
 
 ---
 
@@ -401,7 +401,7 @@ The 13-target contract (`build`, `test`, `test-integration`, `test-e2e`, `test-c
 
 When Anthropic or GitHub releases a new model version:
 
-1. Run `ai-squad init --yes` and answer the provider prompts — the wizard rewrites all agent files automatically
+1. Run `maple init --yes` and answer the provider prompts — the wizard rewrites all agent files automatically
 2. Or manually update:
    - `opencode.json` → `model.default`
    - Each `.opencode/agents/*.md` → `model:` field

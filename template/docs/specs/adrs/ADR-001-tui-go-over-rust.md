@@ -4,7 +4,7 @@
 Accepted
 
 ## Context
-PRD v1.2 §5.9.6 specified the `squad` TUI be built in **Rust using Ratatui**, with the explicit rationale that Rust aligns with the maintainer's kernel/systems environment and produces a smaller static binary. Go + Bubble Tea was considered and rejected in §8.
+PRD v1.2 §5.9.6 specified the `maple` TUI be built in **Rust using Ratatui**, with the explicit rationale that Rust aligns with the maintainer's kernel/systems environment and produces a smaller static binary. Go + Bubble Tea was considered and rejected in §8.
 
 Before that decision could be acted on, a Go-based TUI was already partially implemented in `tui/` using the Go standard library and the Charm/Bubbletea ecosystem. The maintainer reviewed both the PRD decision and the existing Go implementation and chose to keep Go.
 

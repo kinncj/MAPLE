@@ -1,6 +1,6 @@
 # Quickstart — OpenCode
 
-Get from zero to a running feature pipeline using **OpenCode** and AI Squad.
+Get from zero to a running feature pipeline using **OpenCode** and MAPLE.
 
 ---
 
@@ -19,29 +19,29 @@ Get from zero to a running feature pipeline using **OpenCode** and AI Squad.
 
 ---
 
-## 1. Install `squad`
+## 1. Install `maple`
 
 **From source (preferred):**
 
 ```bash
-git clone https://github.com/kinncj/AI-Squad.git ai-squad
-cd ai-squad
-make build-tui           # produces ./squad
+git clone https://github.com/kinncj/AI-Squad.git maple
+cd maple
+make build-tui           # produces ./maple
 ```
 
 Add to your PATH — pick one:
 
 ```bash
 # Option A: move to a system bin
-sudo mv squad /usr/local/bin/squad
+sudo mv maple /usr/local/bin/maple
 
 # Option B: add repo directory to PATH (useful during development)
 export PATH="$PWD:$PATH"   # add to ~/.zshrc / ~/.bashrc to persist
 
-# Option C: install to ~/.tools/ai-squad/bin (recommended)
-mkdir -p ~/.tools/ai-squad/bin
-mv squad ~/.tools/ai-squad/bin/squad
-echo 'export PATH="$HOME/.tools/ai-squad/bin:$PATH"' >> ~/.zshrc
+# Option C: install to ~/.tools/maple/bin (recommended)
+mkdir -p ~/.tools/maple/bin
+mv maple ~/.tools/maple/bin/maple
+echo 'export PATH="$HOME/.tools/maple/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/instal
 Verify:
 
 ```bash
-squad --version
+maple --version
 ```
 
 ---
@@ -64,8 +64,8 @@ squad --version
 ```bash
 mkdir my-project && cd my-project
 git init
-squad init
-squad labels       # bootstrap GitHub label set
+maple init
+maple labels       # bootstrap GitHub label set
 ```
 
 ---
@@ -79,10 +79,10 @@ Open OpenCode in your project and go to **Settings → Providers**. Add your API
 ## 4. Write your first requirement
 
 ```bash
-squad req
+maple req
 ```
 
-Type your requirement in plain text, press `Ctrl+D`. AI Squad converts it to a Gherkin story under `docs/stories/`.
+Type your requirement in plain text, press `Ctrl+D`. MAPLE converts it to a Gherkin story under `docs/stories/`.
 
 ---
 
@@ -127,7 +127,7 @@ You can also trigger it manually: ask OpenCode to "critique your work" or "get a
 
 ---
 
-## Project structure after `squad init`
+## Project structure after `maple init`
 
 ```
 my-project/

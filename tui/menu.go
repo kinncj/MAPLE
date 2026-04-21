@@ -80,7 +80,7 @@ func runMenu(tools Tools, fsys fs.FS) menuResult {
 
 func buildMenuItems(tools Tools, initialized bool) []menuItem {
 	items := []menuItem{
-		{action: menuInit, label: "Init", desc: "Set up AI-Squad in this directory"},
+		{action: menuInit, label: "Init", desc: "Set up MAPLE in this directory"},
 	}
 
 	if initialized {
@@ -209,7 +209,7 @@ func (m *menuModel) View() string {
 func (m *menuModel) menuView(t Theme) string {
 	var sb strings.Builder
 
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("AI Development Squad")
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("MAPLE")
 	ver := lipgloss.NewStyle().Foreground(t.Muted).Render(" · " + version)
 	sb.WriteString("  " + title + ver + "\n")
 	sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 54)) + "\n\n")
@@ -273,7 +273,7 @@ func (m *menuModel) helpView(t Theme) string {
 		{"Init", "Copies agents, skills, hooks, and config into the current\n                  directory for each detected AI tool."},
 		{"Update", "Re-syncs managed files (agents, skills, hooks) with the\n                  latest templates. Never overwrites project.config.yaml."},
 		{"Requirements", "Interactive editor. Type plain-text requirements, press\n                  Ctrl+D to convert via detected AI tool → Gherkin story\n                  saved to docs/stories/."},
-		{"Labels", "Creates the canonical AI-Squad GitHub label set in the\n                  current repo using gh CLI."},
+		{"Labels", "Creates the canonical MAPLE GitHub label set in the\n                  current repo using gh CLI."},
 		{"Project", "Creates a GitHub Project v2 and writes the project number\n                  and node ID into project.config.yaml."},
 	}
 

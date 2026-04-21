@@ -24,7 +24,7 @@ run_suite() {
 }
 
 # ─── suites ───────────────────────────────────────────────────────────────────
-printf "\n\033[1m  AI Development Squad — Test Suite\033[0m\n"
+printf "\n\033[1m  MAPLE — Test Suite\033[0m\n"
 printf "  %s\n" "$REPO_ROOT"
 
 run_suite "CLI Tests"              "$REPO_ROOT/tests/cli/test_ai_squad.sh"

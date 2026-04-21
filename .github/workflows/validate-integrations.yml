@@ -24,10 +24,10 @@ jobs:
           go-version-file: tui/go.mod
           cache-dependency-path: tui/go.sum
 
-      - name: Build squad
+      - name: Build maple
         run: |
           cp -r template tui/template
-          go build -C tui -o ../squad .
+          go build -C tui -o ../maple .
 
 
       - name: Validate agent frontmatter (structural)
@@ -42,15 +42,15 @@ jobs:
 
       - name: Configure git identity for CI
         run: |
-          git config --global user.email "ai-squad@noreply"
-          git config --global user.name "AI Development Squad"
+          git config --global user.email "maple@noreply"
+          git config --global user.name "MAPLE"
 
-      - name: Smoke-test squad init
+      - name: Smoke-test maple init
         run: |
           mkdir -p /tmp/test-smoke
           cd /tmp/test-smoke
-          AI_SQUAD_TEMPLATE="$GITHUB_WORKSPACE/template" \
-            "$GITHUB_WORKSPACE/squad" init 2>&1
+          MAPLE_TEMPLATE="$GITHUB_WORKSPACE/template" \
+            "$GITHUB_WORKSPACE/maple" init 2>&1
           ls .claude/agents/orchestrator.md || \
             { echo "orchestrator agent missing"; exit 1; }
           ls .claude/agents/architect.md || \

@@ -372,7 +372,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// so runReq pre-loads it into the textarea.
 			gherkin := extractGherkinFromLines(m.storyLines)
 			_ = os.MkdirAll(".claude/state", 0o755)
-			_ = os.WriteFile(".claude/state/squad-edit.txt", []byte(gherkin), 0o644)
+			_ = os.WriteFile(".claude/state/maple-edit.txt", []byte(gherkin), 0o644)
 			if m.storyDir != "" {
 				_ = os.RemoveAll(m.storyDir)
 				m.storyDir = ""
@@ -737,7 +737,7 @@ func (m *dashboardModel) header() string {
 	if name == "" {
 		name = "—"
 	}
-	left := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  squad")
+	left := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  maple")
 	mid := lipgloss.NewStyle().Foreground(t.Muted).Render(" · project: " + name + " · theme: " + t.Name)
 	bar := left + mid
 	if m.noAnimate {
@@ -802,7 +802,7 @@ func (m *dashboardModel) storiesContent(height int) string {
 	t := m.theme
 	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Stories")
 	if len(m.stories) == 0 {
-		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no stories yet — run squad req")
+		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no stories yet — run maple req")
 	}
 	lines := []string{title}
 	cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
@@ -1509,5 +1509,5 @@ func runDashboard(t Theme, noAnimate bool) (dashAction, error) {
 func writeRecoveryMarker(state string) {
 	_ = os.MkdirAll(".claude/state", 0o755)
 	data := fmt.Sprintf(`{"state":%q,"ts":%q}`, state, time.Now().UTC().Format(time.RFC3339))
-	_ = os.WriteFile(".claude/state/squad.json", []byte(data+"\n"), 0o644)
+	_ = os.WriteFile(".claude/state/maple.json", []byte(data+"\n"), 0o644)
 }

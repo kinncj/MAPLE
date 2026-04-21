@@ -1,6 +1,6 @@
 # Quickstart — GitHub Copilot CLI
 
-Get from zero to a running feature pipeline using **GitHub Copilot CLI** (`copilot`) and AI Squad.
+Get from zero to a running feature pipeline using **GitHub Copilot CLI** (`copilot`) and MAPLE.
 
 ---
 
@@ -24,29 +24,29 @@ gh copilot --version     # verify Copilot CLI is working
 
 ---
 
-## 1. Install `squad`
+## 1. Install `maple`
 
 **From source (preferred):**
 
 ```bash
-git clone https://github.com/kinncj/AI-Squad.git ai-squad
-cd ai-squad
-make build-tui           # produces ./squad
+git clone https://github.com/kinncj/AI-Squad.git maple
+cd maple
+make build-tui           # produces ./maple
 ```
 
 Add to your PATH — pick one:
 
 ```bash
 # Option A: move to a system bin
-sudo mv squad /usr/local/bin/squad
+sudo mv maple /usr/local/bin/maple
 
 # Option B: add repo directory to PATH (useful during development)
 export PATH="$PWD:$PATH"   # add to ~/.zshrc / ~/.bashrc to persist
 
-# Option C: install to ~/.tools/ai-squad/bin (recommended)
-mkdir -p ~/.tools/ai-squad/bin
-mv squad ~/.tools/ai-squad/bin/squad
-echo 'export PATH="$HOME/.tools/ai-squad/bin:$PATH"' >> ~/.zshrc
+# Option C: install to ~/.tools/maple/bin (recommended)
+mkdir -p ~/.tools/maple/bin
+mv maple ~/.tools/maple/bin/maple
+echo 'export PATH="$HOME/.tools/maple/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -59,7 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/instal
 Verify:
 
 ```bash
-squad --version
+maple --version
 ```
 
 ---
@@ -69,8 +69,8 @@ squad --version
 ```bash
 mkdir my-project && cd my-project
 git init
-squad init
-squad labels       # bootstrap GitHub label set
+maple init
+maple labels       # bootstrap GitHub label set
 ```
 
 ---
@@ -78,7 +78,7 @@ squad labels       # bootstrap GitHub label set
 ## 3. Write your first requirement
 
 ```bash
-squad req
+maple req
 ```
 
 Type your requirement in plain text, press `Ctrl+D` to generate a Gherkin story saved under `docs/stories/`.
@@ -129,7 +129,7 @@ You can also trigger it manually at any time — just say "critique your work" o
 
 ## Skills
 
-AI Squad skills load automatically from `.github/extensions/` and `.claude/skills/`. All skill files have the required YAML frontmatter (`name:` + `description:`) for Copilot CLI.
+MAPLE skills load automatically from `.github/extensions/` and `.claude/skills/`. All skill files have the required YAML frontmatter (`name:` + `description:`) for Copilot CLI.
 
 Reference a skill in your session:
 
@@ -151,7 +151,7 @@ use the tdd-workflow skill
 
 ---
 
-## Project structure after `squad init`
+## Project structure after `maple init`
 
 ```
 my-project/
@@ -175,7 +175,7 @@ my-project/
 Install: `gh extension install github/gh-copilot` then `gh copilot --version`.
 
 **Skill shows "missing or malformed YAML frontmatter"**
-Each skill file must start with `---\nname: skill-name\ndescription: ...\n---`. All AI Squad skills already have this — if you added a custom skill, add the frontmatter.
+Each skill file must start with `---\nname: skill-name\ndescription: ...\n---`. All MAPLE skills already have this — if you added a custom skill, add the frontmatter.
 
 **Rubber Duck not appearing**
 Type `/experimental` in your Copilot CLI session and make sure a Claude model is selected in the model picker.

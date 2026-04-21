@@ -1,4 +1,4 @@
-module github.com/kinncj/ai-squad/tui
+module github.com/kinncj/maple/tui
 
 go 1.24.2
 

@@ -13,7 +13,7 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 - `docs/examples/ui-feature/` — full `new-ui-feature` superpower walkthrough (`ui: true` story, design gates, a11y)
 - `docs/examples/api-endpoint/` — `api-endpoint` superpower (`ui: false`, no design gate)
 - `docs/examples/spike/` — `spike/*` branch, Spec-Kit skip, no-production-merge pattern
-- `README.md` updated: `squad` binary, `go build` quickstart, TUI keybindings, phase summary
+- `README.md` updated: `maple` binary, `go build` quickstart, TUI keybindings, phase summary
 
 ## [3.6.0] — 2026-04-16
 
@@ -29,7 +29,7 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 ## [3.5.0] — 2026-04-16
 
-### Added — Phase VI: TUI `squad`
+### Added — Phase VI: TUI `maple`
 - `tui/` — Go + Bubble Tea TUI binary; cross-compiles to macOS/Linux/Windows with zero runtime deps
 - 8-pane dashboard: Stories, Agents, PRs, QA, Design, Logs, Help, Superpowers
 - 5 built-in themes: `tokyo-night` (default), `catppuccin-mocha`, `gruvbox`, `nord`, `everforest`
@@ -64,7 +64,7 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 ### Added — Phase II: GitHub Integration Skills
 - `gh-issues`, `gh-projects`, `gh-labels-milestones`, `gherkin-authoring`, `story-issue-sync`, `cucumber-automation` skills (Claude Code + OpenCode)
-- `cmd_project` in `scripts/ai-squad`: creates GitHub Project v2, stores `project_number` + `project_node_id` in `project.config.yaml`
+- `cmd_project` in `scripts/maple`: creates GitHub Project v2, stores `project_number` + `project_node_id` in `project.config.yaml`
 
 ## [3.0.0] — 2026-04-16
 
@@ -79,5 +79,5 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 - Removed swarm mode (`scripts/swarm-*.sh`) and hardcoded model names from all 54 agent files
 - Removed empty scaffold stubs (`template/app/`, `template/common/`, `template/infra/`)
 - Baked BusinessRepo/SOLID standards into `template/CLAUDE.md`, orchestrators, and architect agent
-- Rewrote `scripts/ai-squad`: 1,254 → ~700 lines
+- Rewrote `scripts/maple`: 1,254 → ~700 lines
 

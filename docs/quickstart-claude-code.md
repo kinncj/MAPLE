@@ -1,6 +1,6 @@
 # Quickstart — Claude Code
 
-Get from zero to a running feature pipeline using **Claude Code** and AI Squad.
+Get from zero to a running feature pipeline using **Claude Code** and MAPLE.
 
 ---
 
@@ -17,29 +17,29 @@ Get from zero to a running feature pipeline using **Claude Code** and AI Squad.
 
 ---
 
-## 1. Install `squad`
+## 1. Install `maple`
 
 **From source (preferred):**
 
 ```bash
-git clone https://github.com/kinncj/AI-Squad.git ai-squad
-cd ai-squad
-make build-tui           # produces ./squad
+git clone https://github.com/kinncj/AI-Squad.git maple
+cd maple
+make build-tui           # produces ./maple
 ```
 
 Add to your PATH — pick one:
 
 ```bash
 # Option A: move to a system bin
-sudo mv squad /usr/local/bin/squad
+sudo mv maple /usr/local/bin/maple
 
 # Option B: add repo directory to PATH (useful during development)
 export PATH="$PWD:$PATH"   # add to ~/.zshrc / ~/.bashrc to persist
 
-# Option C: install to ~/.tools/ai-squad/bin (recommended for personal installs)
-mkdir -p ~/.tools/ai-squad/bin
-mv squad ~/.tools/ai-squad/bin/squad
-echo 'export PATH="$HOME/.tools/ai-squad/bin:$PATH"' >> ~/.zshrc
+# Option C: install to ~/.tools/maple/bin (recommended for personal installs)
+mkdir -p ~/.tools/maple/bin
+mv maple ~/.tools/maple/bin/maple
+echo 'export PATH="$HOME/.tools/maple/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
@@ -47,13 +47,13 @@ source ~/.zshrc
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.sh | bash
-# installs to ~/.tools/ai-squad/bin/ and prints PATH instructions
+# installs to ~/.tools/maple/bin/ and prints PATH instructions
 ```
 
 Verify:
 
 ```bash
-squad --version
+maple --version
 ```
 
 ---
@@ -63,14 +63,14 @@ squad --version
 ```bash
 mkdir my-project && cd my-project
 git init
-squad init
+maple init
 ```
 
-`squad init` detects which AI tools are installed and copies the matching agent definitions, skills, hooks, Makefile, and config. Existing files are never overwritten.
+`maple init` detects which AI tools are installed and copies the matching agent definitions, skills, hooks, Makefile, and config. Existing files are never overwritten.
 
 ```bash
-squad labels       # bootstrap GitHub label set (requires gh auth login)
-squad project      # create a GitHub Project v2 (optional)
+maple labels       # bootstrap GitHub label set (requires gh auth login)
+maple project      # create a GitHub Project v2 (optional)
 ```
 
 ---
@@ -78,10 +78,10 @@ squad project      # create a GitHub Project v2 (optional)
 ## 3. Write your first requirement
 
 ```bash
-squad req
+maple req
 ```
 
-Type your requirement in plain text, press `Ctrl+D`. AI Squad converts it to a Gherkin story saved under `docs/stories/`.
+Type your requirement in plain text, press `Ctrl+D`. MAPLE converts it to a Gherkin story saved under `docs/stories/`.
 
 ---
 
@@ -126,7 +126,7 @@ You can also trigger it manually: just ask Claude to "critique your work" or "ge
 
 ---
 
-## Project structure after `squad init`
+## Project structure after `maple init`
 
 ```
 my-project/
@@ -149,7 +149,7 @@ my-project/
 
 ## Troubleshooting
 
-**`squad: command not found`**
+**`maple: command not found`**
 Check your PATH. If you used Option C above: `source ~/.zshrc` then retry.
 
 **`claude: command not found`**

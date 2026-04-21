@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// runLabels bootstraps the canonical AI-Squad label set in the current repo.
+// runLabels bootstraps the canonical MAPLE label set in the current repo.
 func runLabels(gh string) error {
 	if gh == "" {
 		return fmt.Errorf("gh CLI not found — install it from https://cli.github.com")
@@ -136,7 +136,7 @@ func runProject(gh string) error {
 	// Create project
 	projOut, err := exec.Command(gh, "project", "create",
 		"--owner", owner,
-		"--title", "AI-Squad",
+		"--title", "MAPLE",
 		"--format", "json",
 	).Output()
 	if err != nil {
@@ -157,7 +157,7 @@ func runProject(gh string) error {
 	// Update project.config.yaml
 	cfg := "project.config.yaml"
 	if _, err := os.Stat(cfg); os.IsNotExist(err) {
-		fmt.Printf("  ✗ %s not found — run squad init first\n", cfg)
+		fmt.Printf("  ✗ %s not found — run maple init first\n", cfg)
 		return nil
 	}
 
@@ -180,7 +180,7 @@ func runProject(gh string) error {
 	return nil
 }
 
-// bootstrapProjectFields adds the standard AI-Squad custom fields to a Project v2.
+// bootstrapProjectFields adds the standard MAPLE custom fields to a Project v2.
 // number is the integer project number returned by gh project create.
 func bootstrapProjectFields(gh, owner, number string) error {
 	type field struct {

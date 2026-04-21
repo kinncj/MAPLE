@@ -35,7 +35,7 @@ func main() {
 	// Subcommand mode
 	switch args[0] {
 	case "--version", "-v", "version":
-		fmt.Println("squad " + version)
+		fmt.Println("maple " + version)
 
 	case "--help", "-h", "help":
 		printHelp()
@@ -62,7 +62,7 @@ func main() {
 		}
 
 	default:
-		fmt.Fprintf(os.Stderr, "squad: unknown command %q\n\n", args[0])
+		fmt.Fprintf(os.Stderr, "maple: unknown command %q\n\n", args[0])
 		printHelpStatic()
 		os.Exit(1)
 	}
@@ -157,30 +157,30 @@ func printHelpStatic() {
 }
 
 func printHelpText() {
-	fmt.Printf(`squad %s — AI-Squad initialiser and project helper
+	fmt.Printf(`maple %s — MAPLE initialiser and project helper
 
 Usage:
-  squad                   Launch interactive menu
-  squad init              Set up AI-Squad in the current directory
-  squad init --force      Overwrite existing files
-  squad req               Write requirements → generate Gherkin story
-  squad labels            Bootstrap GitHub label set
-  squad project           Create GitHub Project v2
+  maple                   Launch interactive menu
+  maple init              Set up MAPLE in the current directory
+  maple init --force      Overwrite existing files
+  maple req               Write requirements → generate Gherkin story
+  maple labels            Bootstrap GitHub label set
+  maple project           Create GitHub Project v2
 
-  squad --no-animate      Skip logo animations (SSH / slow terminals)
-  squad --version         Print version
-  squad --help            Show this help
+  maple --no-animate      Skip logo animations (SSH / slow terminals)
+  maple --version         Print version
+  maple --help            Show this help
 `, version)
 }
 
 // resolveTemplateFS resolves the template source as an fs.FS.
 // Resolution order:
-//  1. AI_SQUAD_TEMPLATE env var (resolved to absolute path, uses OS filesystem)
+//  1. MAPLE_TEMPLATE env var (resolved to absolute path, uses OS filesystem)
 //  2. <binary_dir>/template/ if it exists on disk (dev checkout)
 //  3. ./template/ in cwd if exists (running from repo root in dev)
 //  4. Embedded FS (always works for released binaries)
 func resolveTemplateFS() (fs.FS, string) {
-	if v := os.Getenv("AI_SQUAD_TEMPLATE"); v != "" {
+	if v := os.Getenv("MAPLE_TEMPLATE"); v != "" {
 		if abs, err := filepath.Abs(v); err == nil {
 			v = abs
 		}
@@ -210,7 +210,7 @@ func contains(haystack []string, needle string) bool {
 }
 
 func fatalf(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "squad: "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "maple: "+format+"\n", args...)
 	if runtime.GOOS == "windows" {
 		os.Exit(1)
 	}

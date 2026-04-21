@@ -43,7 +43,7 @@ func runReq(tools Tools) error {
 	m := newReqModel(tools, t)
 
 	// Pick up story content handed off from the dashboard re-edit flow.
-	const handoff = ".claude/state/squad-edit.txt"
+	const handoff = ".claude/state/maple-edit.txt"
 	if data, err := os.ReadFile(handoff); err == nil {
 		m.textarea.SetValue(string(data))
 		m.lastReq = string(data)
@@ -349,7 +349,7 @@ func (m *reqModel) visibleLines() int {
 // compactHeader returns a single slim header bar used after the logo animation.
 func (m *reqModel) compactHeader() string {
 	t := m.theme
-	left := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  squad")
+	left := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  maple")
 	mid := lipgloss.NewStyle().Foreground(t.Muted).Render(" · requirements")
 	if m.selectedAI.label != "" {
 		badge := lipgloss.NewStyle().
