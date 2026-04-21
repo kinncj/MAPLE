@@ -7,6 +7,11 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.8.1] — 2026-04-21
+
+### Fixed
+- **Pipeline overlay live-updates**: `pipelineState` and `approvalPending` are now refreshed on every 5-second tick, so the `[P]` overlay shows current stage/status/approval without the user having to close and reopen it. The `[a]` approve button appears automatically when `approval-pending.txt` is written by the skill.
+
 ## [4.8.0] — 2026-04-21
 
 ### Added

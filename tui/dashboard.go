@@ -293,6 +293,11 @@ func (m *dashboardModel) reload() {
 	m.projectName = loadProjectName()
 	m.pinnedSessions = loadPinnedSessions()
 	m.rtkHarnessInstalled = loadRTKHarnesses()
+	// always keep pipeline state current — the skill updates maple.json every stage
+	if ps, err := loadPipelineState(); err == nil {
+		m.pipelineState = ps
+	}
+	m.approvalPending = approvalPending()
 	// clamp cursors
 	m.clampCursor(&m.storiesCur, len(m.stories))
 	m.clampCursor(&m.sessionsCur, len(m.sessions))
@@ -1095,9 +1100,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.superpowerCur = 0
 		m.showSuperpowers = true
 	case "P":
-		ps, _ := loadPipelineState()
-		m.pipelineState = ps
-		m.approvalPending = approvalPending()
+		// pipelineState and approvalPending are kept fresh by reload() every tick
 		m.showPipeline = true
 	case "L":
 		m.launcherCur = 0
