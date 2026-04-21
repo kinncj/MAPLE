@@ -199,11 +199,12 @@ type dashboardModel struct {
 	testOutFailed  bool
 
 	// PR detail overlay
-	showPRDetail    bool
-	prDetailLines   []string
-	prDetailScroll  int
-	prDetailTitle   string
-	prDetailLoading bool
+	showPRDetail      bool
+	prDetailLines     []string
+	prDetailScroll    int
+	prDetailTitle     string
+	prDetailLoading   bool
+	prDetailNumber    int // number of the PR currently shown
 
 	exitAction dashAction
 }
@@ -629,9 +630,10 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "G":
 			m.prDetailScroll = maxScroll
 		case "o":
-			if len(m.prList) > 0 && m.prsCur < len(m.prList) {
-				_ = exec.Command("gh", "pr", "view", fmt.Sprintf("%d", m.prList[m.prsCur].number), "--web").Start()
-			}
+			_ = exec.Command("gh", "pr", "view", fmt.Sprintf("%d", m.prDetailNumber), "--web").Start()
+		case "a":
+			m.prDetailLoading = true
+			return m, approvePRCmd(m.prDetailNumber)
 		case "q", "esc", "b", "ctrl+c":
 			m.showPRDetail = false
 		}
@@ -720,6 +722,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			pr := m.prList[m.prsCur]
 			m.prDetailLoading = true
 			m.prDetailLines = nil
+			m.prDetailNumber = pr.number
 			m.showPRDetail = false
 			return m, loadPRDetailCmd(pr.number, pr.title)
 		}
@@ -1022,7 +1025,7 @@ func (m *dashboardModel) footer() string {
 	} else if m.showQAFile {
 		keys = "  [j/k] scroll · [r] run test · [Esc] close"
 	} else if m.showPRDetail || m.prDetailLoading {
-		keys = "  [j/k] scroll · [o] open in browser · [Esc] close"
+		keys = "  [j/k] scroll · [o] open in browser · [a] approve · [Esc] close"
 	} else if m.searchMode {
 		keys = "  /" + m.searchBuf + "█"
 	} else if m.cmdMode {

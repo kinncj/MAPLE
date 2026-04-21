@@ -141,6 +141,21 @@ func loadPRsCmd() tea.Cmd {
 	}
 }
 
+func approvePRCmd(number int) tea.Cmd {
+	return func() tea.Msg {
+		ghPath, err := exec.LookPath("gh")
+		if err != nil {
+			return prDetailLoadedMsg{err: "gh not found"}
+		}
+		out, err := exec.Command(ghPath, "pr", "review", fmt.Sprintf("%d", number), "--approve").CombinedOutput()
+		msg := strings.TrimSpace(string(out))
+		if err != nil {
+			return prDetailLoadedMsg{err: "approve failed: " + msg}
+		}
+		return prDetailLoadedMsg{lines: []string{"✓ PR #" + fmt.Sprintf("%d", number) + " approved"}}
+	}
+}
+
 func loadPRDetailCmd(number int, title string) tea.Cmd {
 	return func() tea.Msg {
 		ghPath, err := exec.LookPath("gh")

@@ -532,7 +532,8 @@ func (m *dashboardModel) openStoryDetail(s storyRow) {
 	m.showStory = true
 }
 
-// openSessionDetail loads session detail lines for the selected agent row.
+// openSessionDetail loads session detail lines for the selected agent row and
+// scrolls to the line closest to the row's timestamp.
 func (m *dashboardModel) openSessionDetail(row agentRow) {
 	m.sessionTitle = row.agent + ": " + truncate(row.op, 48)
 	m.sessionSource = row.source
@@ -550,7 +551,28 @@ func (m *dashboardModel) openSessionDetail(row agentRow) {
 	if len(m.sessionLines) == 0 {
 		m.sessionLines = []string{"(no entries found)"}
 	}
+	// Scroll to the line that mentions this row's op or ts so different
+	// rows from the same session open at different positions.
+	needle := row.op
+	if row.ts != "" {
+		needle = row.ts[:min(len(row.ts), 16)]
+	}
+	if needle != "" {
+		for i, l := range m.sessionLines {
+			if strings.Contains(l, needle) {
+				m.sessionScroll = i
+				break
+			}
+		}
+	}
 	m.showSession = true
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // sessionDetailView renders the session detail overlay.
@@ -724,9 +746,9 @@ func (m *dashboardModel) prDetailView() string {
 		pct := (m.prDetailScroll * 100) / (total - visible)
 		sb.WriteString(fmt.Sprintf("\n  %s\n",
 			lipgloss.NewStyle().Foreground(t.Muted).Render(
-				fmt.Sprintf("(%d%%)  j/k scroll · o open in browser · Esc close", pct))))
+				fmt.Sprintf("(%d%%)  j/k scroll · o browser · a approve · Esc close", pct))))
 	} else {
-		sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(t.Muted).Render("o open in browser · Esc close") + "\n")
+		sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(t.Muted).Render("o browser · a approve · Esc close") + "\n")
 	}
 	return sb.String()
 }
