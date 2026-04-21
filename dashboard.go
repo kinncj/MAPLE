@@ -82,17 +82,23 @@ type prDetailLoadedMsg struct {
 
 type dashRefreshMsg struct{}
 type statusClearMsg struct{}
-type dashTickMsg struct{} // periodic local-data refresh (no network)
+type dashTickMsg struct{}    // periodic local-data refresh (no network)
+type dashNetTickMsg struct{} // periodic network refresh (gh pr list)
 
 type qaTestResultMsg struct {
 	output string
 	failed bool
 }
 
-const dashTickInterval = 5 * time.Second
+const dashTickInterval    = 5 * time.Second
+const dashNetTickInterval = 60 * time.Second
 
 func dashTickCmd() tea.Cmd {
 	return tea.Tick(dashTickInterval, func(time.Time) tea.Msg { return dashTickMsg{} })
+}
+
+func dashNetTickCmd() tea.Cmd {
+	return tea.Tick(dashNetTickInterval, func(time.Time) tea.Msg { return dashNetTickMsg{} })
 }
 
 // ─── Model ────────────────────────────────────────────────────────────────────
@@ -234,7 +240,7 @@ func (m *dashboardModel) clampCursor(c *int, n int) {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 func (m *dashboardModel) Init() tea.Cmd {
-	return tea.Batch(loadPRsCmd(), dashTickCmd())
+	return tea.Batch(loadPRsCmd(), dashTickCmd(), dashNetTickCmd())
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -270,7 +276,11 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case dashTickMsg:
 		m.reload()
-		return m, dashTickCmd() // re-schedule; tea.Tick does not repeat
+		return m, dashTickCmd()
+
+	case dashNetTickMsg:
+		m.prsLoading = true
+		return m, tea.Batch(loadPRsCmd(), dashNetTickCmd())
 
 	case qaTestResultMsg:
 		if msg.failed {
