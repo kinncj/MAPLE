@@ -413,50 +413,63 @@ else
 fi
 
 # ─── Phase V: Superpowers ─────────────────────────────────────────────────────
+# Superpowers are an optional feature; skip checks if the directory is absent.
 
-if [[ -f "$TEMPLATE_DIR/.claude/superpowers/schema.yaml" ]]; then
-  ok "superpowers schema.yaml present"
+if [[ -d "$TEMPLATE_DIR/.claude/superpowers" ]]; then
+  if [[ -f "$TEMPLATE_DIR/.claude/superpowers/schema.yaml" ]]; then
+    ok "superpowers schema.yaml present"
+  else
+    fail "superpowers schema.yaml missing"
+  fi
+
+  for sp in new-ui-feature api-endpoint bugfix design-refresh; do
+    if [[ -f "$TEMPLATE_DIR/.claude/superpowers/$sp.yaml" ]]; then
+      ok "superpower present: $sp"
+    else
+      fail "superpower missing: $sp"
+    fi
+  done
+
+  for platform in claude opencode; do
+    if [[ -f "$TEMPLATE_DIR/.$platform/skills/superpower-runner/SKILL.md" ]]; then
+      ok "$platform superpower-runner skill present"
+    else
+      fail "$platform superpower-runner skill missing"
+    fi
+  done
+
+  for keyword in "stages" "when:" "gate:" "human-approval" "pipeline" "PAUSED" "maple.json"; do
+    if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/superpower-runner/SKILL.md" 2>/dev/null; then
+      ok "superpower-runner covers: $keyword"
+    else
+      fail "superpower-runner missing: $keyword"
+    fi
+  done
+
+  for keyword in "spec-kit" "wireframe" "ui-mockup-builder" "a11y-audit" "standard-8-phase"; do
+    if grep -q "$keyword" "$TEMPLATE_DIR/.claude/superpowers/new-ui-feature.yaml" 2>/dev/null; then
+      ok "new-ui-feature superpower references: $keyword"
+    else
+      fail "new-ui-feature superpower missing: $keyword"
+    fi
+  done
 else
-  fail "superpowers schema.yaml missing"
+  echo "  (superpowers not present — skipping Phase V checks)"
 fi
-
-for sp in new-ui-feature api-endpoint bugfix design-refresh; do
-  if [[ -f "$TEMPLATE_DIR/.claude/superpowers/$sp.yaml" ]]; then
-    ok "superpower present: $sp"
-  else
-    fail "superpower missing: $sp"
-  fi
-done
-
-for platform in claude opencode; do
-  if [[ -f "$TEMPLATE_DIR/.$platform/skills/superpower-runner/SKILL.md" ]]; then
-    ok "$platform superpower-runner skill present"
-  else
-    fail "$platform superpower-runner skill missing"
-  fi
-done
-
-for keyword in "stages" "when:" "gate:" "human-approval" "pipeline" "PAUSED" "maple.json"; do
-  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/superpower-runner/SKILL.md"; then
-    ok "superpower-runner covers: $keyword"
-  else
-    fail "superpower-runner missing: $keyword"
-  fi
-done
-
-# new-ui-feature superpower references key agents
-for keyword in "spec-kit" "wireframe" "ui-mockup-builder" "a11y-audit" "standard-8-phase"; do
-  if grep -q "$keyword" "$TEMPLATE_DIR/.claude/superpowers/new-ui-feature.yaml"; then
-    ok "new-ui-feature superpower references: $keyword"
-  else
-    fail "new-ui-feature superpower missing: $keyword"
-  fi
-done
 
 # ─── Phase VI: TUI ────────────────────────────────────────────────────────────
 
-for f in go.mod go.sum main.go detect.go init.go req.go gh_cmds.go themes.go; do
+for f in go.mod go.sum; do
   if [[ -f "$f" ]]; then
+    ok "$f present"
+  else
+    fail "$f missing"
+  fi
+done
+
+# Go source files now live in tui/
+for f in main.go detect.go init.go req.go gh_cmds.go themes.go; do
+  if [[ -f "tui/$f" ]]; then
     ok "$f present"
   else
     fail "$f missing"
@@ -472,7 +485,7 @@ fi
 
 # All 5 themes present
 for theme in tokyoNight catppuccinMocha gruvbox nord everforest; do
-  if grep -q "$theme" themes.go; then
+  if grep -q "$theme" tui/themes.go; then
     ok "theme present: $theme"
   else
     fail "theme missing: $theme"
@@ -490,7 +503,16 @@ done
 
 # maple binary builds and responds to --help
 MAPLE_BIN="$REPO_ROOT/maple"
-if [[ -f "$MAPLE_BIN" ]] || (cd "$REPO_ROOT/tui" && go build -o "$MAPLE_BIN" . 2>/dev/null); then
+_build_maple() {
+  rm -f "$REPO_ROOT/tui/template"
+  cp -rL "$REPO_ROOT/template" "$REPO_ROOT/tui/template"
+  go build -o "$MAPLE_BIN" "$REPO_ROOT/tui" 2>/dev/null
+  local rc=$?
+  rm -rf "$REPO_ROOT/tui/template"
+  ln -s ../template "$REPO_ROOT/tui/template" 2>/dev/null || true
+  return $rc
+}
+if [[ -f "$MAPLE_BIN" ]] || _build_maple; then
   ok "maple binary builds"
   MAPLE_HELP=$("$MAPLE_BIN" --help 2>&1 || true)
   for cmd in "init" "req" "labels" "project"; do
