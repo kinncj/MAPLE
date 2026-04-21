@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="kinncj/AI-Squad"
+REPO="kinncj/maple"
 INSTALL_DIR="${MAPLE_INSTALL_DIR:-$HOME/.tools/maple/bin}"
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')

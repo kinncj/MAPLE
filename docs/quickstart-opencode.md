@@ -8,180 +8,141 @@ Get from zero to a running feature pipeline using **OpenCode** and MAPLE.
 
 | Tool | Install |
 |---|---|
-| [OpenCode](https://opencode.ai) | See [opencode.ai](https://opencode.ai) |
+| [OpenCode](https://opencode.ai) | `npm install -g opencode-ai` |
 | [GitHub CLI](https://cli.github.com) | `brew install gh` |
 | [Git](https://git-scm.com) | pre-installed on macOS/Linux |
 | [Go 1.22+](https://go.dev) | `brew install go` *(only to build from source)* |
-| [Node.js](https://nodejs.org) | `brew install node` *(Playwright E2E tests)* |
+| [Node.js](https://nodejs.org) | `brew install node` *(Playwright E2E tests + npx skills)* |
 | [Docker](https://docker.com) | [docker.com/get-started](https://docker.com/get-started) |
-
-> **Any model works.** Quality and consistency come from the prompts, not hardcoded model IDs. Configure your preferred provider in OpenCode's Settings → Providers.
 
 ---
 
 ## 1. Install `maple`
 
-**From source (preferred):**
+**Pre-built binary (recommended):**
 
 ```bash
-git clone https://github.com/kinncj/AI-Squad.git maple
+curl -fsSL https://raw.githubusercontent.com/kinncj/maple/main/scripts/install.sh | bash
+```
+
+Installs to `~/.tools/maple/bin/`. Add to your shell profile:
+
+```bash
+export PATH="$HOME/.tools/maple/bin:$PATH"
+```
+
+**From source:**
+
+```bash
+git clone https://github.com/kinncj/maple.git
 cd maple
 make build-tui           # produces ./maple
+export PATH="$PWD:$PATH"
 ```
 
-Add to your PATH — pick one:
+Verify: `maple --version`
 
-```bash
-# Option A: move to a system bin
-sudo mv maple /usr/local/bin/maple
+---
 
-# Option B: add repo directory to PATH (useful during development)
-export PATH="$PWD:$PATH"   # add to ~/.zshrc / ~/.bashrc to persist
+## 2. Configure OpenCode providers
 
-# Option C: install to ~/.tools/maple/bin (recommended)
-mkdir -p ~/.tools/maple/bin
-mv maple ~/.tools/maple/bin/maple
-echo 'export PATH="$HOME/.tools/maple/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+OpenCode reads `opencode.json` in your project root. MAPLE ships a pre-configured one that uses Anthropic and GitHub Copilot providers. Edit it to match your available API keys:
+
+```json
+{
+  "providers": {
+    "anthropic": { "apiKey": "$ANTHROPIC_API_KEY" },
+    "github-copilot": {}
+  }
+}
 ```
 
-**From a release (no Go required):**
+For GitHub Copilot, authenticate with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.sh | bash
-```
-
-Verify:
-
-```bash
-maple --version
+gh auth login --scopes copilot
 ```
 
 ---
 
-## 2. Scaffold a project
+## 3. Scaffold your project
 
 ```bash
-mkdir my-project && cd my-project
-git init
+cd your-project-directory
 maple init
-maple labels       # bootstrap GitHub label set
+```
+
+`maple init` copies `.opencode/` agents along with skills, hooks, Makefile stubs, and docs structure into the current directory.
+
+---
+
+## 4. Customize the Makefile
+
+The Makefile ships with stubs. Open `Makefile` and replace the recipe bodies with your stack's commands before running any feature pipeline.
+
+---
+
+## 5. Bootstrap GitHub
+
+```bash
+gh auth login
+maple labels    # create MAPLE phase labels on the repo
+maple project   # create a GitHub Project v2 board
 ```
 
 ---
 
-## 3. Configure your provider
+## 6. Write your first story
 
-Open OpenCode in your project and go to **Settings → Providers**. Add your API key or authenticate with GitHub Copilot. The agents work with any model you configure — no model names are hardcoded.
-
----
-
-## 4. Write your first requirement
-
-```bash
-maple req
-```
-
-Type your requirement in plain text, press `Ctrl+D`. MAPLE converts it to a Gherkin story under `docs/stories/`.
+Press `n` in the `maple` dashboard to open the Gherkin requirements wizard, or run `maple req` directly. The wizard produces a story file at `docs/stories/{slug}/Story.md` with embedded Gherkin and links it to a GitHub Issue.
 
 ---
 
-## 5. Run the pipeline
+## 7. Run a feature
 
-Open OpenCode in your project directory:
+Open the project in **OpenCode**:
 
 ```bash
-opencode
+opencode .
 ```
 
 Then run:
 
 ```
-/feature "describe your feature here"
+/feature "short description of what you want to build"
 ```
 
-The orchestrator drives all 8 phases. Sub-agents run as navigable child sessions via OpenCode's native `task` tool — use the session navigator to switch between them.
+The orchestrator follows the same 8-phase pipeline as in Claude Code. Agent routing in OpenCode uses the `permission.task` list in `.opencode/agents/orchestrator.md`.
 
 ---
 
-## Rubber Duck
+## Agent model routing
 
-The `@rubber-duck` agent is invoked by the orchestrator automatically at three checkpoints:
+OpenCode agents declare their own model in frontmatter. MAPLE's defaults:
 
-1. **After plan** — before implementation starts
-2. **After complex multi-file implementations** — before tests run
-3. **After tests written** — before executing them
+| Agent | Model |
+|---|---|
+| `orchestrator`, `architect` | `anthropic/claude-opus-4-7` |
+| Implementation agents | `github-copilot/claude-sonnet-4.5` |
+| `kubernetes`, `terraform`, `docker` | `copilot/gpt-4.1` |
 
-You can also trigger it manually: ask OpenCode to "critique your work" or "get a second opinion."
+Change any agent's model by editing the `model:` field in its `.opencode/agents/{name}.md` file.
 
 ---
 
-## Available commands
+## Commands reference
 
 | Command | What it does |
 |---|---|
-| `/feature "description"` | Full 8-phase pipeline from discovery to PR |
+| `/feature "description"` | Full 8-phase pipeline |
 | `/bugfix "description"` | Reproduce → fix → validate → CHANGELOG |
-| `/validate` | Run full test suite (skips discovery/architecture) |
+| `/validate` | Run full test suite |
 | `/tdd "requirement"` | Single RED → GREEN → REFACTOR cycle |
 
 ---
 
-## Project structure after `maple init`
+## Next steps
 
-```
-my-project/
-├── .opencode/
-│   ├── agents/          # 35 agent definitions (OpenCode frontmatter)
-│   ├── commands/        # /feature, /bugfix, /validate, /tdd
-│   └── skills/          # 32 reusable skill files
-├── .claude/             # Mirror for Claude Code
-├── .github/
-│   └── copilot-instructions.md
-├── opencode.json        # OpenCode project config
-├── Makefile
-├── project.config.yaml
-└── docs/stories/        # Gherkin stories (source of truth)
-```
-
----
-
-## OpenCode agent format
-
-OpenCode agents use richer frontmatter than Claude Code. Example:
-
-```markdown
----
-name: typescript
-temperature: 0.2
-mode: code
-tools:
-  - read
-  - edit
-  - write
-  - bash
-permission:
-  allow:
-    - bash: ["npx", "node", "npm", "tsc", "jest", "vitest"]
----
-
-You are the TypeScript specialist...
-```
-
-The `permission.allow` list restricts which shell commands each agent can run — preventing agents from touching each other's domains.
-
----
-
-## Troubleshooting
-
-**`opencode: command not found`**
-Install from [opencode.ai](https://opencode.ai).
-
-**Orchestrator cannot invoke sub-agents**
-Ensure the agent name appears in `orchestrator.md` under `permission.task`. OpenCode enforces this allowlist strictly.
-
-**API key errors**
-Set your key in OpenCode's provider settings UI — not via environment variable. OpenCode manages credentials through its own config store.
-
-**Agent uses a model you don't have access to**
-Update the `model:` field in the relevant `.opencode/agents/*.md` file to a model ID available in your provider settings.
+- [The 8-Phase Pipeline](./pipeline.md)
+- [The Agents](./agents.md)
+- [Customization Guide](./customization.md)

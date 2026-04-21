@@ -1,12 +1,12 @@
 # Customization Guide
 
-This guide covers how to tailor the MAPLE template to your specific stack — adding agents, adjusting models, and restricting what each agent can do.
+How to tailor MAPLE to your specific stack — adding agents, adjusting permissions, extending skills, and customizing the Makefile.
 
 ---
 
 ## Adding a custom agent
 
-### Step 1 — Create the Claude Code agent
+### Step 1 — Claude Code agent
 
 Create `.claude/agents/{name}.md`:
 
@@ -25,13 +25,13 @@ You are the Rust specialist. You write idiomatic, safe Rust code.
 
 ## What you never do
 - Modify files outside Rust source directories
-- Invoke agents other than yourself
+- Invoke other agents
 - Skip failing tests
 ```
 
 No `model:` field needed — the agent uses your Claude Code default model.
 
-### Step 2 — Create the OpenCode agent
+### Step 2 — OpenCode agent
 
 Create `.opencode/agents/{name}.md`:
 
@@ -47,189 +47,7 @@ tools:
   - bash
 permission:
   allow:
-    - bash: ["cargo", "rustc", "rustfmt", "clippy", "rustup"]
----
-
-You are the Rust specialist...
-```
-
-No `model:` field needed — the agent inherits OpenCode's configured default.
-
-### Step 3 — Register with the orchestrator
-
-In `.opencode/agents/orchestrator.md`, add `rust` to the `permission.task` list:
-
-```yaml
-permission:
-  task:
-    - product-owner
-    - architect
-    - qa
-    - rust        # ← add here
-    - typescript
-    # ...
-```
-
-Do the same in `.claude/agents/orchestrator.md` (add `rust` to the orchestrator's agent roster comment for documentation purposes).
-
-### Step 4 — Update AGENTS.md
-
-Add a row to the table in `AGENTS.md` so the orchestrator knows which tasks to route to the new agent.
-
----
-
-## Removing an agent
-
-1. Delete `.claude/agents/{name}.md`
-2. Delete `.opencode/agents/{name}.md`
-3. Remove the agent from the `permission.task` list in both orchestrator files
-4. Remove the row from `AGENTS.md`
-
-The orchestrator will no longer delegate to it.
-
----
-
-## Choosing models
-
-Agents have no hardcoded model — they use whatever model you configure in your AI tool of choice.
-
-**Claude Code:** Set your preferred model in Claude Code's global settings. You can optionally add a `model:` field to individual agent frontmatter to override on a per-agent basis.
-
-**OpenCode:** Configure your default model in `opencode.json` or via Settings → Providers. Add a `model:` field to individual agent frontmatter to override per-agent:
-
-```json
-{
-  "model": {
-    "default": "your-provider/your-model-id"
-  }
-}
-```
-
----
-
-## Restricting agent permissions
-
-Each OpenCode agent has a `permission.allow` list that controls which shell commands it can run:
-
-```yaml
-permission:
-  allow:
-    - bash: ["cargo", "rustc", "rustfmt"]
-```
-
-This prevents the rust agent from running `npm`, `python`, or any other tool outside its domain. Claude Code uses tool permissions configured per-project in `CLAUDE.md`.
-
----
-
-## Adding a custom skill
-
-Skills are markdown files that encode specialized workflows (CLI patterns, TDD sequences, tool usage). They are loaded on demand.
-
-Create `.claude/skills/{name}.md` (and `.opencode/skills/{name}.md`):
-
-```markdown
-# Skill: redis-pub-sub
-
-Use this skill when implementing Redis pub/sub patterns.
-
-## Setup
-Always use connection pooling:
-```bash
-redis-cli -h localhost -p 6379
-```
-
-## Pattern: fan-out
-...
-```
-
-Reference the skill in an agent prompt:
-
-```
-@skill redis-pub-sub
-```
-
----
-
-## Adjusting the plan.md format
-
-Tasks in `plan.md` follow this format:
-
-```
-- [ ] Task N: @agent-name description of task
-```
-
-Any line matching `- [ ] Task [0-9]+:` with an `@agent-name` is a delegatable task. Checked tasks (`- [x]`) are skipped. Maintain this format if you customise the orchestrator's planning output.
-
----
-
-## Makefile customization
-
-The template ships with stub targets. Replace the recipe bodies for your stack:
-
-```makefile
-test:
-	pytest tests/unit -v           # Python example
-
-test-integration:
-	docker compose -f docker-compose.test.yml up -d
-	pytest tests/integration -v
-	docker compose -f docker-compose.test.yml down
-
-test-e2e:
-	npx playwright test
-```
-
-The 13-target contract (`build`, `test`, `test-integration`, `test-e2e`, `test-contract`, `test-all`, `lint`, `security-scan`, `fmt`, `containers-up`, `containers-down`, `seed-test`, `migrate`) must remain intact — agents rely on these names.
-
-
-This guide covers how to tailor the MAPLE template to your specific stack — adding agents, adjusting models, and restricting what each agent can do.
-
----
-
-## Adding a custom agent
-
-### Step 1 — Create the Claude Code agent
-
-Create `.claude/agents/{name}.md`:
-
-```markdown
----
-name: rust
-description: Rust systems programming specialist. Handles Cargo workspaces, async Tokio, and FFI.
-model: claude-sonnet-4-6
----
-
-You are the Rust specialist. You write idiomatic, safe Rust code.
-
-## What you do
-- Implement tasks assigned by the orchestrator
-- Write unit tests with `#[test]` and integration tests in `tests/`
-- Run `cargo build`, `cargo test`, `cargo clippy`, `cargo fmt`
-
-## What you never do
-- Modify files outside Rust source directories
-- Invoke agents other than yourself
-- Skip failing tests
-```
-
-### Step 2 — Create the OpenCode agent
-
-Create `.opencode/agents/{name}.md`:
-
-```markdown
----
-name: rust
-model: github-copilot/claude-sonnet-4.5
-temperature: 0.2
-mode: code
-tools:
-  - read
-  - edit
-  - write
-  - bash
-permission:
-  allow:
-    - bash: ["cargo", "rustc", "rustfmt", "clippy", "rustup"]
+    - bash: ["cargo", "rustc", "rustfmt", "clippy"]
 ---
 
 You are the Rust specialist...
@@ -237,172 +55,137 @@ You are the Rust specialist...
 
 ### Step 3 — Register with the orchestrator
 
-In `.opencode/agents/orchestrator.md`, add `rust` to the `permission.task` list:
+Add your agent to the `permission.task` list in `.opencode/agents/orchestrator.md`:
 
 ```yaml
 permission:
   task:
-    - product-owner
-    - architect
-    - qa
-    - rust        # ← add here
-    - typescript
+    - rust    # add here
+    - dotnet
+    - javascript
     # ...
 ```
 
-Do the same in `.claude/agents/orchestrator.md` (Claude Code uses `description` for routing, not an explicit allowlist, but add `rust` to the orchestrator's agent roster comment for documentation purposes).
-
-### Step 4 — Update AGENTS.md
-
-Add a row to the table in `AGENTS.md` so the orchestrator knows which tasks to route to the new agent.
-
----
-
-## Removing an agent
-
-1. Delete `.claude/agents/{name}.md`
-2. Delete `.opencode/agents/{name}.md`
-3. Remove the agent from the `permission.task` list in both orchestrator files
-4. Remove the row from `AGENTS.md`
-
-The orchestrator will no longer delegate to it.
-
----
-
-## Changing model assignments
-
-### Claude Code
-
-Edit the `model:` field in the agent's `.claude/agents/{name}.md` frontmatter:
-
-```yaml
----
-name: typescript
-model: claude-opus-4-6    # upgrade to Opus for complex reasoning
----
-```
-
-Available Claude Code models:
-
-| Model | ID | Use when |
-|---|---|---|
-| Claude Opus 4.6 | `claude-opus-4-6` | Complex design decisions, architecture |
-| Claude Sonnet 4.6 | `claude-sonnet-4-6` | Fast, capable code generation |
-| Claude Haiku 4.5 | `claude-haiku-4-5-20251001` | High-volume, simple tasks |
-
-### OpenCode
-
-Edit the `model:` field in `.opencode/agents/{name}.md` and update `opencode.json`:
-
-```json
-{
-  "model": {
-    "default": "github-copilot/claude-sonnet-4.5"
-  }
-}
-```
-
-Provider model ID strings:
-
-| Provider | Model | ID string |
-|---|---|---|
-| Anthropic API | Claude Opus 4.6 | `anthropic/claude-opus-4-6` |
-| Anthropic API | Claude Sonnet 4.6 | `anthropic/claude-sonnet-4-6` |
-| GitHub Copilot Enterprise | Claude Sonnet 4.5 | `github-copilot/claude-sonnet-4.5` |
-| GitHub Copilot Enterprise | GPT-4.1 | `copilot/gpt-4.1` |
-
-Re-run `maple init` (answer the provider prompts) to automatically rewrite all 34 agent files for your subscription.
+Then update `AGENTS.md` so the orchestrator knows what expertise is available.
 
 ---
 
 ## Restricting agent permissions
 
-Each OpenCode agent has a `permission.allow` list that controls which shell commands it can run:
+OpenCode agents support fine-grained bash restrictions. Only allow the commands an agent legitimately needs:
 
 ```yaml
 permission:
   allow:
-    - bash: ["cargo", "rustc", "rustfmt"]
+    - bash: ["npm", "npx", "node"]   # node.js agent — only npm/node
+  deny:
+    - bash: ["rm", "git push"]       # never delete or push directly
 ```
 
-This prevents the rust agent from running `npm`, `python`, or any other tool outside its domain. Claude Code uses tool permissions configured per-project in `CLAUDE.md`.
+Claude Code agents inherit permissions from your `settings.json`. To lock down a specific agent, add it to the `agentPermissions` section in `.claude/settings.json`.
 
 ---
 
-## Adding a custom skill
+## Customizing the Makefile
 
-Skills are markdown files that encode specialized workflows (CLI patterns, TDD sequences, tool usage). They are loaded on demand.
+The template Makefile ships with stub targets. Replace the recipe bodies with your actual stack commands:
 
-Create `.claude/skills/{name}.md` (and `.opencode/skills/{name}.md`):
+```makefile
+## Unit tests
+test:
+    dotnet test --filter 'Category=Unit'
 
-```markdown
-# Skill: redis-pub-sub
+## Integration tests
+test-integration:
+    dotnet test --filter 'Category=Integration'
 
-Use this skill when implementing Redis pub/sub patterns.
-
-## Setup
-Always use connection pooling:
-```bash
-redis-cli -h localhost -p 6379
+## Build
+build:
+    dotnet build
 ```
 
-## Pattern: fan-out
+The section between `# ─── BEGIN MAPLE MANAGED` and `# ─── END MAPLE MANAGED` is managed by `maple update`. Your custom targets outside those markers are never touched on update.
+
+---
+
+## Adding custom skills
+
+Skills are markdown files read by agents before task execution. Create one at `.claude/skills/{name}/SKILL.md`:
+
+```markdown
+# my-workflow
+
+## When to use
+Use this skill when implementing X.
+
+## Steps
+1. Run `some-tool init`
+2. Edit the config at `./config.yml`
+3. Run `some-tool validate`
+
+## Common patterns
 ...
 ```
 
-Reference the skill in an agent prompt:
-
-```
-@skill redis-pub-sub
-```
+Reference it in an agent prompt: `Read .claude/skills/my-workflow/SKILL.md before starting.`
 
 ---
 
-## Adjusting the plan.md format
+## Installing skills from the marketplace
 
-The orchestrator and spec-kit agent parse `plan.md` for unchecked tasks using this pattern:
+The skills.sh marketplace has community-built skills for Claude Code, Cursor, and other editors.
 
+**From the TUI** — press `F` to open the browser:
+- **Installed** tab — see all installed skills, `d` to remove
+- **Search** tab — type a query, `Enter` to find and install
+
+**From the CLI:**
+```bash
+npx skills find <query>
+npx skills add owner/repo@skill --all -y
+npx skills remove <name> --all -y
+npx skills ls
 ```
-- [ ] Task N: @agent-name description of task
-```
 
-Any line matching `- [ ] Task [0-9]+:` with an `@agent-name` gets picked up. Checked tasks (`- [x]`) are skipped. Maintain this format if you customise the orchestrator's planning output.
+MAPLE installs `obra/superpowers` automatically during `maple init`.
 
 ---
 
-## Changing the plan path
+## Switching themes
 
-By default, spec-kit reads `docs/specs/<slug>/TASKS.md`. The orchestrator's pre-DISCOVER gate checks this path. Override by passing the path explicitly when invoking the spec-kit agent.
+The `maple` TUI supports five built-in themes. Switch from the dashboard:
 
----
-
-## Makefile customization
-
-The template ships with stub targets. Replace the recipe bodies for your stack:
-
-```makefile
-test:
-	pytest tests/unit -v           # Python example
-
-test-integration:
-	docker compose -f docker-compose.test.yml up -d
-	pytest tests/integration -v
-	docker compose -f docker-compose.test.yml down
-
-test-e2e:
-	npx playwright test
+```
+:theme tokyo-night       (default)
+:theme catppuccin-mocha
+:theme gruvbox
+:theme nord
+:theme everforest
 ```
 
-The 13-target contract (`build`, `test`, `test-integration`, `test-e2e`, `test-contract`, `test-all`, `lint`, `security-scan`, `fmt`, `containers-up`, `containers-down`, `seed-test`, `migrate`) must remain intact — agents rely on these names.
+Or auto-detect from your Omarchy config: if `~/.config/omarchy/current/theme` exists, `maple` selects the matching theme at launch.
 
 ---
 
-## Updating to new model versions
+## Updating MAPLE
 
-When Anthropic or GitHub releases a new model version:
+Pull the latest template files into your project without overwriting your customizations:
 
-1. Run `maple init --yes` and answer the provider prompts — the wizard rewrites all agent files automatically
-2. Or manually update:
-   - `opencode.json` → `model.default`
-   - Each `.opencode/agents/*.md` → `model:` field
-   - Each `.claude/agents/*.md` → `model:` field (for Claude Code)
+```bash
+maple update        # or: u from the dashboard
+```
+
+This re-syncs:
+- `.claude/` agents, skills, hooks
+- `.opencode/` agents
+- `docs/` story templates and structure
+- `scripts/sdlc/`
+- The MAPLE-managed section of your `Makefile`
+
+Your custom Makefile targets, story files, and project-specific settings are left untouched.
+
+To upgrade the `maple` binary itself:
+
+```bash
+maple self-update   # fetches latest release from GitHub
+```

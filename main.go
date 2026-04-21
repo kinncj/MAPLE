@@ -1,11 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 var version = "dev" // overridden at build time: -ldflags "-X main.version=vX.Y.Z"
@@ -63,6 +68,11 @@ func main() {
 	case "project":
 		if err := runProject(tools.GH); err != nil {
 			fatalf("project: %v", err)
+		}
+
+	case "self-update", "upgrade":
+		if err := selfUpdate(); err != nil {
+			fatalf("self-update: %v", err)
 		}
 
 	default:
@@ -180,11 +190,100 @@ Usage:
   maple req               Write requirements → generate Gherkin story
   maple labels            Bootstrap GitHub label set
   maple project           Create GitHub Project v2
+  maple self-update       Upgrade maple to the latest release
 
   maple --no-animate      Skip logo animations (SSH / slow terminals)
   maple --version         Print version
   maple --help            Show this help
 `, version)
+}
+
+const mapleRepo = "kinncj/maple"
+
+// latestRelease fetches the latest release tag from GitHub.
+func latestRelease() (string, error) {
+	apiURL := "https://api.github.com/repos/" + mapleRepo + "/releases/latest"
+	resp, err := http.Get(apiURL) //nolint:noctx
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	var payload struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", err
+	}
+	return payload.TagName, nil
+}
+
+// selfUpdate downloads and replaces the running binary with the latest release.
+func selfUpdate() error {
+	latest, err := latestRelease()
+	if err != nil {
+		return fmt.Errorf("could not fetch latest release: %w", err)
+	}
+	if strings.TrimPrefix(latest, "v") == strings.TrimPrefix(version, "v") {
+		fmt.Println("maple " + version + " is already up to date.")
+		return nil
+	}
+
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+	archive := fmt.Sprintf("maple-%s-%s.tar.gz", goos, goarch)
+	dlURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", mapleRepo, latest, archive)
+
+	fmt.Printf("Updating maple %s → %s\n", version, latest)
+
+	resp, err := http.Get(dlURL) //nolint:noctx
+	if err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("download failed: HTTP %d for %s", resp.StatusCode, dlURL)
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not determine executable path: %w", err)
+	}
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return fmt.Errorf("could not resolve symlinks: %w", err)
+	}
+
+	tmp, err := os.CreateTemp("", "maple-update-*.tar.gz")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := io.Copy(tmp, resp.Body); err != nil {
+		return err
+	}
+	tmp.Close()
+
+	// Extract the maple binary from the tar and write alongside current exe
+	newBin := exe + ".new"
+	extractCmd := exec.Command("tar", "-xzf", tmp.Name(), "-O", "maple")
+	newFile, err := os.OpenFile(newBin, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	if err != nil {
+		return err
+	}
+	extractCmd.Stdout = newFile
+	if err := extractCmd.Run(); err != nil {
+		newFile.Close()
+		os.Remove(newBin)
+		return fmt.Errorf("extract failed: %w", err)
+	}
+	newFile.Close()
+
+	if err := os.Rename(newBin, exe); err != nil {
+		os.Remove(newBin)
+		return fmt.Errorf("could not replace binary (try with sudo): %w", err)
+	}
+	fmt.Printf("✓ maple updated to %s\n", latest)
+	return nil
 }
 
 // resolveTemplateFS resolves the template source as an fs.FS.
