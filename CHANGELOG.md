@@ -7,6 +7,14 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.7.2] — 2026-04-21
+
+### Fixed
+- **`o` key (open+pin session)**: now works for OpenCode sessions — `sessionUUID` was returning `""` for all non-Claude sources, so OpenCode sessions were never pinned and `opencode` was launched without a `--session` flag. Both are fixed.
+- **`o` key feedback**: pressing `o` outside the Agents pane now shows a helpful status message instead of silently doing nothing.
+- **`p` key pin confirmation**: status bar now shows "saved to .claude/state/sessions.json" so the user knows where to find it.
+- **`opencode --session <id>` resume**: `agentOpenCmd` now passes `--session <id>` when opening an OpenCode session.
+
 ## [4.7.1] — 2026-04-21
 
 ### Fixed

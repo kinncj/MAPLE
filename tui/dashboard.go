@@ -1056,11 +1056,11 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			s := m.sessions[m.sessionsCur]
 			id := sessionUUID(s)
 			if id == "" {
-				return m, m.setStatus("✗ cannot pin: no session ID for "+s.source, true)
+				return m, m.setStatus("✗ cannot pin: no resumable ID for "+s.source, true)
 			}
 			savePinnedSession(s.source, id)
 			m.pinnedSessions = loadPinnedSessions()
-			return m, m.setStatus("✓ pinned "+s.source+" session", false)
+			return m, m.setStatus("✓ pinned "+s.source+" — saved to .claude/state/sessions.json", false)
 		}
 		m.focus = panePRs
 		m.fullscreen = -1
@@ -1111,15 +1111,18 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.rtkHarnessRunning = false
 		m.showRTKHarness = true
 	case "o":
-		if m.focus == paneAgents && m.sessionsCur < len(m.sessions) {
+		if m.focus == paneAgents {
+			if m.sessionsCur >= len(m.sessions) {
+				return m, m.setStatus("no sessions — navigate to [a] Agents pane and select one", true)
+			}
 			s := m.sessions[m.sessionsCur]
 			cmd := agentOpenCmd(s)
 			if len(cmd) == 0 {
-				return m, m.setStatus("✗ cannot open source: "+s.source, true)
+				return m, m.setStatus("✗ cannot open: no launch command for "+s.source, true)
 			}
-			// auto-pin when opening
-			if id := sessionUUID(s); id != "" {
-				savePinnedSession(s.source, id)
+			// auto-pin: use s.id directly — it's the UUID for claude and the DB id for opencode
+			if s.id != "" {
+				savePinnedSession(s.source, sessionUUID(s))
 				m.pinnedSessions = loadPinnedSessions()
 			}
 			m.openTarget = cmd
@@ -1129,6 +1132,9 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.focus == panePRs && m.prsCur < len(m.prList) {
 			_ = exec.Command("gh", "pr", "view", fmt.Sprintf("%d", m.prList[m.prsCur].number), "--web").Start()
 			return m, m.setStatus("opening PR in browser…", false)
+		}
+		if m.focus != paneAgents {
+			return m, m.setStatus("press [a] to switch to Agents pane, then [o] to open a session", false)
 		}
 	case "r":
 		if m.focus == paneQA && m.qaEntryCur < len(m.qaEntries) {
@@ -1614,22 +1620,32 @@ func agentOpenCmd(s sessionRow) []string {
 		}
 		return []string{"claude", "--resume", uuid}
 	case "opencode":
+		// opencode accepts --session <id> to resume; fall back to plain opencode if no id
+		if s.id != "" {
+			return []string{"opencode", "--session", s.id}
+		}
 		return []string{"opencode"}
 	default:
 		return nil
 	}
 }
 
-// sessionUUID extracts the UUID from a Claude session row (s.id is the full JSONL path).
+// sessionUUID extracts the resumable session identifier for any source.
+// For claude: strips the directory path and .jsonl extension from s.id (which is a file path).
+// For opencode: s.id is already the DB session ID — return it directly.
 func sessionUUID(s sessionRow) string {
-	if s.source != "claude" {
-		return ""
+	switch s.source {
+	case "claude":
+		base := s.id
+		if idx := strings.LastIndex(base, "/"); idx >= 0 {
+			base = base[idx+1:]
+		}
+		return strings.TrimSuffix(base, ".jsonl")
+	case "opencode":
+		return s.id
+	default:
+		return s.id
 	}
-	base := s.id
-	if idx := strings.LastIndex(base, "/"); idx >= 0 {
-		base = base[idx+1:]
-	}
-	return strings.TrimSuffix(base, ".jsonl")
 }
 
 // launcherTools returns a list of tool names available for launching.
