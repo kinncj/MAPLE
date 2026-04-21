@@ -405,6 +405,10 @@ func (m *dashboardModel) helpView() string {
 		{"j / k  (↓ / ↑)", "navigate rows"},
 		{"gg / G", "jump to top / bottom"},
 		{"s  a  p  Q", "focus Stories / Agents / PRs / QA"},
+		{"Enter", "open detail popup"},
+		{"o  (Sessions pane)", "open session in Claude / OpenCode"},
+		{"o  (PRs pane)", "open PR in browser"},
+		{"S", "ship-safe audit (shipsafecli.com)"},
 		{"d", "toggle Design pane (full-screen)"},
 		{"l", "toggle Logs pane (full-screen)"},
 		{"n", "new story → Gherkin requirements wizard"},
@@ -563,24 +567,56 @@ func min(a, b int) int {
 	return b
 }
 
-// sessionDetailView renders the session detail overlay.
+// popupBox renders a centered rounded-border popup over the content area.
+// title, body (pre-formatted lines joined with \n), and hint are rendered inside.
+func (m *dashboardModel) popupBox(title, body, hint string, borderColor lipgloss.Color) string {
+	t := m.theme
+
+	popW := (m.width * 3) / 4
+	if popW > 114 {
+		popW = 114
+	}
+	if popW < 52 {
+		popW = 52
+	}
+	innerW := popW - 6 // border(2) + padding sides(4)
+
+	titleBar := lipgloss.NewStyle().Foreground(borderColor).Bold(true).Render(title)
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("─", innerW))
+	hintBar := lipgloss.NewStyle().Foreground(t.Muted).Render(hint)
+
+	inner := strings.Join([]string{titleBar, sep, "", body, "", hintBar}, "\n")
+
+	box := lipgloss.NewStyle().
+		Width(innerW).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(1, 2).
+		Render(inner)
+
+	availH := m.height - 6
+	if availH < 10 {
+		availH = 10
+	}
+	return lipgloss.Place(m.width, availH, lipgloss.Center, lipgloss.Center, box)
+}
+
+// sessionDetailView renders the session detail as a centered popup.
 func (m *dashboardModel) sessionDetailView() string {
 	t := m.theme
 
-	sourceColor := t.Primary
+	borderColor := t.Primary
 	switch m.sessionSource {
 	case "opencode":
-		sourceColor = t.Accent
+		borderColor = t.Accent
 	case "maple":
-		sourceColor = t.Success
+		borderColor = t.Success
 	}
 
-	titleStyle := lipgloss.NewStyle().Foreground(sourceColor).Bold(true)
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
-	title := titleStyle.Render("  " + m.sessionTitle)
-	src := lipgloss.NewStyle().Foreground(t.Muted).Render("  source: " + m.sessionSource)
+	badge := agentSourceBadge(m.sessionSource, t)
+	title := badge + "  " + m.sessionTitle
 
-	visible := m.height - 14
+	visible := m.height - 18
 	if visible < 4 {
 		visible = 4
 	}
@@ -590,22 +626,78 @@ func (m *dashboardModel) sessionDetailView() string {
 	}
 	window := m.sessionLines[m.sessionScroll:end]
 
-	var sb strings.Builder
-	sb.WriteString(title + "\n" + src + "\n" + sep + "\n\n")
+	var bodyLines []string
 	for _, l := range window {
-		sb.WriteString("  " + lipgloss.NewStyle().Foreground(t.Foreground).Render(l) + "\n")
+		bodyLines = append(bodyLines, lipgloss.NewStyle().Foreground(t.Foreground).Render(l))
+	}
+	body := strings.Join(bodyLines, "\n")
+
+	hint := "j/k scroll · Esc close"
+	total := len(m.sessionLines)
+	if total > visible && total > 1 {
+		pct := (m.sessionScroll * 100) / (total - 1)
+		hint = fmt.Sprintf("(%d%%)  j/k scroll · Esc close", pct)
 	}
 
-	total := len(m.sessionLines)
-	if total > visible {
-		pct := (m.sessionScroll * 100) / (total - visible)
-		sb.WriteString(fmt.Sprintf("\n  %s\n",
-			lipgloss.NewStyle().Foreground(t.Muted).Render(
-				fmt.Sprintf("(%d%%)  j/k scroll · Esc close", pct))))
-	} else {
-		sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(t.Muted).Render("Esc close") + "\n")
+	return m.popupBox(title, body, hint, borderColor)
+}
+
+// shipSafeView renders the ship-safe audit output as a centered popup.
+func (m *dashboardModel) shipSafeView() string {
+	t := m.theme
+
+	borderColor := t.Success
+	statusLabel := "CLEAN"
+	if m.shipSafeRunning {
+		borderColor = t.Muted
+		statusLabel = "auditing…"
+	} else if m.shipSafeFailed {
+		borderColor = t.Error
+		statusLabel = "ISSUES FOUND"
 	}
-	return sb.String()
+
+	title := lipgloss.NewStyle().Foreground(borderColor).Bold(true).Render("[ship-safe] "+statusLabel) +
+		lipgloss.NewStyle().Foreground(t.Muted).Render("  npx ship-safe audit .")
+
+	visible := m.height - 18
+	if visible < 4 {
+		visible = 4
+	}
+	end := m.shipSafeScroll + visible
+	if end > len(m.shipSafeLines) {
+		end = len(m.shipSafeLines)
+	}
+	window := m.shipSafeLines[m.shipSafeScroll:end]
+
+	var bodyLines []string
+	for _, l := range window {
+		col := t.Foreground
+		tl := strings.TrimSpace(l)
+		switch {
+		case strings.HasPrefix(tl, "✓"), strings.HasPrefix(tl, "✅"),
+			strings.HasPrefix(tl, "PASS"), strings.HasPrefix(tl, "ok "),
+			strings.Contains(tl, "no issues"):
+			col = t.Success
+		case strings.HasPrefix(tl, "✗"), strings.HasPrefix(tl, "❌"),
+			strings.HasPrefix(tl, "FAIL"), strings.HasPrefix(tl, "ERROR"),
+			strings.HasPrefix(tl, "CRITICAL"), strings.HasPrefix(tl, "HIGH"):
+			col = t.Error
+		case strings.HasPrefix(tl, "⚠"), strings.HasPrefix(tl, "WARN"),
+			strings.HasPrefix(tl, "MEDIUM"), strings.HasPrefix(tl, "LOW"):
+			col = t.Warning
+		}
+		bodyLines = append(bodyLines, lipgloss.NewStyle().Foreground(col).Render(l))
+	}
+	body := strings.Join(bodyLines, "\n")
+
+	hint := "j/k scroll · Esc close"
+	total := len(m.shipSafeLines)
+	if total > visible && total > 1 {
+		pct := (m.shipSafeScroll * 100) / (total - 1)
+		hint = fmt.Sprintf("(%d%%)  j/k scroll · Esc close", pct)
+	}
+
+	return m.popupBox(title, body, hint, borderColor)
 }
 
 // qaFileDetailView renders a test file as a full-screen overlay.

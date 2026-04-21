@@ -141,12 +141,21 @@ func runInteractive(fsys fs.FS, noAnimate bool) {
 
 func runDashboardLoop(t Theme, noAnimate bool, tools Tools, fsys fs.FS) {
 	for {
-		action, err := runDashboard(t, noAnimate)
+		action, openTarget, err := runDashboard(t, noAnimate)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "dashboard: %v\n", err)
 			return
 		}
 		switch action {
+		case dashActionOpenAgent:
+			if len(openTarget) > 0 {
+				cmd := exec.Command(openTarget[0], openTarget[1:]...)
+				cmd.Stdin = os.Stdin
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				_ = cmd.Run()
+			}
+			return
 		case dashActionReq:
 			if err := runReq(tools); err != nil {
 				fmt.Fprintf(os.Stderr, "req: %v\n", err)

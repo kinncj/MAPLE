@@ -50,12 +50,13 @@ type testEntry struct {
 type dashAction int
 
 const (
-	dashActionNone    dashAction = iota
-	dashActionQuit              // plain quit — no follow-up workflow
-	dashActionReq               // quit and run req (Gherkin converter)
-	dashActionUpdate            // quit and run init --force (re-sync template)
-	dashActionLabels            // quit and run labels bootstrap
-	dashActionProject           // quit and run project creation
+	dashActionNone      dashAction = iota
+	dashActionQuit                // plain quit — no follow-up workflow
+	dashActionReq                 // quit and run req (Gherkin converter)
+	dashActionUpdate              // quit and run init --force (re-sync template)
+	dashActionLabels              // quit and run labels bootstrap
+	dashActionProject             // quit and run project creation
+	dashActionOpenAgent           // quit and exec a session in Claude/OpenCode
 )
 
 // ─── Pane IDs ─────────────────────────────────────────────────────────────────
@@ -101,6 +102,13 @@ type testRunStartMsg struct {
 }
 
 type testRunDoneMsg struct {
+	lines  []string
+	failed bool
+}
+
+type shipSafeStartMsg struct{}
+
+type shipSafeDoneMsg struct {
 	lines  []string
 	failed bool
 }
@@ -210,6 +218,14 @@ type dashboardModel struct {
 	prDetailLoading   bool
 	prDetailNumber    int // number of the PR currently shown
 
+	// ShipSafe audit overlay
+	showShipSafe    bool
+	shipSafeLines   []string
+	shipSafeScroll  int
+	shipSafeRunning bool
+	shipSafeFailed  bool
+
+	openTarget []string // command to exec when exitAction == dashActionOpenAgent
 	exitAction dashAction
 }
 
@@ -327,6 +343,22 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.testOutScroll = len(msg.lines) - 1 // scroll to bottom
 		if m.testOutScroll < 0 {
 			m.testOutScroll = 0
+		}
+
+	case shipSafeStartMsg:
+		m.shipSafeRunning = true
+		m.shipSafeFailed = false
+		m.shipSafeLines = []string{"running npx ship-safe audit …"}
+		m.shipSafeScroll = 0
+		m.showShipSafe = true
+
+	case shipSafeDoneMsg:
+		m.shipSafeRunning = false
+		m.shipSafeFailed = msg.failed
+		m.shipSafeLines = msg.lines
+		m.shipSafeScroll = len(msg.lines) - 1
+		if m.shipSafeScroll < 0 {
+			m.shipSafeScroll = 0
 		}
 
 	case statusClearMsg:
@@ -620,6 +652,33 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// ShipSafe audit overlay
+	if m.showShipSafe {
+		maxScroll := len(m.shipSafeLines) - (m.height - 15)
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		switch k {
+		case "j", "down":
+			if m.shipSafeScroll < maxScroll {
+				m.shipSafeScroll++
+			}
+		case "k", "up":
+			if m.shipSafeScroll > 0 {
+				m.shipSafeScroll--
+			}
+		case "g":
+			m.shipSafeScroll = 0
+		case "G":
+			m.shipSafeScroll = maxScroll
+		case "q", "esc", "b", "ctrl+c":
+			if !m.shipSafeRunning {
+				m.showShipSafe = false
+			}
+		}
+		return m, nil
+	}
+
 	// PR detail overlay
 	if m.showPRDetail {
 		maxScroll := len(m.prDetailLines) - (m.height - 14)
@@ -736,7 +795,19 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.showPRDetail = false
 			return m, loadPRDetailCmd(pr.number, pr.title)
 		}
+	case "S":
+		return m, m.runShipSafeCmd()
 	case "o":
+		if m.focus == paneAgents && m.sessionsCur < len(m.sessions) {
+			s := m.sessions[m.sessionsCur]
+			cmd := agentOpenCmd(s)
+			if len(cmd) == 0 {
+				return m, m.setStatus("✗ cannot open source: "+s.source, true)
+			}
+			m.openTarget = cmd
+			m.exitAction = dashActionOpenAgent
+			return m, tea.Quit
+		}
 		if m.focus == panePRs && m.prsCur < len(m.prList) {
 			_ = exec.Command("gh", "pr", "view", fmt.Sprintf("%d", m.prList[m.prsCur].number), "--web").Start()
 			return m, m.setStatus("opening PR in browser…", false)
@@ -965,6 +1036,9 @@ func (m *dashboardModel) View() string {
 	}
 
 	// Overlays (rendered over the grid)
+	if m.showShipSafe {
+		return m.header() + m.shipSafeView() + m.footer()
+	}
 	if m.showSession {
 		return m.header() + m.sessionDetailView() + m.footer()
 	}
@@ -1003,8 +1077,18 @@ func (m *dashboardModel) header() string {
 
 func (m *dashboardModel) footer() string {
 	t := m.theme
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [j/k] nav · [Enter] open · [o] browser (PR) · [r] run tests (QA) · [n] new · [u] update · [F] skills · [?] help · [q] quit"
-	if m.showSkills {
+	// Status always wins — errors from approve/run must be visible over overlay hints
+	if m.status != "" {
+		col := t.Success
+		if m.statusErr {
+			col = t.Error
+		}
+		return "\n" + lipgloss.NewStyle().Foreground(col).Render("  "+m.status) + "\n"
+	}
+
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open in agent (Sessions)/browser (PR) · [S] ship-safe · [r] run tests (QA) · [F] skills · [?] help · [q] quit"
+	switch {
+	case m.showSkills:
 		if !m.skillsTabSearch {
 			if m.installedLoading {
 				keys = "  loading installed skills…"
@@ -1020,11 +1104,19 @@ func (m *dashboardModel) footer() string {
 				keys = "  [Tab] switch tab · type a query · [Enter] search · Esc close"
 			}
 		}
-	} else if m.showSession {
+	case m.showShipSafe:
+		if m.shipSafeRunning {
+			keys = "  auditing…"
+		} else if m.shipSafeFailed {
+			keys = "  ISSUES FOUND · [j/k] scroll · [Esc] close"
+		} else {
+			keys = "  CLEAN · [j/k] scroll · [Esc] close"
+		}
+	case m.showSession:
 		keys = "  [j/k] scroll · [Esc] close"
-	} else if m.showStory {
+	case m.showStory:
 		keys = "  [j/k] scroll · [e] re-edit · [Esc] close"
-	} else if m.showTestOut {
+	case m.showTestOut:
 		if m.testOutRunning {
 			keys = "  running…"
 		} else if m.testOutFailed {
@@ -1032,20 +1124,14 @@ func (m *dashboardModel) footer() string {
 		} else {
 			keys = "  PASSED · [j/k] scroll · [Esc] close"
 		}
-	} else if m.showQAFile {
+	case m.showQAFile:
 		keys = "  [j/k] scroll · [r] run test · [Esc] close"
-	} else if m.showPRDetail || m.prDetailLoading {
+	case m.showPRDetail || m.prDetailLoading:
 		keys = "  [j/k] scroll · [o] open in browser · [a] approve · [Esc] close"
-	} else if m.searchMode {
+	case m.searchMode:
 		keys = "  /" + m.searchBuf + "█"
-	} else if m.cmdMode {
+	case m.cmdMode:
 		keys = "  :" + m.cmdBuf + "█"
-	} else if m.status != "" {
-		col := t.Success
-		if m.statusErr {
-			col = t.Error
-		}
-		keys = lipgloss.NewStyle().Foreground(col).Render("  " + m.status)
 	}
 	return "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render(keys) + "\n"
 }
@@ -1136,6 +1222,44 @@ func (m *dashboardModel) runTestCmd(e testEntry) tea.Cmd {
 	)
 }
 
+// runShipSafeCmd runs npx ship-safe audit . and streams output to the overlay.
+func (m *dashboardModel) runShipSafeCmd() tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg { return shipSafeStartMsg{} },
+		func() tea.Msg {
+			npx, err := exec.LookPath("npx")
+			if err != nil {
+				return shipSafeDoneMsg{lines: []string{"npx not found — install Node.js from nodejs.org"}, failed: true}
+			}
+			cmd := exec.Command(npx, "ship-safe", "audit", ".")
+			out, err := cmd.CombinedOutput()
+			lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+			if len(lines) == 0 {
+				lines = []string{"(no output)"}
+			}
+			return shipSafeDoneMsg{lines: lines, failed: err != nil}
+		},
+	)
+}
+
+// agentOpenCmd returns the CLI command to resume a session in its native agent.
+func agentOpenCmd(s sessionRow) []string {
+	switch s.source {
+	case "claude":
+		// s.id is the full JSONL path; the filename stem is the session UUID
+		base := s.id
+		if idx := strings.LastIndex(base, "/"); idx >= 0 {
+			base = base[idx+1:]
+		}
+		uuid := strings.TrimSuffix(base, ".jsonl")
+		return []string{"claude", "--resume", uuid}
+	case "opencode":
+		return []string{"opencode"}
+	default:
+		return nil
+	}
+}
+
 // ─── Utility ─────────────────────────────────────────────────────────────────
 
 func truncate(s string, n int) string {
@@ -1151,18 +1275,19 @@ func truncate(s string, n int) string {
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
-// runDashboard runs the dashboard and returns the exit action so the caller
-// can decide what to do next (e.g. launch the req workflow).
-func runDashboard(t Theme, noAnimate bool) (dashAction, error) {
+// runDashboard runs the dashboard and returns the exit action and any open
+// target command (used when dashActionOpenAgent is returned).
+func runDashboard(t Theme, noAnimate bool) (dashAction, []string, error) {
 	m := newDashboard(t, noAnimate)
 	writeRecoveryMarker("running")
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, err := p.Run()
 	writeRecoveryMarker("exited")
 	if err != nil {
-		return dashActionNone, err
+		return dashActionNone, nil, err
 	}
-	return final.(*dashboardModel).exitAction, nil
+	dm := final.(*dashboardModel)
+	return dm.exitAction, dm.openTarget, nil
 }
 
 func writeRecoveryMarker(state string) {
