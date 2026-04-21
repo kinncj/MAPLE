@@ -56,7 +56,7 @@ jobs:
           [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
           go build \
             -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
-            -o "dist/maple${EXT}" .
+            -o "dist/maple${EXT}" ./tui
 
       - name: Archive
         run: |
