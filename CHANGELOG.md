@@ -7,6 +7,11 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.4.2] — 2026-04-21
+
+### Fixed
+- `writeRecoveryMarker` now merges with existing `maple.json` instead of overwriting — TUI start/exit no longer wipes superpower pipeline state written by the `superpower-runner` skill, so the `P` pane shows the correct status
+
 ## [4.4.1] — 2026-04-21
 
 ### Fixed
