@@ -47,3 +47,14 @@ jobs:
           STORIES=$(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null || true)
           [ -z "$STORIES" ] && echo "No stories found — skipping" && exit 0
           bash scripts/sdlc/a11y-gate.sh $STORIES
+
+  ship-safe:
+    name: Ship-Safe security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run ship-safe audit
+        run: npx --yes ship-safe audit .

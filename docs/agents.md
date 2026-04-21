@@ -121,7 +121,7 @@ Skills are markdown files agents read before executing specific tasks. They enco
 
 | Category | Skills |
 |---|---|
-| Process | `tdd-workflow`, `rfc-adr`, `threat-modeling` |
+| Process | `tdd-workflow`, `rfc-adr`, `threat-modeling`, `ship-safe` |
 | Output | `mermaid-diagrams`, `finops-review`, `sre-review` |
 | Tool / CLI | `playwright-cli`, `github-cli`, `docker-patterns`, `kubernetes-patterns`, `terraform-patterns`, `supabase-patterns`, `stripe-patterns`, `vercel-patterns`, `postgresql-patterns`, `redis-patterns`, `jupyter-patterns` |
 

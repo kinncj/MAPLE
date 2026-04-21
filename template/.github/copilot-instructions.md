@@ -37,6 +37,7 @@ bash scripts/sdlc/spec-kit-gate.sh
 bash scripts/sdlc/validate-frontmatter.sh $(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null)
 bash scripts/sdlc/design-approved-gate.sh $(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null)
 bash scripts/sdlc/a11y-gate.sh $(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null)
+npx ship-safe audit .
 ```
 
 If any gate fails, **do not commit**. Report the failure and wait for the human to resolve.

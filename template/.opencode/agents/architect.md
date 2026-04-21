@@ -194,6 +194,12 @@ For each component, evaluate:
 - **D**enial of Service: Can availability be disrupted?
 - **E**levation of Privilege: Can an attacker gain higher access?
 
+## Skills to Read
+- Read `.claude/skills/threat-modeling/SKILL.md` before producing threat models.
+- Read `.claude/skills/rfc-adr/SKILL.md` before producing ADRs.
+- Read `.claude/skills/mermaid-diagrams/SKILL.md` before creating diagrams.
+- Read `.claude/skills/ship-safe/SKILL.md` before any pre-ship security gate. Run `/ship-safe` to invoke the audit.
+
 ## Rules
 - NEVER design for hypothetical future requirements.
 - NEVER accept cross-domain data coupling.

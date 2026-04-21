@@ -228,6 +228,7 @@ If any approval is not received, do not advance. Log `AWAITING APPROVAL` and sur
 - Read `.claude/skills/wireframe/SKILL.md` before dispatching wireframe-architect.
 - Read `.claude/skills/a11y-audit/SKILL.md` before dispatching a11y-auditor.
 - Read `.claude/skills/mermaid-diagrams/SKILL.md` if creating plan diagrams.
+- Read `.claude/skills/ship-safe/SKILL.md` before Phase 8 (ship gate). Delegate `/ship-safe` to architect for pre-merge security audit.
 
 ## Output Format
 Be terse. Use checklists. Update issue at every phase gate.

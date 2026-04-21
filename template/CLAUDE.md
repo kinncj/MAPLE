@@ -10,6 +10,7 @@ Commands:
 - `/bugfix {description}` — Reproduce → fix → validate → CHANGELOG
 - `/validate` — Run full test suite
 - `/tdd {requirement}` — Single RED → GREEN → REFACTOR cycle
+- `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping
 
 Pipeline rules:
 1. Orchestrator never writes code. Delegates to specialist agents.
@@ -121,7 +122,7 @@ Makefile    # all CI/CD calls Makefile targets
 ## Skills
 
 Read skills from `.claude/skills/` before executing tasks.
-Key skills: `tdd-workflow`, `playwright-cli`, `github-cli`, `mermaid-diagrams`.
+Key skills: `tdd-workflow`, `playwright-cli`, `github-cli`, `mermaid-diagrams`, `ship-safe`.
 
 
 ## Agent System
@@ -134,6 +135,7 @@ Default agent: @orchestrator (never writes code, delegates everything).
 - `/bugfix {description}` — Reproduce → fix → validate → CHANGELOG
 - `/validate` — Run full test suite
 - `/tdd {requirement}` — Single RED → GREEN → REFACTOR cycle
+- `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping
 
 ## Rules
 1. The Orchestrator NEVER writes code. It delegates to specialist agents.

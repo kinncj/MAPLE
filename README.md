@@ -148,6 +148,8 @@ maple --help   # all flags
 | `d` | Toggle Design artifacts pane (full-screen) |
 | `l` | Toggle Skill Logs pane (full-screen) |
 | `F` | Skills marketplace — browse, install, remove via skills.sh |
+| `S` | Run `ship-safe` audit — security/quality scan with colored findings |
+| `o` | Open selected session in its agent (Agents pane: `claude --resume` or `opencode`) |
 | `n` | New story → Gherkin requirements wizard |
 | `u` | Update — re-sync template files (preserves your Makefile edits) |
 | `r` | Reload all pane data |
@@ -168,6 +170,7 @@ maple --help   # all flags
 | `/bugfix "description"` | Reproduce → fix → validate → CHANGELOG |
 | `/validate` | Run full test suite |
 | `/tdd "requirement"` | Single RED → GREEN → REFACTOR cycle |
+| `/ship-safe` | Run `npx ship-safe audit .` — security scan, reports blockers by severity |
 
 ---
 
