@@ -7,6 +7,14 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.9.0] — 2026-04-21
+
+### Changed
+- **maple never exits for harness launches**: pressing `o` (open session), Enter in the superpower launch overlay, or Enter in the `L` launcher no longer calls `tea.Quit`. Spawning is now a `tea.Cmd` — if `spawnInNewTerminal` succeeds, a status message confirms it; if it fails, a manual-launch modal appears inside the TUI showing the command to paste, with `[c]` to copy to clipboard. maple stays alive in all cases.
+
+### Added
+- **Manual-launch modal**: when no new-terminal mechanism is detected (no tmux/zellij/WezTerm/Kitty, no GUI emulator), a centered overlay shows the exact command to paste in a new terminal window. Clipboard copy via `[c]` (pbcopy / xclip / xsel / clip depending on OS).
+
 ## [4.8.1] — 2026-04-21
 
 ### Fixed

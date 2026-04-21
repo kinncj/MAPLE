@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -120,6 +121,9 @@ type rtkInitDoneMsg struct {
 	key string
 	err string
 }
+
+type spawnSucceededMsg struct{ harness string }
+type spawnFailedMsg struct{ args []string }
 
 const dashTickInterval    = 5 * time.Second
 const dashNetTickInterval = 60 * time.Second
@@ -259,6 +263,11 @@ type dashboardModel struct {
 	superpowerLaunchHarness   string // chosen harness (tool)
 	superpowerLaunchPickHarness bool // true = showing harness picker, false = prompt input
 	superpowerLaunchHarnessCur  int
+
+	// Manual launch modal — shown when spawnInNewTerminal fails
+	showManualLaunch    bool
+	manualLaunchArgs    []string
+	manualLaunchCopied  bool // shows "copied!" briefly after [c]
 
 	// RTK harness selector overlay
 	showRTKHarness    bool
@@ -426,6 +435,14 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showRTKHarness = false
 			return m, m.setStatus("✓ rtk wired for selected harnesses", false)
 		}
+
+	case spawnSucceededMsg:
+		return m, m.setStatus("✓ launched "+msg.harness+" in new terminal", false)
+
+	case spawnFailedMsg:
+		m.showManualLaunch = true
+		m.manualLaunchArgs = msg.args
+		m.manualLaunchCopied = false
 
 	case statusClearMsg:
 		m.status = ""
@@ -785,9 +802,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					cmd += " " + m.superpowerLaunchPrompt
 				}
 				m.showSuperpowerLaunch = false
-				m.openTarget = buildLaunchCmd(m.superpowerLaunchHarness, cmd, m.pinnedSessions)
-				m.exitAction = dashActionOpenAgent
-				return m, tea.Quit
+				target := buildLaunchCmd(m.superpowerLaunchHarness, cmd, m.pinnedSessions)
+				return m, trySpawnCmd(target)
 			case "esc":
 				if m.superpowerLaunchPickHarness {
 					m.showSuperpowerLaunch = false
@@ -857,9 +873,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					tool := tools[m.launcherCur]
 					m.showLauncher = false
 					cmd := buildLaunchCmd(tool, m.launcherCmd, m.pinnedSessions)
-					m.openTarget = cmd
-					m.exitAction = dashActionLaunch
-					return m, tea.Quit
+					return m, trySpawnCmd(cmd)
 				}
 			case "esc":
 				m.launcherInput = false
@@ -928,6 +942,26 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "q", "esc", "ctrl+c":
 			m.showRTKHarness = false
+		}
+		return m, nil
+	}
+
+	// Manual launch modal — shown when spawnInNewTerminal fails
+	if m.showManualLaunch {
+		switch k {
+		case "c":
+			if len(m.manualLaunchArgs) > 0 {
+				// build a shell-pasteable command and copy to clipboard via pbcopy/xclip/clip
+				var quoted []string
+				for _, a := range m.manualLaunchArgs {
+					quoted = append(quoted, shQuote(a))
+				}
+				line := strings.Join(quoted, " ")
+				_ = copyToClipboard(line)
+				m.manualLaunchCopied = true
+			}
+		case "q", "esc", "ctrl+c", "enter":
+			m.showManualLaunch = false
 		}
 		return m, nil
 	}
@@ -1128,9 +1162,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				savePinnedSession(s.source, sessionUUID(s))
 				m.pinnedSessions = loadPinnedSessions()
 			}
-			m.openTarget = cmd
-			m.exitAction = dashActionOpenAgent
-			return m, tea.Quit
+			return m, trySpawnCmd(cmd)
 		}
 		if m.focus == panePRs && m.prsCur < len(m.prList) {
 			_ = exec.Command("gh", "pr", "view", fmt.Sprintf("%d", m.prList[m.prsCur].number), "--web").Start()
@@ -1342,6 +1374,44 @@ func (m *dashboardModel) execCmd(input string) string {
 	}
 }
 
+// trySpawnCmd tries to open args in a new terminal tab/window as a tea.Cmd.
+// On success it returns spawnSucceededMsg; on failure it returns spawnFailedMsg
+// so the TUI can show the manual-launch modal — maple never exits.
+func trySpawnCmd(args []string) tea.Cmd {
+	return func() tea.Msg {
+		if len(args) == 0 {
+			return spawnFailedMsg{}
+		}
+		harness := args[0]
+		if err := spawnInNewTerminal(args); err != nil {
+			return spawnFailedMsg{args: args}
+		}
+		return spawnSucceededMsg{harness: harness}
+	}
+}
+
+// copyToClipboard writes s to the system clipboard via pbcopy (macOS),
+// xclip/xsel (Linux), or clip (Windows). Errors are silently ignored.
+func copyToClipboard(s string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("pbcopy")
+	case "windows":
+		cmd = exec.Command("clip")
+	default:
+		if _, err := exec.LookPath("xclip"); err == nil {
+			cmd = exec.Command("xclip", "-selection", "clipboard")
+		} else if _, err := exec.LookPath("xsel"); err == nil {
+			cmd = exec.Command("xsel", "--clipboard", "--input")
+		} else {
+			return fmt.Errorf("no clipboard tool found")
+		}
+	}
+	cmd.Stdin = strings.NewReader(s)
+	return cmd.Run()
+}
+
 // ─── View ─────────────────────────────────────────────────────────────────────
 
 func (m *dashboardModel) View() string {
@@ -1402,6 +1472,9 @@ func (m *dashboardModel) View() string {
 	if m.showRTKHarness {
 		return m.header() + m.rtkHarnessView() + m.footer()
 	}
+	if m.showManualLaunch {
+		return m.header() + m.manualLaunchView() + m.footer()
+	}
 
 	// Normal 2×2 dashboard
 	return m.header() + m.gridView() + m.footer()
@@ -1430,6 +1503,12 @@ func (m *dashboardModel) footer() string {
 
 	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open+pin session · [p] pin · [L] launch · [R] rtk harnesses · [S] ship-safe · [x] superpowers · [P] pipeline · [F] skills · [?] help · [q] quit"
 	switch {
+	case m.showManualLaunch:
+		if m.manualLaunchCopied {
+			keys = "  copied! · [Esc] dismiss"
+		} else {
+			keys = "  [c] copy command · [Esc] dismiss"
+		}
 	case m.showRTKHarness:
 		if m.rtkHarnessRunning {
 			keys = "  installing…"

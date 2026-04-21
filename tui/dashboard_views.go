@@ -918,6 +918,56 @@ func (m *dashboardModel) rtkHarnessView() string {
 	return lipgloss.Place(m.width, availH, lipgloss.Center, lipgloss.Center, box)
 }
 
+// manualLaunchView renders a modal telling the user maple couldn't open a new
+// terminal, and showing the command they should paste themselves.
+func (m *dashboardModel) manualLaunchView() string {
+	t := m.theme
+	title := lipgloss.NewStyle().Foreground(t.Error).Bold(true).Render("⚠  Could not open a new terminal tab")
+	mutedStyle := lipgloss.NewStyle().Foreground(t.Muted)
+	codeStyle := lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
+	successStyle := lipgloss.NewStyle().Foreground(t.Success)
+
+	var cmdLine string
+	for _, a := range m.manualLaunchArgs {
+		cmdLine += " " + shQuote(a)
+	}
+	cmdLine = strings.TrimSpace(cmdLine)
+
+	copyHint := mutedStyle.Render("[c] copy to clipboard")
+	if m.manualLaunchCopied {
+		copyHint = successStyle.Render("✓ copied!")
+	}
+
+	bodyLines := []string{
+		mutedStyle.Render("maple needs a multiplexer (tmux / zellij) or a supported terminal"),
+		mutedStyle.Render("to open the harness in a new tab. Open a tab manually and run:"),
+		"",
+		"  " + codeStyle.Render(cmdLine),
+		"",
+		"  " + copyHint + "  " + mutedStyle.Render("[Esc] dismiss"),
+		"",
+		mutedStyle.Render("Tip: run maple inside tmux or zellij — harnesses open automatically."),
+	}
+
+	inner := title + "\n\n" + strings.Join(bodyLines, "\n")
+	innerW := m.width - 10
+	if innerW < 60 {
+		innerW = 60
+	}
+	box := lipgloss.NewStyle().
+		Width(innerW).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Error).
+		Padding(1, 2).
+		Render(inner)
+
+	availH := m.height - 6
+	if availH < 10 {
+		availH = 10
+	}
+	return lipgloss.Place(m.width, availH, lipgloss.Center, lipgloss.Center, box)
+}
+
 // sessionDetailView renders the session detail as a centered popup.
 func (m *dashboardModel) sessionDetailView() string {
 	t := m.theme
