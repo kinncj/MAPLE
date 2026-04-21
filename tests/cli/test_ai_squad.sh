@@ -397,7 +397,7 @@ else
   fail "docs/specs/README.md missing"
 fi
 
-for keyword in "PROBLEM" "SPEC.md" "PLAN.md" "TASKS.md" "stories_emitted" "spike" "chore"; do
+for keyword in "Scenario" "docs/stories" "status: approved" "validate_story" "spike" "chore"; do
   if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/spec-kit/SKILL.md"; then
     ok "spec-kit skill covers: $keyword"
   else
