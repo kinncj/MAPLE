@@ -63,6 +63,25 @@ func logo() string {
 	return sb.String()
 }
 
+// logoCompactRows is the compact 4-line wordmark used in the dashboard header.
+var logoCompactRows = [4]string{
+	"🍁 ▗▖  ▗▖ ▗▄▖ ▗▄▄▖ ▗▖   ▗▄▄▄▖ 🍁",
+	"🍁 ▐▛▚▞▜▌▐▌ ▐▌▐▌ ▐▌▐▌   ▐▌    🍁",
+	"🍁 ▐▌  ▐▌▐▛▀▜▌▐▛▀▘ ▐▌   ▐▛▀▀▘ 🍁",
+	"🍁 ▐▌  ▐▌▐▌ ▐▌▐▌   ▐▙▄▄▖▐▙▄▄▖ 🍁",
+}
+
+// logoCompact returns the 4-line wordmark styled in Canada red.
+func logoCompact() string {
+	style := lipgloss.NewStyle().Foreground(logoColor)
+	var sb strings.Builder
+	for _, row := range logoCompactRows {
+		sb.WriteString(style.Render(row))
+		sb.WriteByte('\n')
+	}
+	return sb.String()
+}
+
 // ─── Bubble Tea animation ─────────────────────────────────────────────────────
 
 // logoTickMsg advances the logo animation by one frame.

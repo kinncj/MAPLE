@@ -83,13 +83,8 @@ type prsLoadedMsg struct {
 	err   string
 }
 
-type shimmerTickMsg struct{}
 type dashRefreshMsg struct{}
 type statusClearMsg struct{}
-
-func shimmerTick() tea.Cmd {
-	return tea.Tick(10*time.Second, func(time.Time) tea.Msg { return shimmerTickMsg{} })
-}
 
 // ─── Model ────────────────────────────────────────────────────────────────────
 
@@ -136,9 +131,6 @@ type dashboardModel struct {
 	spItems []spRow
 	spCur   int
 
-	shimmerPos int
-	shimmerDir int
-
 	lastKey    string // for gg double-key detection
 	debugMode  bool   // :debug — tee state to .claude/logs/tui.log
 
@@ -157,7 +149,6 @@ func newDashboard(t Theme, noAnimate bool) *dashboardModel {
 		theme:      t,
 		noAnimate:  noAnimate,
 		fullscreen: -1,
-		shimmerDir: 1,
 	}
 	m.reload()
 	return m
@@ -203,11 +194,7 @@ func (m *dashboardModel) clampCursor(c *int, n int) {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 func (m *dashboardModel) Init() tea.Cmd {
-	cmds := []tea.Cmd{loadPRsCmd()}
-	if !m.noAnimate {
-		cmds = append(cmds, shimmerTick())
-	}
-	return tea.Batch(cmds...)
+	return loadPRsCmd()
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -224,17 +211,6 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prsErr = msg.err
 		m.prList = msg.items
 		m.clampCursor(&m.prsCur, len(m.prList))
-
-	case shimmerTickMsg:
-		m.shimmerPos += m.shimmerDir
-		if m.shimmerPos >= logoShimmerWidth {
-			m.shimmerDir = -1
-			m.shimmerPos = logoShimmerWidth - 2
-		} else if m.shimmerPos < 0 {
-			m.shimmerDir = 1
-			m.shimmerPos = 1
-		}
-		return m, shimmerTick()
 
 	case dashRefreshMsg:
 		m.reload()
@@ -737,13 +713,8 @@ func (m *dashboardModel) header() string {
 	if name == "" {
 		name = "—"
 	}
-	left := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  maple")
-	mid := lipgloss.NewStyle().Foreground(t.Muted).Render(" · project: " + name + " · theme: " + t.Name)
-	bar := left + mid
-	if m.noAnimate {
-		return logo() + "\n" + bar + "\n"
-	}
-	return logoShimmer(m.shimmerPos, t.Primary, t.Accent) + bar + "\n"
+	info := lipgloss.NewStyle().Foreground(t.Muted).Render("  project: " + name + " · theme: " + t.Name)
+	return logoCompact() + info + "\n"
 }
 
 func (m *dashboardModel) footer() string {
@@ -768,7 +739,7 @@ func (m *dashboardModel) footer() string {
 // gridView renders the 2×2 pane layout.
 func (m *dashboardModel) gridView() string {
 	t := m.theme
-	innerH := m.height - 14 // subtract header(9) + footer(2) + separators
+	innerH := m.height - 10 // subtract compact header(6) + footer(2) + separators
 	if innerH < 6 {
 		innerH = 6
 	}

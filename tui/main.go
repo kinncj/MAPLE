@@ -45,6 +45,10 @@ func main() {
 		if err := runInit(tools, tplFS, force); err != nil {
 			fatalf("init: %v", err)
 		}
+		// Auto-open dashboard after successful init
+		if isStdinTTY() && hasTTY() {
+			runInteractive(tplFS, noAnimate)
+		}
 
 	case "req":
 		if err := runReq(tools); err != nil {
@@ -75,42 +79,13 @@ func runInteractive(fsys fs.FS, noAnimate bool) {
 	}
 
 	// If project is initialized, run boot check then launch dashboard.
-	// The dashboard may signal a sub-workflow on exit; we loop back after each.
 	if _, err := os.Stat("project.config.yaml"); err == nil {
 		t, ok := runBoot()
 		if !ok {
 			return
 		}
-		tools := Detect()
-		for {
-			action, err := runDashboard(t, noAnimate)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "dashboard: %v\n", err)
-				return
-			}
-			switch action {
-			case dashActionReq:
-				if err := runReq(tools); err != nil {
-					fmt.Fprintf(os.Stderr, "req: %v\n", err)
-				}
-			case dashActionUpdate:
-				if err := runInitFromMenu(tools, fsys, true); err != nil {
-					fmt.Fprintf(os.Stderr, "update: %v\n", err)
-				}
-			case dashActionLabels:
-				if err := runLabels(tools.GH); err != nil {
-					fmt.Fprintf(os.Stderr, "labels: %v\n", err)
-				}
-			case dashActionProject:
-				if err := runProject(tools.GH); err != nil {
-					fmt.Fprintf(os.Stderr, "project: %v\n", err)
-				}
-			default:
-				return
-			}
-			// re-detect tools after any operation that may install new things
-			tools = Detect()
-		}
+		runDashboardLoop(t, noAnimate, Detect(), fsys)
+		return
 	}
 
 	// Not yet initialized — show the setup menu.
@@ -123,6 +98,14 @@ func runInteractive(fsys fs.FS, noAnimate bool) {
 		case menuInit:
 			if err := runInitFromMenu(tools, fsys, false); err != nil {
 				fmt.Fprintf(os.Stderr, "init: %v\n", err)
+			}
+			// Jump straight to dashboard if init succeeded
+			if _, err := os.Stat("project.config.yaml"); err == nil {
+				t, ok := runBoot()
+				if ok {
+					runDashboardLoop(t, noAnimate, tools, fsys)
+				}
+				return
 			}
 		case menuUpdate:
 			if err := runInitFromMenu(tools, fsys, true); err != nil {
@@ -143,6 +126,37 @@ func runInteractive(fsys fs.FS, noAnimate bool) {
 		case menuHelp:
 			// handled inline in menu
 		}
+	}
+}
+
+func runDashboardLoop(t Theme, noAnimate bool, tools Tools, fsys fs.FS) {
+	for {
+		action, err := runDashboard(t, noAnimate)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "dashboard: %v\n", err)
+			return
+		}
+		switch action {
+		case dashActionReq:
+			if err := runReq(tools); err != nil {
+				fmt.Fprintf(os.Stderr, "req: %v\n", err)
+			}
+		case dashActionUpdate:
+			if err := runInitFromMenu(tools, fsys, true); err != nil {
+				fmt.Fprintf(os.Stderr, "update: %v\n", err)
+			}
+		case dashActionLabels:
+			if err := runLabels(tools.GH); err != nil {
+				fmt.Fprintf(os.Stderr, "labels: %v\n", err)
+			}
+		case dashActionProject:
+			if err := runProject(tools.GH); err != nil {
+				fmt.Fprintf(os.Stderr, "project: %v\n", err)
+			}
+		default:
+			return
+		}
+		tools = Detect()
 	}
 }
 

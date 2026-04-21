@@ -62,6 +62,7 @@ type initModel struct {
 }
 
 type initDoneMsg struct{ logs []string; err error }
+type initAutoDoneMsg struct{}
 
 func newInitModel(tools Tools, fsys fs.FS, force bool, fromMenu bool) *initModel {
 	s := spinner.New()
@@ -135,6 +136,12 @@ func (m *initModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.step = stepDone
 		m.logs = msg.logs
 		m.err = msg.err
+		if m.err == nil {
+			return m, tea.Tick(800*time.Millisecond, func(time.Time) tea.Msg { return initAutoDoneMsg{} })
+		}
+
+	case initAutoDoneMsg:
+		return m, tea.Quit
 	}
 	return m, nil
 }
@@ -179,11 +186,7 @@ func (m *initModel) View() string {
 			sb.WriteString("  " + l + "\n")
 		}
 		sb.WriteString("\n")
-		sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render(
-			"Next steps:\n" +
-				"  • Open your project in Claude Code, OpenCode, or Copilot CLI\n" +
-				"  • Run: maple req  — to write requirements and generate a story\n" +
-				"  • Run: maple labels  — to bootstrap GitHub labels\n"))
+		sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("Opening dashboard…"))
 		return header + sb.String() + "\n"
 	}
 	return ""
