@@ -70,6 +70,11 @@ func main() {
 			fatalf("project: %v", err)
 		}
 
+	case "update":
+		if err := runInit(tools, tplFS, true); err != nil {
+			fatalf("update: %v", err)
+		}
+
 	case "self-update", "upgrade":
 		if err := selfUpdate(); err != nil {
 			fatalf("self-update: %v", err)
@@ -198,7 +203,7 @@ func printHelpText() {
 Usage:
   maple                   Launch interactive menu
   maple init              Set up MAPLE in the current directory
-  maple init --force      Overwrite existing files
+  maple update            Re-sync template files (preserves Makefile edits)
   maple req               Write requirements → generate Gherkin story
   maple labels            Bootstrap GitHub label set
   maple project           Create GitHub Project v2

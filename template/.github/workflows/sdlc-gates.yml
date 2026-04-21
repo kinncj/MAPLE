@@ -48,6 +48,14 @@ jobs:
           [ -z "$STORIES" ] && echo "No stories found — skipping" && exit 0
           bash scripts/sdlc/a11y-gate.sh $STORIES
 
+  adr-required:
+    name: ADR required gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check ADR files exist when adr_required is true
+        run: bash scripts/sdlc/adr-required-gate.sh
+
   ship-safe:
     name: Ship-Safe security audit
     runs-on: ubuntu-latest

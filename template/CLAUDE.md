@@ -121,7 +121,7 @@ Makefile    # all CI/CD calls Makefile targets
 ## MCP Servers
 
 - `context7`: Library documentation lookup (`use context7` in prompts)
-- New MCP servers require an ADR per Appendix C of the PRD.
+- New MCP servers require an ADR. Use `docs/architecture/adr-template.md` and add a row to `docs/architecture/README.md`.
 
 ---
 
@@ -129,8 +129,3 @@ Makefile    # all CI/CD calls Makefile targets
 
 Read skills from `.claude/skills/` before executing tasks.
 Key skills: `tdd-workflow`, `playwright-cli`, `github-cli`, `mermaid-diagrams`, `superpower-runner`, `ship-safe`.
-
-
-## MCP Servers
-- `context7`: Library documentation lookup (`use context7` in prompts)
-- New MCP servers require an ADR per Appendix C of the PRD.

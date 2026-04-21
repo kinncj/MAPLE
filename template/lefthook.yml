@@ -30,6 +30,10 @@ pre-push:
         bash scripts/sdlc/a11y-gate.sh $STORIES
       fail_text: "A11y gate failed — WCAG 2.2 AA audit not passed for ui:true story."
 
+    adr-required:
+      run: bash scripts/sdlc/adr-required-gate.sh
+      fail_text: "ADR gate failed — story has adr_required: true but no ADR file found in docs/architecture/."
+
 pre-commit:
   parallel: true
   commands:

@@ -667,6 +667,9 @@ cmd_help() {
   printf '%b\n' "  ${D}    Scaffold the template into a new or existing directory${R}"
   printf '%b\n\n' "  ${D}    --yes / -y  skip all interactive prompts (for CI)${R}"
 
+  printf '%b\n' "  ${BCYN}update${R}"
+  printf '%b\n\n' "  ${D}    Re-sync template files into the current project (preserves Makefile edits)${R}"
+
   printf '%b\n' "  ${BCYN}labels${R}  ${D}[owner/repo]${R}"
   printf '%b\n\n' "  ${D}    Create GitHub issue labels for the MAPLE pipeline${R}"
 
@@ -695,6 +698,7 @@ _play_jingle
 
 case "${1:-help}" in
   init)               shift; cmd_init    "$@" ;;
+  update)             cmd_init --yes ;;
   labels)             shift; cmd_labels  "$@" ;;
   project)            shift; cmd_project "$@" ;;
   help | -h | --help) cmd_help ;;

@@ -135,13 +135,14 @@ else
   ok "maple help contains no swarm references"
 fi
 
-# 13. maple help lists init, labels, and project commands
+# 13. maple help lists init, update, labels, and project commands
 if printf '%s' "$MAIN_HELP" | grep -q 'init' && \
+   printf '%s' "$MAIN_HELP" | grep -q 'update' && \
    printf '%s' "$MAIN_HELP" | grep -q 'labels' && \
    printf '%s' "$MAIN_HELP" | grep -q 'project'; then
   ok "maple help lists init, labels, and project commands"
 else
-  fail "maple help is missing init, labels, or project"
+  fail "maple help is missing init, update, labels, or project"
 fi
 
 # 14. maple project command exists and exits non-zero without a repo (no gh auth in CI)
@@ -177,6 +178,27 @@ if [[ -f "$TEST_PROJECT/docs/dod/definition-of-done.md" ]]; then
   ok "init copies docs/dod/definition-of-done.md"
 else
   fail "init did not copy docs/dod/definition-of-done.md"
+fi
+
+# 17b. init copies .gitignore
+if [[ -f "$TEST_PROJECT/.gitignore" ]]; then
+  ok "init copies .gitignore"
+else
+  fail "init did not copy .gitignore"
+fi
+
+# 17c. template has PULL_REQUEST_TEMPLATE.md
+if [[ -f "$TEMPLATE_DIR/.github/PULL_REQUEST_TEMPLATE.md" ]]; then
+  ok "template includes .github/PULL_REQUEST_TEMPLATE.md"
+else
+  fail "template missing .github/PULL_REQUEST_TEMPLATE.md"
+fi
+
+# 17d. init copies PULL_REQUEST_TEMPLATE.md
+if [[ -f "$TEST_PROJECT/.github/PULL_REQUEST_TEMPLATE.md" ]]; then
+  ok "init copies .github/PULL_REQUEST_TEMPLATE.md"
+else
+  fail "init did not copy .github/PULL_REQUEST_TEMPLATE.md"
 fi
 
 # 18. template .gitignore contains Claude logs entries
@@ -515,7 +537,7 @@ _build_maple() {
 if [[ -f "$MAPLE_BIN" ]] || _build_maple; then
   ok "maple binary builds"
   MAPLE_HELP=$("$MAPLE_BIN" --help 2>&1 || true)
-  for cmd in "init" "req" "labels" "project"; do
+  for cmd in "init" "update" "req" "labels" "project"; do
     if printf '%s' "$MAPLE_HELP" | grep -q "$cmd"; then
       ok "maple --help lists: $cmd"
     else
@@ -561,7 +583,7 @@ else
   fail "sdlc-gates.yml workflow missing"
 fi
 
-for job in frontmatter spec-kit design-approved a11y; do
+for job in frontmatter spec-kit design-approved a11y adr-required; do
   if grep -q "name: $job\|$job:" "$TEMPLATE_DIR/.github/workflows/sdlc-gates.yml" 2>/dev/null; then
     ok "workflow job present: $job"
   else
@@ -573,6 +595,39 @@ if [[ -f "$TEMPLATE_DIR/scripts/bootstrap-branch-protection.sh" ]]; then
   ok "bootstrap-branch-protection.sh present"
 else
   fail "bootstrap-branch-protection.sh missing"
+fi
+
+# adr-required-gate.sh
+if [[ -f "$TEMPLATE_DIR/scripts/sdlc/adr-required-gate.sh" ]]; then
+  ok "sdlc script present: adr-required-gate.sh"
+else
+  fail "sdlc script missing: adr-required-gate.sh"
+fi
+
+if [[ -x "$TEMPLATE_DIR/scripts/sdlc/adr-required-gate.sh" ]]; then
+  ok "sdlc script executable: adr-required-gate.sh"
+else
+  fail "sdlc script not executable: adr-required-gate.sh"
+fi
+
+# ADR template and architecture README
+if [[ -f "$TEMPLATE_DIR/docs/architecture/adr-template.md" ]]; then
+  ok "template includes docs/architecture/adr-template.md"
+else
+  fail "template missing docs/architecture/adr-template.md"
+fi
+
+if [[ -f "$TEMPLATE_DIR/docs/architecture/README.md" ]]; then
+  ok "template includes docs/architecture/README.md"
+else
+  fail "template missing docs/architecture/README.md"
+fi
+
+# qa-cucumber agent
+if [[ -f "$TEMPLATE_DIR/.claude/agents/qa-cucumber.md" ]]; then
+  ok "qa-cucumber agent present"
+else
+  fail "qa-cucumber agent missing"
 fi
 
 # ─── Phase VIII: Examples ─────────────────────────────────────────────────────

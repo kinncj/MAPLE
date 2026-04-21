@@ -8,6 +8,7 @@
 | 2 | product-owner | User stories, acceptance criteria |
 | 3 | architect | ADR, contracts, threat models |
 | 4 | qa | Write tests (RED) + validate (GREEN) |
+| 4b | qa-cucumber | BDD: extract Gherkin → feature files, generate step stubs, run suite |
 | 5 | dotnet | .NET backend implementation |
 | 6 | javascript | Node.js / vanilla JS |
 | 7 | typescript | TypeScript backend/libraries |

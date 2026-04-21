@@ -248,6 +248,7 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 		{"Makefile", "Makefile"}, // skipped on first copy if already exists when force=false
 		{"lefthook.yml", "lefthook.yml"},
 		{".github", ".github"},
+		{".gitignore", ".gitignore"},
 	}
 
 	// Platform-specific copies. In CI copy everything so the smoke test can
