@@ -115,18 +115,29 @@ func (m *dashboardModel) prsContent(height int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (m *dashboardModel) qaContent(_ int) string {
+func (m *dashboardModel) qaContent(height int) string {
 	t := m.theme
 	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("QA / Gherkin")
 	if m.qaFeatures == 0 {
 		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no .feature files in tests/features/")
 	}
-	fLine := lipgloss.NewStyle().Foreground(t.Success).Render(
-		fmt.Sprintf("  %d feature file(s)", m.qaFeatures))
-	sLine := lipgloss.NewStyle().Foreground(t.Foreground).Render(
-		fmt.Sprintf("  %d scenario(s) total", m.qaScenarios))
-	hint := lipgloss.NewStyle().Foreground(t.Muted).Render("  make test-features-sync to regenerate")
-	return strings.Join([]string{title, fLine, sLine, hint}, "\n")
+	summary := lipgloss.NewStyle().Foreground(t.Muted).Render(
+		fmt.Sprintf("  %d file(s) · %d scenario(s)", m.qaFeatures, m.qaScenarios))
+	lines := []string{title, summary}
+	cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
+	for i, p := range m.qaFiles {
+		if i >= height-3 {
+			break
+		}
+		name := filepath.Base(p)
+		label := lipgloss.NewStyle().Foreground(t.Foreground).Render(truncate(name, 28))
+		if i == m.qaFileCur && m.focus == paneQA {
+			lines = append(lines, cursor+" "+label)
+		} else {
+			lines = append(lines, "  "+label)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m *dashboardModel) designView() string {
@@ -544,6 +555,80 @@ func (m *dashboardModel) sessionDetailView() string {
 				fmt.Sprintf("(%d%%)  j/k scroll · Esc close", pct))))
 	} else {
 		sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(t.Muted).Render("Esc close") + "\n")
+	}
+	return sb.String()
+}
+
+// qaFileDetailView renders a .feature file as a full-screen overlay.
+func (m *dashboardModel) qaFileDetailView() string {
+	t := m.theme
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  " + filepath.Base(m.qaFileTitle))
+	path := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + m.qaFileTitle)
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
+
+	visible := m.height - 14
+	if visible < 4 {
+		visible = 4
+	}
+	end := m.qaFileScroll + visible
+	if end > len(m.qaFileLines) {
+		end = len(m.qaFileLines)
+	}
+	window := m.qaFileLines[m.qaFileScroll:end]
+
+	var sb strings.Builder
+	sb.WriteString(title + "\n" + path + "\n" + sep + "\n\n")
+	for _, l := range window {
+		sb.WriteString("  " + colorizeGherkin(l, t) + "\n")
+	}
+
+	total := len(m.qaFileLines)
+	if total > visible {
+		pct := (m.qaFileScroll * 100) / (total - visible)
+		sb.WriteString(fmt.Sprintf("\n  %s\n",
+			lipgloss.NewStyle().Foreground(t.Muted).Render(
+				fmt.Sprintf("(%d%%)  j/k scroll · r run test · Esc close", pct))))
+	} else {
+		sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(t.Muted).Render("r run test · Esc close") + "\n")
+	}
+	return sb.String()
+}
+
+// prDetailView renders `gh pr view` output as a full-screen overlay.
+func (m *dashboardModel) prDetailView() string {
+	t := m.theme
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  " + m.prDetailTitle)
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
+
+	if m.prDetailLoading {
+		return title + "\n" + sep + "\n\n  " +
+			lipgloss.NewStyle().Foreground(t.Muted).Render("loading…") + "\n"
+	}
+
+	visible := m.height - 14
+	if visible < 4 {
+		visible = 4
+	}
+	end := m.prDetailScroll + visible
+	if end > len(m.prDetailLines) {
+		end = len(m.prDetailLines)
+	}
+	window := m.prDetailLines[m.prDetailScroll:end]
+
+	var sb strings.Builder
+	sb.WriteString(title + "\n" + sep + "\n\n")
+	for _, l := range window {
+		sb.WriteString("  " + lipgloss.NewStyle().Foreground(t.Foreground).Render(l) + "\n")
+	}
+
+	total := len(m.prDetailLines)
+	if total > visible {
+		pct := (m.prDetailScroll * 100) / (total - visible)
+		sb.WriteString(fmt.Sprintf("\n  %s\n",
+			lipgloss.NewStyle().Foreground(t.Muted).Render(
+				fmt.Sprintf("(%d%%)  j/k scroll · o open in browser · Esc close", pct))))
+	} else {
+		sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(t.Muted).Render("o open in browser · Esc close") + "\n")
 	}
 	return sb.String()
 }

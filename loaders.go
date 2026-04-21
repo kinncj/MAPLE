@@ -640,12 +640,13 @@ func loadOpenCodeSessionLines(sessionID string) []string {
 	return lines
 }
 
-func loadQA() (files int, scenarios int) {
+func loadQA() (files int, scenarios int, paths []string) {
 	entries, err := filepath.Glob("tests/features/*.feature")
 	if err != nil {
 		return
 	}
 	files = len(entries)
+	paths = entries
 	for _, p := range entries {
 		data, err := os.ReadFile(p)
 		if err != nil {
@@ -659,6 +660,21 @@ func loadQA() (files int, scenarios int) {
 		}
 	}
 	return
+}
+
+func loadPRDetailCmd(number int, title string) tea.Cmd {
+	return func() tea.Msg {
+		ghPath, err := exec.LookPath("gh")
+		if err != nil {
+			return prDetailLoadedMsg{err: "gh not found", title: title}
+		}
+		out, err := exec.Command(ghPath, "pr", "view", fmt.Sprintf("%d", number)).Output()
+		if err != nil {
+			return prDetailLoadedMsg{err: strings.TrimSpace(string(out)), title: title}
+		}
+		lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+		return prDetailLoadedMsg{lines: lines, title: fmt.Sprintf("#%d %s", number, title)}
+	}
 }
 
 func loadDesignTree() []string {

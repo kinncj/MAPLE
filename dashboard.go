@@ -74,9 +74,20 @@ type prsLoadedMsg struct {
 	err   string
 }
 
+type prDetailLoadedMsg struct {
+	lines []string
+	title string
+	err   string
+}
+
 type dashRefreshMsg struct{}
 type statusClearMsg struct{}
 type dashTickMsg struct{} // periodic local-data refresh (no network)
+
+type qaTestResultMsg struct {
+	output string
+	failed bool
+}
 
 const dashTickInterval = 5 * time.Second
 
@@ -130,6 +141,8 @@ type dashboardModel struct {
 
 	qaFeatures  int
 	qaScenarios int
+	qaFiles     []string // paths to .feature files
+	qaFileCur   int
 
 	designTree []string
 	designCur  int
@@ -154,6 +167,19 @@ type dashboardModel struct {
 	sessionTitle  string
 	sessionSource string
 
+	// QA feature file overlay
+	showQAFile   bool
+	qaFileLines  []string
+	qaFileScroll int
+	qaFileTitle  string
+
+	// PR detail overlay
+	showPRDetail    bool
+	prDetailLines   []string
+	prDetailScroll  int
+	prDetailTitle   string
+	prDetailLoading bool
+
 	exitAction dashAction
 }
 
@@ -173,13 +199,14 @@ func newDashboard(t Theme, noAnimate bool) *dashboardModel {
 func (m *dashboardModel) reload() {
 	m.stories = loadStories()
 	m.agents = loadAgents()
-	m.qaFeatures, m.qaScenarios = loadQA()
+	m.qaFeatures, m.qaScenarios, m.qaFiles = loadQA()
 	m.designTree = loadDesignTree()
 	m.logLines = loadLogLines(200)
 	m.projectName = loadProjectName()
 	// clamp cursors
 	m.clampCursor(&m.storiesCur, len(m.stories))
 	m.clampCursor(&m.agentsCur, len(m.agents))
+	m.clampCursor(&m.qaFileCur, len(m.qaFiles))
 	m.clampCursor(&m.designCur, len(m.designTree))
 	m.clampCursor(&m.logsCur, len(m.logLines))
 }
@@ -225,6 +252,17 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prList = msg.items
 		m.clampCursor(&m.prsCur, len(m.prList))
 
+	case prDetailLoadedMsg:
+		m.prDetailLoading = false
+		if msg.err != "" {
+			m.prDetailLines = []string{"error: " + msg.err}
+		} else {
+			m.prDetailLines = msg.lines
+		}
+		m.prDetailTitle = msg.title
+		m.prDetailScroll = 0
+		m.showPRDetail = true
+
 	case dashRefreshMsg:
 		m.reload()
 		m.prsLoading = true
@@ -233,6 +271,12 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case dashTickMsg:
 		m.reload()
 		return m, dashTickCmd() // re-schedule; tea.Tick does not repeat
+
+	case qaTestResultMsg:
+		if msg.failed {
+			return m, m.setStatus("✗ "+msg.output, true)
+		}
+		return m, m.setStatus("✓ "+msg.output, false)
 
 	case statusClearMsg:
 		m.status = ""
@@ -470,6 +514,63 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// QA feature file overlay
+	if m.showQAFile {
+		maxScroll := len(m.qaFileLines) - (m.height - 14)
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		switch k {
+		case "j", "down":
+			if m.qaFileScroll < maxScroll {
+				m.qaFileScroll++
+			}
+		case "k", "up":
+			if m.qaFileScroll > 0 {
+				m.qaFileScroll--
+			}
+		case "g":
+			m.qaFileScroll = 0
+		case "G":
+			m.qaFileScroll = maxScroll
+		case "r":
+			m.showQAFile = false
+			return m, m.runFeatureTestCmd(m.qaFileTitle)
+		case "q", "esc", "b", "ctrl+c":
+			m.showQAFile = false
+		}
+		return m, nil
+	}
+
+	// PR detail overlay
+	if m.showPRDetail {
+		maxScroll := len(m.prDetailLines) - (m.height - 14)
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		switch k {
+		case "j", "down":
+			if m.prDetailScroll < maxScroll {
+				m.prDetailScroll++
+			}
+		case "k", "up":
+			if m.prDetailScroll > 0 {
+				m.prDetailScroll--
+			}
+		case "g":
+			m.prDetailScroll = 0
+		case "G":
+			m.prDetailScroll = maxScroll
+		case "o":
+			if len(m.prList) > 0 && m.prsCur < len(m.prList) {
+				_ = exec.Command("gh", "pr", "view", fmt.Sprintf("%d", m.prList[m.prsCur].number), "--web").Start()
+			}
+		case "q", "esc", "b", "ctrl+c":
+			m.showPRDetail = false
+		}
+		return m, nil
+	}
+
 	// Global keys
 	switch k {
 	case "ctrl+c":
@@ -503,10 +604,6 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.installedErr = ""
 		m.installedLoading = true
 		return m, listInstalledSkillsCmd()
-	case "r":
-		m.reload()
-		m.prsLoading = true
-		return m, tea.Batch(loadPRsCmd(), m.setStatus("✓ reloading…", false))
 	case "u":
 		m.exitAction = dashActionUpdate
 		return m, tea.Quit
@@ -550,7 +647,27 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.openStoryDetail(m.stories[m.storiesCur])
 		} else if m.focus == paneAgents && m.agentsCur < len(m.agents) {
 			m.openSessionDetail(m.agents[m.agentsCur])
+		} else if m.focus == paneQA && m.qaFileCur < len(m.qaFiles) {
+			m.openQAFile(m.qaFiles[m.qaFileCur])
+		} else if m.focus == panePRs && m.prsCur < len(m.prList) {
+			pr := m.prList[m.prsCur]
+			m.prDetailLoading = true
+			m.prDetailLines = nil
+			m.showPRDetail = false
+			return m, loadPRDetailCmd(pr.number, pr.title)
 		}
+	case "o":
+		if m.focus == panePRs && m.prsCur < len(m.prList) {
+			_ = exec.Command("gh", "pr", "view", fmt.Sprintf("%d", m.prList[m.prsCur].number), "--web").Start()
+			return m, m.setStatus("opening PR in browser…", false)
+		}
+	case "r":
+		if m.focus == paneQA {
+			return m, m.runFeatureTestCmd("")
+		}
+		m.reload()
+		m.prsLoading = true
+		return m, tea.Batch(loadPRsCmd(), m.setStatus("✓ reloading…", false))
 	case "j", "down":
 		m.moveCursorDown()
 	case "k", "up":
@@ -598,6 +715,10 @@ func (m *dashboardModel) moveCursorDown() {
 			if m.prsCur < len(m.prList)-1 {
 				m.prsCur++
 			}
+		case paneQA:
+			if m.qaFileCur < len(m.qaFiles)-1 {
+				m.qaFileCur++
+			}
 		}
 	}
 }
@@ -626,6 +747,10 @@ func (m *dashboardModel) moveCursorUp() {
 			if m.prsCur > 0 {
 				m.prsCur--
 			}
+		case paneQA:
+			if m.qaFileCur > 0 {
+				m.qaFileCur--
+			}
 		}
 	}
 }
@@ -644,6 +769,8 @@ func (m *dashboardModel) moveCursorTop() {
 			m.agentsCur = 0
 		case panePRs:
 			m.prsCur = 0
+		case paneQA:
+			m.qaFileCur = 0
 		}
 	}
 }
@@ -671,6 +798,10 @@ func (m *dashboardModel) moveCursorBottom() {
 		case panePRs:
 			if len(m.prList) > 0 {
 				m.prsCur = len(m.prList) - 1
+			}
+		case paneQA:
+			if len(m.qaFiles) > 0 {
+				m.qaFileCur = len(m.qaFiles) - 1
 			}
 		}
 	}
@@ -758,6 +889,12 @@ func (m *dashboardModel) View() string {
 	if m.showStory {
 		return m.header() + m.storyDetailView() + m.footer()
 	}
+	if m.showQAFile {
+		return m.header() + m.qaFileDetailView() + m.footer()
+	}
+	if m.showPRDetail || m.prDetailLoading {
+		return m.header() + m.prDetailView() + m.footer()
+	}
 	if m.showHelp {
 		return m.header() + m.helpView() + m.footer()
 	}
@@ -781,7 +918,7 @@ func (m *dashboardModel) header() string {
 
 func (m *dashboardModel) footer() string {
 	t := m.theme
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [j/k] nav · [Enter] open story · [n] new · [u] update · [F] skills.sh · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [j/k] nav · [Enter] open · [o] browser (PR) · [r] run tests (QA) · [n] new · [u] update · [F] skills · [?] help · [q] quit"
 	if m.showSkills {
 		if !m.skillsTabSearch {
 			if m.installedLoading {
@@ -802,6 +939,10 @@ func (m *dashboardModel) footer() string {
 		keys = "  [j/k] scroll · [Esc] close"
 	} else if m.showStory {
 		keys = "  [j/k] scroll · [e] re-edit · [Esc] close"
+	} else if m.showQAFile {
+		keys = "  [j/k] scroll · [r] run test · [Esc] close"
+	} else if m.showPRDetail || m.prDetailLoading {
+		keys = "  [j/k] scroll · [o] open in browser · [Esc] close"
 	} else if m.searchMode {
 		keys = "  /" + m.searchBuf + "█"
 	} else if m.cmdMode {
@@ -864,6 +1005,47 @@ func (m *dashboardModel) narrowView() string {
 	}
 	lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  q quit"))
 	return strings.Join(lines, "\n")
+}
+
+// openQAFile loads a .feature file into the QA file overlay.
+func (m *dashboardModel) openQAFile(path string) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		m.status = "✗ could not read " + path
+		m.statusErr = true
+		return
+	}
+	m.qaFileLines = strings.Split(string(raw), "\n")
+	m.qaFileScroll = 0
+	m.qaFileTitle = path
+	m.showQAFile = true
+}
+
+// runFeatureTestCmd runs the test suite. If path is non-empty, runs only that file.
+func (m *dashboardModel) runFeatureTestCmd(path string) tea.Cmd {
+	return func() tea.Msg {
+		var cmd *exec.Cmd
+		if path != "" {
+			cmd = exec.Command("make", "test-features", "FEATURE="+path)
+		} else {
+			cmd = exec.Command("make", "test-features")
+		}
+		out, err := cmd.CombinedOutput()
+		summary := strings.TrimSpace(string(out))
+		// Keep last 72 chars of output as the status summary
+		lines := strings.Split(summary, "\n")
+		last := strings.TrimSpace(lines[len(lines)-1])
+		if last == "" && len(lines) > 1 {
+			last = strings.TrimSpace(lines[len(lines)-2])
+		}
+		if len(last) > 72 {
+			last = "…" + last[len(last)-72:]
+		}
+		if last == "" {
+			last = "tests ran"
+		}
+		return qaTestResultMsg{output: last, failed: err != nil}
+	}
 }
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
