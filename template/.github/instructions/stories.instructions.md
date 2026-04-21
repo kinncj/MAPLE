@@ -4,7 +4,7 @@ applyTo: "docs/stories/**/*.md"
 
 # Story File Rules
 
-Every story file must include valid YAML frontmatter. Required fields:
+Every story file must include valid YAML frontmatter. Required fields: `id`, `title`, `epic`, `priority`, `ui`, `adr_required`, `labels`. Optional: `milestone`, `issue_number`, `issue_url`, `created_at`.
 
 ```yaml
 ---

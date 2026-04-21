@@ -12,6 +12,7 @@ Default agent: `@orchestrator`. It never writes code — delegates everything to
 | `/bugfix {description}` | Reproduce → fix → validate → CHANGELOG |
 | `/validate` | Run full test suite |
 | `/tdd {requirement}` | Single RED → GREEN → REFACTOR cycle |
+| `/superpower-runner {name}` | Named workflow: `new-ui-feature`, `api-endpoint`, `bugfix`, `design-refresh` |
 | `/ship-safe` | Run `npx ship-safe audit .` security scan before shipping |
 
 ## Specialist Agents
@@ -84,6 +85,7 @@ bash scripts/sdlc/spec-kit-gate.sh
 bash scripts/sdlc/validate-frontmatter.sh $(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null)
 bash scripts/sdlc/design-approved-gate.sh $(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null)
 bash scripts/sdlc/a11y-gate.sh $(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null)
+bash scripts/sdlc/adr-required-gate.sh
 # ship-safe is optional — only run if ENABLE_SHIP_SAFE=true is set
 [ "${ENABLE_SHIP_SAFE}" = "true" ] && npx ship-safe audit .
 ```
@@ -93,7 +95,7 @@ If any gate fails, **do not commit**. Report the failure and wait for the human 
 ## Story Files (`docs/stories/**/*.md`)
 
 Every story file must have valid YAML frontmatter:
-- `id`, `title`, `epic`, `priority`, `ui`, `adr_required`, `milestone`, `labels`
+- `id`, `title`, `epic`, `priority`, `ui`, `adr_required`, `labels` (milestone optional, nullable)
 - `ui: true` for ANY story involving a rendered UI element (pages, cards, modals, forms, navigation)
 - `priority` must be `critical | high | medium | low`
 
