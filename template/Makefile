@@ -112,6 +112,8 @@ test-features-scaffold:
 	@echo "  npx cucumber-js --dry-run --format usage"
 	@echo "  behave --dry-run"
 
+# ─── BEGIN MAPLE MANAGED — updated by `maple update`, do not hand-edit ────────
+
 ## Print per-story agent invocation counts and estimated costs
 ## Reads .claude/logs/skills.jsonl
 sdlc-report:
@@ -157,3 +159,5 @@ help:
 	@echo "  sdlc-report            - Print per-story cost + invocation report"
 	@echo "  sdlc-rotate-logs       - Rotate .claude/logs/ (keep last 5 compressed)"
 	@echo "  sdlc-branch-protection - Apply branch protection rules to main"
+
+# ─── END MAPLE MANAGED ────────────────────────────────────────────────────────

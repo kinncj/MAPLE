@@ -93,13 +93,14 @@ type dashboardModel struct {
 	focus      dashPane
 	fullscreen dashPane // paneDesign or paneLogs, -1 = none
 	showHelp      bool
-	showSkills    bool
-	skillsQuery   string
-	skillsItems   []skillRow
-	skillsCur     int
-	skillsLoading bool
-	skillsErr     string
-	npxPath       string // cached npx binary path
+	showSkills     bool
+	skillsQuery    string
+	skillsItems    []skillRow
+	skillsCur      int
+	skillsLoading  bool
+	skillsErr      string
+	skillsSearched bool // true after first search attempt
+	npxPath        string // cached npx binary path
 	cmdMode       bool
 	cmdBuf     string
 	searchMode bool
@@ -220,6 +221,7 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case skillsSearchedMsg:
 		m.skillsLoading = false
+		m.skillsSearched = msg.searched
 		if msg.err != nil {
 			m.skillsErr = msg.err.Error()
 		} else {
@@ -411,6 +413,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.skillsItems = nil
 		m.skillsCur = 0
 		m.skillsErr = ""
+		m.skillsSearched = false
 	case "r":
 		m.reload()
 		m.prsLoading = true
@@ -992,8 +995,10 @@ func (m *dashboardModel) skillsBrowserView() string {
 		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  searching…"))
 	} else if m.skillsErr != "" {
 		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Error).Render("  "+m.skillsErr))
+	} else if len(m.skillsItems) == 0 && m.skillsSearched {
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  no results — try a different query"))
 	} else if len(m.skillsItems) == 0 {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  type a query and press Enter to search skills.sh"))
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  type a query and press Enter to search"))
 	} else {
 		cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
 		for i, sk := range m.skillsItems {

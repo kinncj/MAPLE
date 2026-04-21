@@ -230,11 +230,22 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 		return logs, err
 	}
 
-	// Always copy: docs structure, Makefile, scripts, .github
+	// Makefile gets special treatment: only the MAPLE-managed section is updated
+	// on force (update) so user customisations are preserved.
+	makefileDst := filepath.Join(cwd, "Makefile")
+	if force {
+		if err := patchMakefile(fsys, makefileDst); err != nil {
+			log("✗ Makefile (patch): " + err.Error())
+		} else {
+			log("↺ Makefile (MAPLE section updated)")
+		}
+	}
+
+	// Always copy: docs structure, scripts, .github (Makefile handled above)
 	pairs := []struct{ src, dst string }{
 		{"docs", "docs"},
 		{"scripts", "scripts"},
-		{"Makefile", "Makefile"},
+		{"Makefile", "Makefile"}, // skipped on first copy if already exists when force=false
 		{"lefthook.yml", "lefthook.yml"},
 		{".github", ".github"},
 	}
@@ -374,6 +385,49 @@ func writeFromFS(fsys fs.FS, src, dst string, force bool) error {
 		_ = os.Chmod(dst, 0755)
 	}
 	return nil
+}
+
+// patchMakefile updates only the MAPLE-managed section of the user's Makefile.
+// It reads the template Makefile to extract the section between the MAPLE markers,
+// then replaces that section in the user's existing file (or appends it if absent).
+func patchMakefile(fsys fs.FS, dstPath string) error {
+	const beginMarker = "# ─── BEGIN MAPLE MANAGED"
+	const endMarker = "# ─── END MAPLE MANAGED"
+
+	// Read template MAPLE section
+	tmplBytes, err := fs.ReadFile(fsys, "Makefile")
+	if err != nil {
+		return fmt.Errorf("read template Makefile: %w", err)
+	}
+	tmpl := string(tmplBytes)
+	tStart := strings.Index(tmpl, beginMarker)
+	tEnd := strings.Index(tmpl, endMarker)
+	if tStart < 0 || tEnd < 0 {
+		return fmt.Errorf("MAPLE markers not found in template Makefile")
+	}
+	mapleSection := tmpl[tStart : tEnd+len(endMarker)]
+
+	// Read existing user Makefile (if any)
+	existing, err := os.ReadFile(dstPath)
+	if os.IsNotExist(err) {
+		// First time — write the full template
+		return os.WriteFile(dstPath, tmplBytes, 0644)
+	}
+	if err != nil {
+		return err
+	}
+	cur := string(existing)
+
+	eStart := strings.Index(cur, beginMarker)
+	eEnd := strings.Index(cur, endMarker)
+	if eStart >= 0 && eEnd >= 0 {
+		// Replace existing MAPLE section
+		cur = cur[:eStart] + mapleSection + cur[eEnd+len(endMarker):]
+	} else {
+		// Append MAPLE section (not present yet)
+		cur = strings.TrimRight(cur, "\n") + "\n\n" + mapleSection + "\n"
+	}
+	return os.WriteFile(dstPath, []byte(cur), 0644)
 }
 
 func projectConfigYAML(name string) string {

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,13 +18,20 @@ type skillRow struct {
 }
 
 type skillsSearchedMsg struct {
-	items []skillRow
-	err   error
+	items    []skillRow
+	err      error
+	searched bool // true = search ran (even if 0 results)
 }
 
 type skillInstalledMsg struct {
 	pkg string
 	err error
+}
+
+var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHF]`)
+
+func stripANSI(s string) string {
+	return ansiEscape.ReplaceAllString(s, "")
 }
 
 func searchSkillsCmd(query string) tea.Cmd {
@@ -30,19 +40,32 @@ func searchSkillsCmd(query string) tea.Cmd {
 		if query != "" {
 			args = append(args, query)
 		}
-		out, err := exec.Command("npx", args...).Output()
-		if err != nil {
-			return skillsSearchedMsg{err: fmt.Errorf("npx skills find: %s", strings.TrimSpace(err.Error()))}
+		cmd := exec.Command("npx", args...)
+		// Disable colors so output is clean ASCII for parsing
+		cmd.Env = append(os.Environ(), "NO_COLOR=1", "FORCE_COLOR=0")
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		_ = cmd.Run() // ignore exit code — parse whatever stdout we got
+
+		items := parseSkillsOutput(stripANSI(stdout.String()))
+		if len(items) == 0 {
+			errStr := strings.TrimSpace(stderr.String())
+			if errStr != "" {
+				return skillsSearchedMsg{searched: true, err: fmt.Errorf("%s", stripANSI(errStr))}
+			}
 		}
-		return skillsSearchedMsg{items: parseSkillsOutput(string(out))}
+		return skillsSearchedMsg{items: items, searched: true}
 	}
 }
 
 func installSkillCmd(pkg string) tea.Cmd {
 	return func() tea.Msg {
-		out, err := exec.Command("npx", "--yes", "skills", "add", pkg, "--all", "-y").CombinedOutput()
+		cmd := exec.Command("npx", "--yes", "skills", "add", pkg, "--all", "-y")
+		cmd.Env = append(os.Environ(), "NO_COLOR=1", "FORCE_COLOR=0")
+		out, err := cmd.CombinedOutput()
 		if err != nil {
-			msg := strings.TrimSpace(string(out))
+			msg := strings.TrimSpace(stripANSI(string(out)))
 			if msg == "" {
 				msg = err.Error()
 			}
@@ -52,7 +75,7 @@ func installSkillCmd(pkg string) tea.Cmd {
 	}
 }
 
-// parseSkillsOutput parses the plain-text output of `npx skills find <query>`.
+// parseSkillsOutput parses the output of `npx skills find <query>`.
 // Each result looks like:
 //
 //	vercel-labs/agent-browser@dogfood 21.1K installs
@@ -73,7 +96,7 @@ func parseSkillsOutput(s string) []skillRow {
 			lastWasPkg = false
 			continue
 		}
-		// "owner/repo@skill N installs"
+		// "owner/repo@skill N installs" or "owner/repo@skill N,NNN installs"
 		parts := strings.Fields(line)
 		if len(parts) >= 3 && parts[len(parts)-1] == "installs" && strings.Contains(parts[0], "/") {
 			rows = append(rows, skillRow{
