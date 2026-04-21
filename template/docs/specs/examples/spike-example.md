@@ -100,7 +100,7 @@ git push origin --delete spike/perf-audit-export-query
 ```
 
 If the spike leads to a feature, create a new story (non-spike) and use the
-findings to write an informed `PROBLEM.md` for Spec-Kit.
+findings to inform the `@spec-kit` agent when writing the Gherkin story file.
 
 ---
 

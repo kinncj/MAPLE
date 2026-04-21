@@ -31,3 +31,8 @@ var/*
 .swarm/squad
 maple
 .maple.json
+
+# Build artifact — tui/template is a copy of ./template for go:embed, never commit it
+tui/template/
+# Stale leftover from running maple init inside this repo's template/ dir
+template/template/

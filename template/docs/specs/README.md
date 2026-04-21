@@ -1,29 +1,28 @@
 # docs/specs/
 
-Feature specification artifacts live here. One subdirectory per epic+feature, produced by the `spec-kit` agent before DISCOVER.
+Feature specification artifacts live here. Subdirectories hold architecture, ADRs, contracts, and phase artifacts produced by architect and other agents.
 
 ## Structure
 
 ```
 docs/specs/
 └── <epic>-<feature-slug>/
-    ├── PROBLEM.md    # Problem statement — user voice, no solution
-    ├── SPEC.md       # Formal specification — goals, non-goals, acceptance criteria
-    ├── PLAN.md       # Technical plan — approach, ADRs, risks, test strategy
-    └── TASKS.md      # Task decomposition → story files
+    ├── architecture.md          # System design — 10 sections, Mermaid diagrams
+    ├── contracts/
+    │   ├── openapi.yaml         # API contract
+    │   ├── events.md            # Event schema
+    │   ├── schema.sql           # Database schema
+    │   └── seed-data.sql        # Test data seeds
+    └── threat-model.md          # STRIDE threat model
 ```
 
-## Progression
+## Source of Truth
 
-Each file must be `status: approved` before the next is created.
-
-```
-PROBLEM → SPEC → PLAN → TASKS → story files → DISCOVER
-```
+The **story file** in `docs/stories/` is the spec. Architecture artifacts here are produced by the `@architect` agent in Phase 2 after the story is approved.
 
 ## Key Rules
 
+- The `@spec-kit` agent writes story files directly to `docs/stories/` — not here.
+- Architecture docs live here after ARCHITECT phase.
 - Spec-Kit is **skipped** for `spike/*` and `chore/*` branches and `type:bug` stories.
-- TASKS.md emits story files into `docs/stories/` — do not create story files manually for spec-kit features.
-- Once `stories_emitted: true` is set in TASKS.md, do not re-emit.
-- All four files are committed to the repo and linked to the feature's GitHub Issue.
+- ADRs live in `docs/architecture/` — use `docs/architecture/adr-template.md`.
