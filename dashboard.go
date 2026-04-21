@@ -1419,41 +1419,227 @@ func loadPRsCmd() tea.Cmd {
 }
 
 func loadAgents() []agentRow {
-	data, err := os.ReadFile(".claude/logs/skills.jsonl")
+	var rows []agentRow
+	seen := map[string]bool{}
+	add := func(r agentRow) {
+		key := r.agent + "|" + r.op + "|" + r.file
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		rows = append(rows, r)
+	}
+
+	// Primary: MAPLE skills log
+	if data, err := os.ReadFile(".claude/logs/skills.jsonl"); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		for i := len(lines) - 1; i >= 0; i-- {
+			line := strings.TrimSpace(lines[i])
+			if line == "" {
+				continue
+			}
+			var e map[string]interface{}
+			if err := json.Unmarshal([]byte(line), &e); err != nil {
+				continue
+			}
+			agent, _ := e["agent"].(string)
+			if agent == "" {
+				agent, _ = e["skill"].(string)
+			}
+			if agent == "" {
+				continue
+			}
+			add(agentRow{
+				agent: agent,
+				op:    str(e["op"]),
+				file:  str(e["file"]),
+				ts:    str(e["ts"]),
+			})
+		}
+	}
+
+	// Secondary: Claude Code native session logs for the current project
+	rows = append(rows, loadClaudeSessionActivity()...)
+	// Re-deduplicate after merge (loadClaudeSessionActivity has its own seen set
+	// but timestamps may differ from skills.jsonl entries for the same op)
+	final := rows[:0]
+	finalSeen := map[string]bool{}
+	for _, r := range rows {
+		key := r.agent + "|" + r.op + "|" + r.file
+		if finalSeen[key] {
+			continue
+		}
+		finalSeen[key] = true
+		final = append(final, r)
+		if len(final) >= 12 {
+			break
+		}
+	}
+	return final
+}
+
+// loadClaudeSessionActivity reads Claude Code's native session JSONL for the
+// current working directory and extracts recent tool-use activity.
+func loadClaudeSessionActivity() []agentRow {
+	cwd, err := os.Getwd()
 	if err != nil {
 		return nil
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+
+	// Claude Code encodes the project path by replacing every "/" with "-"
+	encoded := strings.ReplaceAll(cwd, "/", "-")
+	projectDir := filepath.Join(home, ".claude", "projects", encoded)
+
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		return nil
+	}
+
+	// Collect JSONL files sorted newest-first by ModTime
+	type mtime struct {
+		path string
+		t    time.Time
+	}
+	var files []mtime
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, mtime{filepath.Join(projectDir, e.Name()), info.ModTime()})
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].t.After(files[j].t) })
+
 	var rows []agentRow
 	seen := map[string]bool{}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	// Walk backward — most recent first
-	for i := len(lines) - 1; i >= 0 && len(rows) < 8; i-- {
-		line := strings.TrimSpace(lines[i])
-		if line == "" {
+
+	for _, f := range files {
+		if len(rows) >= 8 {
+			break
+		}
+		data, err := os.ReadFile(f.path)
+		if err != nil {
 			continue
 		}
-		var entry map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		// Walk backward — most recent first
+		for i := len(lines) - 1; i >= 0 && len(rows) < 8; i-- {
+			line := strings.TrimSpace(lines[i])
+			if line == "" {
+				continue
+			}
+			var e map[string]interface{}
+			if err := json.Unmarshal([]byte(line), &e); err != nil {
+				continue
+			}
+			r, ok := claudeEntryToRow(e)
+			if !ok {
+				continue
+			}
+			key := r.agent + "|" + r.op + "|" + r.file
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			rows = append(rows, r)
 		}
-		agent, _ := entry["agent"].(string)
-		if agent == "" {
-			agent, _ = entry["skill"].(string)
-		}
-		if agent == "" {
-			continue
-		}
-		op, _ := entry["op"].(string)
-		file, _ := entry["file"].(string)
-		ts, _ := entry["ts"].(string)
-		key := agent + "|" + op
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		rows = append(rows, agentRow{agent: agent, op: op, file: file, ts: ts})
 	}
 	return rows
+}
+
+// claudeEntryToRow converts one Claude Code session JSONL entry into an agentRow.
+func claudeEntryToRow(e map[string]interface{}) (agentRow, bool) {
+	ts, _ := e["timestamp"].(string)
+	if ts != "" && len(ts) > 19 {
+		ts = ts[:19] // trim to "2006-01-02T15:04:05"
+	}
+
+	switch e["type"] {
+	case "ai-title":
+		title, _ := e["aiTitle"].(string)
+		if title == "" {
+			return agentRow{}, false
+		}
+		return agentRow{agent: "claude", op: title, ts: ts}, true
+
+	case "last-prompt":
+		prompt, _ := e["lastPrompt"].(string)
+		if prompt == "" {
+			return agentRow{}, false
+		}
+		if len(prompt) > 48 {
+			prompt = prompt[:48] + "…"
+		}
+		return agentRow{agent: "user", op: prompt, ts: ts}, true
+
+	case "user":
+		// Sub-agent tool result entries carry agentType
+		msg, _ := e["message"].(map[string]interface{})
+		if msg == nil {
+			return agentRow{}, false
+		}
+		content, _ := msg["content"].([]interface{})
+		for _, c := range content {
+			cm, _ := c.(map[string]interface{})
+			if cm == nil {
+				continue
+			}
+			agentType, _ := e["agentType"].(string)
+			if agentType == "" {
+				agentType, _ = cm["agentType"].(string)
+			}
+			if agentType != "" {
+				toolCount := ""
+				if v, ok := e["totalToolUseCount"].(float64); ok {
+					toolCount = fmt.Sprintf("%d tools", int(v))
+				}
+				return agentRow{agent: agentType, op: toolCount, ts: ts}, true
+			}
+		}
+
+	case "assistant":
+		msg, _ := e["message"].(map[string]interface{})
+		if msg == nil {
+			return agentRow{}, false
+		}
+		content, _ := msg["content"].([]interface{})
+		for _, c := range content {
+			cm, _ := c.(map[string]interface{})
+			if cm == nil || cm["type"] != "tool_use" {
+				continue
+			}
+			toolName, _ := cm["name"].(string)
+			if toolName == "" {
+				continue
+			}
+			file := ""
+			if inp, ok := cm["input"].(map[string]interface{}); ok {
+				for _, k := range []string{"file_path", "path", "command"} {
+					if v, _ := inp[k].(string); v != "" {
+						file = v
+						if len(file) > 32 {
+							file = "…" + file[len(file)-32:]
+						}
+						break
+					}
+				}
+			}
+			return agentRow{agent: "claude", op: toolName, file: file, ts: ts}, true
+		}
+	}
+	return agentRow{}, false
+}
+
+func str(v interface{}) string {
+	s, _ := v.(string)
+	return s
 }
 
 func loadQA() (files int, scenarios int) {
