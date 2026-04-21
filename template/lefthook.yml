@@ -5,23 +5,29 @@
 pre-push:
   parallel: true
   commands:
-    spec-kit-gate:
-      run: scripts/sdlc/spec-kit-gate.sh
-      fail_text: "Spec-Kit gate failed — PROBLEM/SPEC/PLAN/TASKS not all approved."
+    gherkin-gate:
+      run: bash scripts/sdlc/spec-kit-gate.sh
+      fail_text: "Gherkin gate failed — story files must contain Scenario: blocks."
 
     feature-frontmatter:
-      glob: "docs/stories/*.md"
-      run: scripts/sdlc/validate-frontmatter.sh {staged_files}
+      run: |
+        STORIES=$(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null || true)
+        [ -z "$STORIES" ] && exit 0
+        bash scripts/sdlc/validate-frontmatter.sh $STORIES
       fail_text: "Story frontmatter invalid — check required fields."
 
     design-approved:
-      glob: "docs/stories/*.md"
-      run: scripts/sdlc/design-approved-gate.sh {staged_files}
+      run: |
+        STORIES=$(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null || true)
+        [ -z "$STORIES" ] && exit 0
+        bash scripts/sdlc/design-approved-gate.sh $STORIES
       fail_text: "Design gate failed — wireframe or mockup not approved for ui:true story."
 
     a11y-required:
-      glob: "docs/stories/*.md"
-      run: scripts/sdlc/a11y-gate.sh {staged_files}
+      run: |
+        STORIES=$(find docs/stories -name "*.md" ! -name "_template.md" 2>/dev/null || true)
+        [ -z "$STORIES" ] && exit 0
+        bash scripts/sdlc/a11y-gate.sh $STORIES
       fail_text: "A11y gate failed — WCAG 2.2 AA audit not passed for ui:true story."
 
 pre-commit:
@@ -35,4 +41,3 @@ post-merge:
   commands:
     rotate-logs:
       run: bash scripts/sdlc/rotate-logs.sh
-

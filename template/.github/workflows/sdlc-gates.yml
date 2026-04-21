@@ -19,11 +19,11 @@ jobs:
           bash scripts/sdlc/validate-frontmatter.sh $STORIES
 
   spec-kit:
-    name: Spec-Kit progression
+    name: Gherkin story validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate spec-kit progression
+      - name: Validate Gherkin scenarios in story files
         run: bash scripts/sdlc/spec-kit-gate.sh
 
   design-approved:

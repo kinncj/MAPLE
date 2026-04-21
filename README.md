@@ -106,6 +106,13 @@ Rules, testing, and compliance are enforced, not just encouraged.
 
 ## Quick Start
 
+**Pre-built binaries** — if you don't have Go installed:
+```bash
+curl -fsSL https://raw.githubusercontent.com/kinncj/MAPLE/main/scripts/install.sh | bash
+```
+Installs `maple` to `~/.tools/maple/bin/`. Add that to your `PATH`.
+
+**Build from source**
 ```bash
 git clone https://github.com/kinncj/MAPLE.git maple-src
 cd maple-src
@@ -116,14 +123,6 @@ cd your-project
 maple init
 maple req                   # write requirements → Gherkin story
 ```
-
-Open your project in **Claude Code**, **GitHub Copilot CLI**, or **OpenCode**, then run `/feature "your feature description"`.
-
-> **Pre-built binaries** — if you don't have Go installed:
-> ```bash
-> curl -fsSL https://raw.githubusercontent.com/kinncj/MAPLE/main/scripts/install.sh | bash
-> ```
-> Installs `maple` to `~/.tools/maple/bin/`. Add that to your `PATH`.
 
 ---
 
@@ -149,6 +148,7 @@ maple --help   # all flags
 | `l` | Toggle Skill Logs pane (full-screen) |
 | `F` | Skills marketplace — browse, install, remove via skills.sh |
 | `S` | Run `ship-safe` audit — security/quality scan with colored findings |
+| `x` | Superpowers picker — browse and launch named agent/skill workflows |
 | `o` | Open selected session in its agent (Agents pane: `claude --resume` or `opencode`) |
 | `n` | New story → Gherkin requirements wizard |
 | `u` | Update — re-sync template files (preserves your Makefile edits) |

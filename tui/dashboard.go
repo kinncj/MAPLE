@@ -57,6 +57,7 @@ const (
 	dashActionLabels              // quit and run labels bootstrap
 	dashActionProject             // quit and run project creation
 	dashActionOpenAgent           // quit and exec a session in Claude/OpenCode
+	dashActionSuperpower          // quit and print superpower launch instructions
 )
 
 // ─── Pane IDs ─────────────────────────────────────────────────────────────────
@@ -224,6 +225,11 @@ type dashboardModel struct {
 	shipSafeScroll  int
 	shipSafeRunning bool
 	shipSafeFailed  bool
+
+	// Superpowers overlay
+	showSuperpowers  bool
+	superpowerDefs   []superpowerDef
+	superpowerCur    int
 
 	openTarget []string // command to exec when exitAction == dashActionOpenAgent
 	exitAction dashAction
@@ -652,6 +658,30 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Superpowers picker overlay
+	if m.showSuperpowers {
+		switch k {
+		case "j", "down":
+			if m.superpowerCur < len(m.superpowerDefs)-1 {
+				m.superpowerCur++
+			}
+		case "k", "up":
+			if m.superpowerCur > 0 {
+				m.superpowerCur--
+			}
+		case "enter":
+			if m.superpowerCur < len(m.superpowerDefs) {
+				m.showSuperpowers = false
+				m.openTarget = []string{m.superpowerDefs[m.superpowerCur].name}
+				m.exitAction = dashActionSuperpower
+				return m, tea.Quit
+			}
+		case "q", "esc", "ctrl+c":
+			m.showSuperpowers = false
+		}
+		return m, nil
+	}
+
 	// ShipSafe audit overlay
 	if m.showShipSafe {
 		maxScroll := len(m.shipSafeLines) - (m.height - 15)
@@ -797,6 +827,10 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "S":
 		return m, m.runShipSafeCmd()
+	case "x":
+		m.superpowerDefs = loadSuperpowers()
+		m.superpowerCur = 0
+		m.showSuperpowers = true
 	case "o":
 		if m.focus == paneAgents && m.sessionsCur < len(m.sessions) {
 			s := m.sessions[m.sessionsCur]
@@ -1060,6 +1094,9 @@ func (m *dashboardModel) View() string {
 	if m.showSkills {
 		return m.header() + m.skillsBrowserView() + m.footer()
 	}
+	if m.showSuperpowers {
+		return m.header() + m.superpowersView() + m.footer()
+	}
 
 	// Normal 2×2 dashboard
 	return m.header() + m.gridView() + m.footer()
@@ -1086,8 +1123,10 @@ func (m *dashboardModel) footer() string {
 		return "\n" + lipgloss.NewStyle().Foreground(col).Render("  "+m.status) + "\n"
 	}
 
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open in agent (Sessions)/browser (PR) · [S] ship-safe · [r] run tests (QA) · [F] skills · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open in agent (Sessions)/browser (PR) · [S] ship-safe · [x] superpowers · [F] skills · [?] help · [q] quit"
 	switch {
+	case m.showSuperpowers:
+		keys = "  [j/k] navigate · [Enter] launch · [Esc] close"
 	case m.showSkills:
 		if !m.skillsTabSearch {
 			if m.installedLoading {

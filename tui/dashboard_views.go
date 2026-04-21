@@ -415,6 +415,7 @@ func (m *dashboardModel) helpView() string {
 		{"u", "update — re-sync template files"},
 		{"r", "reload all pane data"},
 		{"F", "Skills marketplace (skills.sh)"},
+		{"x", "Superpowers — browse and launch named workflows"},
 		{"/", "search within active pane"},
 		{"?", "this help overlay"},
 		{"q  /  Ctrl+C", "quit"},
@@ -565,6 +566,54 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// superpowersView renders the superpowers picker as a centered popup.
+func (m *dashboardModel) superpowersView() string {
+	t := m.theme
+
+	title := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("[x] Superpowers") +
+		lipgloss.NewStyle().Foreground(t.Muted).Render("  — named agent/skill workflows")
+
+	var bodyLines []string
+	if len(m.superpowerDefs) == 0 {
+		bodyLines = append(bodyLines,
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  No superpowers found."),
+			"",
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  Run maple init to scaffold .claude/superpowers/."),
+		)
+	} else {
+		for i, sp := range m.superpowerDefs {
+			cursor := "  "
+			nameStyle := lipgloss.NewStyle().Foreground(t.Foreground)
+			descStyle := lipgloss.NewStyle().Foreground(t.Muted)
+			if i == m.superpowerCur {
+				cursor = "▶ "
+				nameStyle = lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
+				descStyle = lipgloss.NewStyle().Foreground(t.Foreground)
+			}
+
+			nameStr := nameStyle.Render(sp.name)
+			stages := fmt.Sprintf("(%d stages)", sp.stageCount)
+			stageStr := lipgloss.NewStyle().Foreground(t.Muted).Render(stages)
+
+			var tagStr string
+			if len(sp.tags) > 0 {
+				tagStr = "  " + lipgloss.NewStyle().Foreground(t.Primary).Render("["+strings.Join(sp.tags, ", ")+"]")
+			}
+
+			bodyLines = append(bodyLines,
+				cursor+nameStr+"  "+stageStr+tagStr,
+				"    "+descStyle.Render(sp.description),
+				"",
+			)
+		}
+	}
+
+	body := strings.Join(bodyLines, "\n")
+	hint := "j/k navigate · Enter launch → prints /superpower-runner command · Esc close"
+
+	return m.popupBox(title, body, hint, t.Accent)
 }
 
 // popupBox renders a centered rounded-border popup over the content area.

@@ -10,17 +10,23 @@ Commands:
 - `/bugfix {description}` — Reproduce → fix → validate → CHANGELOG
 - `/validate` — Run full test suite
 - `/tdd {requirement}` — Single RED → GREEN → REFACTOR cycle
+- `/superpower-runner {name}` — Launch a named workflow (e.g. `new-ui-feature`, `api-endpoint`, `bugfix`, `design-refresh`)
 - `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping (**optional** — disabled by default; enable by setting repo variable `ENABLE_SHIP_SAFE=true`)
 
 Pipeline rules:
 1. Orchestrator never writes code. Delegates to specialist agents.
-2. Tests are written before implementation (TDD enforced).
-3. QA writes failing tests. Implementation agents make them pass.
-4. 3 consecutive failures on any task → escalate to human.
-5. All phases produce artifacts in `docs/specs/{feature-slug}/`.
+2. **A Gherkin story file must exist in `docs/stories/` before any implementation begins.** The story IS the spec.
+3. Tests are written before implementation (TDD enforced).
+4. QA writes failing tests. Implementation agents make them pass.
+5. 3 consecutive failures on any task → escalate to human.
 6. `make test-all` must pass before Phase 8 gate.
 7. Every feature gets a GitHub issue. Agents update it via `gh` CLI.
 8. Conventional Commits: `feat:`, `fix:`, `test:`, `docs:`, `infra:`, `refactor:`.
+
+**Gate enforcement:**
+- No implementation without a Gherkin story file (orchestrator HALTS and REFUSES if absent)
+- `ui: true` stories require approved wireframe + mockup before IMPLEMENT phase
+- A11y audit required after IMPLEMENT for all `ui: true` stories
 
 ---
 
@@ -122,34 +128,9 @@ Makefile    # all CI/CD calls Makefile targets
 ## Skills
 
 Read skills from `.claude/skills/` before executing tasks.
-Key skills: `tdd-workflow`, `playwright-cli`, `github-cli`, `mermaid-diagrams`, `ship-safe`.
+Key skills: `tdd-workflow`, `playwright-cli`, `github-cli`, `mermaid-diagrams`, `superpower-runner`, `ship-safe`.
 
-
-## Agent System
-This project uses an orchestrated multi-agent system.
-Default agent: @orchestrator (never writes code, delegates everything).
-
-## Commands
-- `/feature {description}` — Full 8-phase pipeline
-- `/build-feature {description}` — Alias for /feature
-- `/bugfix {description}` — Reproduce → fix → validate → CHANGELOG
-- `/validate` — Run full test suite
-- `/tdd {requirement}` — Single RED → GREEN → REFACTOR cycle
-- `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping (**optional** — set `ENABLE_SHIP_SAFE=true` to enable)
-
-## Rules
-1. The Orchestrator NEVER writes code. It delegates to specialist agents.
-2. Tests are written BEFORE implementation (TDD enforced).
-3. QA writes failing tests. Implementation agents make them pass.
-4. 3 consecutive failures on any task → escalate to human.
-5. All phases produce artifacts in `docs/specs/{feature-slug}/`.
-6. `make test-all` must pass before Phase 8 gate.
-7. Every feature gets a GitHub issue. Agents update issues via `gh` CLI.
-8. Conventional Commits: `feat:`, `fix:`, `test:`, `docs:`, `infra:`.
 
 ## MCP Servers
-- context7: Library documentation lookup (`use context7` in prompts)
-
-## Skills
-Read skills from `.claude/skills/` before executing tasks.
-Key skills: tdd-workflow, playwright-cli, github-cli, mermaid-diagrams.
+- `context7`: Library documentation lookup (`use context7` in prompts)
+- New MCP servers require an ADR per Appendix C of the PRD.
