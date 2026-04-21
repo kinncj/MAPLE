@@ -1,9 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="kinncj/maple"
+REPO="kinncj/MAPLE"
 INSTALL_DIR="${MAPLE_INSTALL_DIR:-$HOME/.tools/maple/bin}"
 
+# ── Parse arguments ────────────────────────────────────────────────────────────
+VERSION="${MAPLE_VERSION:-}"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version|-v)
+            VERSION="$2"
+            shift 2
+            ;;
+        --version=*|-v=*)
+            VERSION="${1#*=}"
+            shift
+            ;;
+        --install-dir)
+            INSTALL_DIR="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: install.sh [--version vX.Y.Z] [--install-dir PATH]"
+            exit 1
+            ;;
+    esac
+done
+
+# ── Platform detection ─────────────────────────────────────────────────────────
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 case "$ARCH" in
@@ -16,13 +41,19 @@ case "$OS" in
     *) echo "Unsupported OS: $OS — use install.ps1 on Windows"; exit 1 ;;
 esac
 
-VERSION="${MAPLE_VERSION:-}"
+# ── Resolve version ────────────────────────────────────────────────────────────
 if [ -z "$VERSION" ]; then
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+    # Fetch all releases, filter semver tags, sort by version, pick highest
+    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases" \
+        | grep '"tag_name"' \
+        | cut -d'"' -f4 \
+        | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+        | sort -V \
+        | tail -1)
 fi
-[ -z "$VERSION" ] && { echo "Could not determine latest version. Set MAPLE_VERSION=vX.Y.Z"; exit 1; }
+[ -z "$VERSION" ] && { echo "Could not determine latest version. Set MAPLE_VERSION=vX.Y.Z or pass --version vX.Y.Z"; exit 1; }
 
+# ── Download and install ───────────────────────────────────────────────────────
 ARCHIVE="maple-${OS}-${ARCH}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/${VERSION}/${ARCHIVE}"
 
