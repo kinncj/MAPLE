@@ -1,11 +1,39 @@
 ```
-
-   ▄▄▄▄   ▄▄▄▄▄    ▄▄▄▄▄▄▄   ▄▄▄▄▄   ▄▄▄  ▄▄▄   ▄▄▄▄   ▄▄▄▄▄▄
-  ▄██▀▀██▄  ███    █████▀▀▀ ▄███████▄ ███  ███ ▄██▀▀██▄ ███▀▀██▄
-  ███  ███  ███     ▀████▄  ███   ███ ███  ███ ███  ███ ███  ███
-  ███▀▀███  ███       ▀████ ███▄█▄███ ███▄▄███ ███▀▀███ ███  ███
-  ███  ███ ▄███▄   ███████▀  ▀█████▀  ▀██████▀ ███  ███ ██████▀
-                          ▀▀
+                                        ▄█▄
+                                       █████
+                                      ███████
+                                     █████████
+                                    ███████████
+                        ▄▄         █████████████         ▄▄
+                       ████▄      ███████████████      ▄████
+                       ███████▄  █████████████████  ▄███████
+                       ██████████████████████████████████████
+                        ████████████████████████████████████
+              ▄▄        ████████████████████████████████████        ▄▄
+             ████▄      ████████████████████████████████████      ▄████
+      ▄▄    ███████▄   ██████████████████████████████████████   ▄███████    ▄▄
+     █████▄▄██████████ ██████████████████████████████████████ ██████████▄▄█████
+      ████████████████████████████████████████████████████████████████████████
+       ██████████████████████████████████████████████████████████████████████
+        ████████████████████████████████████████████████████████████████████
+         ██████████████████████████████████████████████████████████████████
+      ▄▄▄███████████████████████████████████████████████████████████████████▄▄▄
+         ██████████████████████████████████████████████████████████████████
+           ██████████████████████████████████████████████████████████████
+             ██████████████████████████████████████████████████████████
+                ████████████████████████████████████████████████████
+                   ██████████████████████████████████████████████
+                      ████████████████████████████████████████
+                         ██████████████████████████████████
+                           ████████████████████████████████
+                         ▀████████████  ██████  ████████████▀
+                                        ██████
+                                        ▓▓▓▓▓▓
+                                        ▓▓▓▓▓▓
+                                        ▒▒▒▒▒▒
+                                        ▒▒▒▒▒▒
+                                        ░░░░░░
+                                        ░░░░░░
 
 ```
 
@@ -14,12 +42,12 @@
 
 A production-ready template for running an **orchestrated, phase-gated, TDD-enforced** development pipeline with **specialist AI agents**. Runs on three platforms: **Claude Code**, **GitHub Copilot CLI**, and **OpenCode**.
 
-> Based on: [Building an AI Development Squad: Orchestrated Multi-Agent Systems with Claude Code and OpenCode](./ARTICLE.md)
+> Based on: [Building MAPLE: Orchestrated Multi-Agent Systems with Claude Code and OpenCode](./ARTICLE.md)
 
 <div align="center">
-  <img src="./demo.gif" alt="AI Squad demo — squad init scaffolding a project" width="860">
+  <img src="./demo.gif" alt="MAPLE demo — maple init scaffolding a project" width="860">
   <br/>
-  <sub><code>squad init</code> — scaffolding a new project from the CLI</sub>
+  <sub><code>maple init</code> — scaffolding a new project from the CLI</sub>
 </div>
 
 ---
@@ -38,21 +66,21 @@ Single-agent AI coding breaks down at scale. Context gets polluted, tests get sk
 - **GitHub integration** — every feature tracked via `gh` CLI, Projects v2, Issues, PRs; stories auto-sync on write
 - **Reusable skills** — token-efficient CLI wrappers for Playwright, Docker, kubectl, Stripe, Supabase, gh, and more
 - **Three platforms** — identical agent prompts for Claude Code, GitHub Copilot CLI, and OpenCode
-- **`squad` TUI** — interactive dashboard and `init` / `req` wizard; self-contained binary with template embedded
+- **`maple` TUI** — interactive dashboard and `init` / `req` wizard; self-contained binary with template embedded
 
 ---
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/kinncj/AI-Squad.git ai-squad
-cd ai-squad
-make build-tui              # produces ./squad
+git clone https://github.com/kinncj/AI-Squad.git maple
+cd maple
+make build-tui              # produces ./maple
 export PATH="$PWD:$PATH"   # or move to any directory on your PATH
 
 cd your-project
-squad init
-squad req                   # write requirements → Gherkin story
+maple init
+maple req                   # write requirements → Gherkin story
 ```
 
 Open your project in **Claude Code**, **GitHub Copilot CLI**, or **OpenCode**, then run `/feature "your feature description"`.
@@ -61,11 +89,11 @@ Open your project in **Claude Code**, **GitHub Copilot CLI**, or **OpenCode**, t
 > ```bash
 > curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.sh | bash
 > ```
-> This installs `squad` to `~/.tools/ai-squad/bin/`. Add that to your `PATH`.
+> This installs `maple` to `~/.tools/maple/bin/`. Add that to your `PATH`.
 
 ---
 
-## `squad` TUI — Keybindings
+## `maple` TUI — Keybindings
 
 | Key | Action |
 |---|---|
@@ -81,9 +109,9 @@ Open your project in **Claude Code**, **GitHub Copilot CLI**, or **OpenCode**, t
 
 Themes: `tokyo-night` (default), `catppuccin-mocha`, `gruvbox`, `nord`, `everforest`. Switch with `:theme <name>`.
 
-**Dashboard auto-launch:** once a project is initialized (`project.config.yaml` present), running `squad` with no arguments launches the boot check followed by the live dashboard instead of the setup menu. The dashboard shows stories, recent agent activity, open PRs, and QA scenario counts in a 4-pane layout. Use `squad --no-animate` on slow terminals or over SSH.
+**Dashboard auto-launch:** once a project is initialized (`project.config.yaml` present), running `maple` with no arguments launches the boot check followed by the live dashboard instead of the setup menu. The dashboard shows stories, recent agent activity, open PRs, and QA scenario counts in a 4-pane layout. Use `maple --no-animate` on slow terminals or over SSH.
 
-**Omarchy theme detection:** if `~/.config/omarchy/current/theme` exists, `squad` reads it and selects the matching built-in theme automatically.
+**Omarchy theme detection:** if `~/.config/omarchy/current/theme` exists, `maple` reads it and selects the matching built-in theme automatically.
 
 ---
 
@@ -133,13 +161,13 @@ Declare your own in `template/.claude/superpowers/<name>.yaml`.
 
 | Tool | Purpose | Install |
 |---|---|---|
-| [Go 1.22+](https://go.dev) | Build `squad` from source | `brew install go` |
+| [Go 1.22+](https://go.dev) | Build `maple` from source | `brew install go` |
 | [Claude Code](https://claude.ai/claude-code) or [Copilot CLI](https://github.com/features/copilot/cli) or [OpenCode](https://opencode.ai) | Run the agents | see each link |
 | [GitHub CLI](https://cli.github.com) | Issue, PR, project management | `brew install gh` |
 | [Docker](https://docker.com) | Test infrastructure | docker.com |
 | [Node.js](https://nodejs.org) | Playwright / Cucumber E2E tests | nodejs.org |
 
-> Go is only needed to build `squad` from source. If you prefer a pre-built binary, use the one-liner installer above.
+> Go is only needed to build `maple` from source. If you prefer a pre-built binary, use the one-liner installer above.
 
 ---
 

@@ -1,0 +1,706 @@
+#!/usr/bin/env bash
+# maple — MAPLE CLI
+#
+# Install globally:
+#   git clone https://github.com/kinncj/AI-Development-Squad-Template.git ~/.maple
+#   echo 'export PATH="$HOME/.maple/scripts:$PATH"' >> ~/.zshrc
+#   source ~/.zshrc
+#
+# Usage:
+#   maple init     [project-name]   Scaffold template into new or current directory
+#   maple labels   [owner/repo]     Create GitHub labels in current repo
+#   maple project  [owner/repo]     Bootstrap GitHub Project v2 board
+#   maple help                      Show this help
+#
+# Copyright (C) 2025 Kinn Coelho Juliao <kinncj@protonmail.com>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+set -euo pipefail
+
+TOOL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TEMPLATE_DIR="$TOOL_DIR/template"
+PLAN_FILE="${PLAN_FILE:-docs/specs/current/plan.md}"
+GLOBAL_CONFIG="$HOME/.maple.json"   # jingle state — once ever, across all projects
+CONFIG_FILE="$(pwd)/.maple.json"    # project options — per working directory
+
+# ─── Colour palette ───────────────────────────────────────────────────────────
+if [[ -n "${NO_COLOR:-}" || "${TERM:-}" == "dumb" || ! -t 1 ]]; then
+  R=''; B=''; D=''; GRN=''; YLW=''; CYN=''
+  BGRN=''; BRED=''; BYEL=''; BCYN=''; BMGT=''
+  HGRN=''  # hacker green (for banner)
+else
+  R='\033[0m';    B='\033[1m';    D='\033[2m'
+  GRN='\033[0;32m';  YLW='\033[0;33m';  CYN='\033[0;36m'
+  BGRN='\033[1;32m'; BRED='\033[1;31m'; BYEL='\033[1;33m'
+  BCYN='\033[1;36m'; BMGT='\033[1;35m'
+  HGRN='\033[0;32m'  # hacker green
+fi
+
+HR="  ${D}$(printf '─%.0s' {1..60})${R}"
+
+# ─── ASCII banner ─────────────────────────────────────────────────────────────
+_BANNER_ROWS=(
+  "                                                                    "
+  "   ▄▄▄▄   ▄▄▄▄▄    ▄▄▄▄▄▄▄   ▄▄▄▄▄   ▄▄▄  ▄▄▄   ▄▄▄▄   ▄▄▄▄▄▄   "
+  "  ▄██▀▀██▄  ███    █████▀▀▀ ▄███████▄ ███  ███ ▄██▀▀██▄ ███▀▀██▄  "
+  "  ███  ███  ███     ▀████▄  ███   ███ ███  ███ ███  ███ ███  ███   "
+  "  ███▀▀███  ███       ▀████ ███▄█▄███ ███▄▄███ ███▀▀███ ███  ███   "
+  "  ███  ███ ▄███▄   ███████▀  ▀█████▀  ▀██████▀ ███  ███ ██████▀   "
+  "                          ▀▀                                        "
+  "                                                                    "
+)
+_BANNER_DONE=''
+
+banner() {
+  [[ -z "$HGRN" ]] && return
+
+  local N=${#_BANNER_ROWS[@]}  # 8 rows total
+
+  # Subsequent calls: print statically, no re-animation
+  if [[ -n "$_BANNER_DONE" ]]; then
+    printf '%b' "${HGRN}"
+    local _r; for _r in "${_BANNER_ROWS[@]}"; do printf '%s\n' "$_r"; done
+    printf '%b' "${R}"
+    return
+  fi
+  _BANNER_DONE=1
+
+  # Reserve vertical space for the animation area
+  local _i; for ((_i=0; _i<N; _i++)); do printf '\n'; done
+
+  # ── Frame 0: edge-on ─────────────────────────────────────────────────────
+  # Single dim line at mid-height simulates the card seen edge-on.
+  printf '\033[%dA' "${N}"
+  for ((_i=0; _i<N; _i++)); do
+    if ((_i == 3)); then
+      printf '\033[2K%b\n' \
+        "${D}  ──────────────────────────────────────────────────────────────────${R}"
+    else
+      printf '\033[2K\n'
+    fi
+  done
+  sleep 0.06
+
+  # ── Frames 1-3: expand from center outward ────────────────────────────────
+  # Content rows live at indices 1-6.  Center pair: rows 3-4.
+  # f=2 → show 2 rows (3-4); f=1 → show 4 rows (2-5); f=0 → show 6 rows (1-6).
+  local _f _top _rows
+  for _f in 2 1 0; do
+    _top=$((_f + 1))        # first visible content index
+    _rows=$((6 - 2 * _f))  # rows to reveal: 2, 4, 6
+    printf '\033[%dA' "${N}"
+    printf '%b' "${HGRN}"
+    for ((_i=0; _i<N; _i++)); do
+      if ((_i >= _top && _i < _top + _rows)); then
+        printf '\033[2K%s\n' "${_BANNER_ROWS[$_i]}"
+      else
+        printf '\033[2K\n'
+      fi
+    done
+    sleep 0.07
+  done
+
+  printf '%b' "${R}"
+}
+
+# ─── UI primitives ────────────────────────────────────────────────────────────
+header() {
+  banner
+  printf "  ${B}${BMGT}MAPLE${R}  ${D}·${R}  ${B}%s${R}\n" "$1"
+  printf "%b\n\n" "$HR"
+}
+
+step()    { printf "\n  ${BCYN}›${R}  ${B}%s${R}\n" "$1"; }
+ok()      { printf "  ${BGRN}✓${R}  %-32s  ${D}%s${R}\n" "$1" "${2:-}"; }
+info()    { printf "  ${CYN}›${R}  %-16s${B}%s${R}\n" "$1" "${2:-}"; }
+warn()    { printf "  ${BYEL}!${R}  ${YLW}%s${R}\n" "$1"; }
+missing() { printf "  ${BYEL}?${R}  %-32s  ${YLW}not found — %s${R}\n" "$1" "$2"; }
+fail()    { printf "\n  ${BRED}✗${R}  ${B}%b${R}\n\n" "$*" >&2; exit 1; }
+
+task_row() {
+  local n="$1" agent="$2" desc="$3"
+  printf "  ${D}[%2d]${R}  ${BCYN}%-22s${R}  %s\n" "$n" "$agent" "$desc"
+}
+
+# ─── Config & jingle ──────────────────────────────────────────────────────────
+_config_init() {
+  command -v python3 &>/dev/null || return 0
+  # Global config — tracks jingle state
+  if [[ ! -f "$GLOBAL_CONFIG" ]]; then
+    python3 - "$GLOBAL_CONFIG" <<'PYEOF'
+import json, sys
+with open(sys.argv[1], "w") as f:
+    json.dump({"jingle_played": False}, f, indent=2)
+    f.write("\n")
+PYEOF
+  fi
+  # Project config — tracks last-used options for this working directory
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    python3 - "$CONFIG_FILE" <<'PYEOF'
+import json, sys
+with open(sys.argv[1], "w") as f:
+    json.dump({"init": {}, "labels": {}}, f, indent=2)
+    f.write("\n")
+PYEOF
+  fi
+}
+
+_config_set() {
+  # _config_set <dot.key> <value>
+  # JSON literals (true/false/arrays/numbers) are preserved; bare strings stored as-is.
+  command -v python3 &>/dev/null || return 0
+  [[ -f "$CONFIG_FILE" ]] || return 0
+  python3 - "$CONFIG_FILE" "$1" "$2" <<'PYEOF'
+import json, sys
+path, dotkey, raw = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(path) as f:
+        cfg = json.load(f)
+except Exception:
+    cfg = {}
+keys = dotkey.split(".")
+d = cfg
+for k in keys[:-1]:
+    d = d.setdefault(k, {})
+try:
+    d[keys[-1]] = json.loads(raw)
+except Exception:
+    d[keys[-1]] = raw
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PYEOF
+}
+
+_config_get() {
+  command -v python3 &>/dev/null || { echo ""; return 0; }
+  [[ -f "$CONFIG_FILE" ]] || { echo ""; return 0; }
+  python3 - "$CONFIG_FILE" "$1" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        v = json.load(f)
+    for k in sys.argv[2].split("."):
+        v = v[k]
+    print(json.dumps(v) if not isinstance(v, str) else v)
+except Exception:
+    print("")
+PYEOF
+}
+
+# Read one key from the global config (jingle state lives here).
+# Called via $() so heredoc must NOT be used inline — logic lives in the function body.
+_global_config_get() {
+  command -v python3 &>/dev/null || { echo ""; return 0; }
+  [[ -f "$GLOBAL_CONFIG" ]] || { echo ""; return 0; }
+  python3 - "$GLOBAL_CONFIG" "$1" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        v = json.load(f)
+    for k in sys.argv[2].split("."):
+        v = v[k]
+    print(json.dumps(v) if not isinstance(v, str) else v)
+except Exception:
+    print("")
+PYEOF
+}
+
+_global_config_set() {
+  command -v python3 &>/dev/null || return 0
+  [[ -f "$GLOBAL_CONFIG" ]] || return 0
+  python3 - "$GLOBAL_CONFIG" "$1" "$2" <<'PYEOF'
+import json, sys
+path, dotkey, raw = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(path) as f:
+        cfg = json.load(f)
+except Exception:
+    cfg = {}
+keys = dotkey.split(".")
+d = cfg
+for k in keys[:-1]:
+    d = d.setdefault(k, {})
+try:
+    d[keys[-1]] = json.loads(raw)
+except Exception:
+    d[keys[-1]] = raw
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PYEOF
+}
+
+_play_jingle() {
+  local jingle="$TOOL_DIR/AI_SQUAD_JINGLE.wav"  # jingle file name preserved
+  [[ -f "$jingle" ]] || return 0
+  [[ "$(_global_config_get jingle_played)" == "true" ]] && return 0
+  _global_config_set "jingle_played" "true"   # mark before playing (fire-and-forget)
+  # Launch audio in background. Never crash — all errors are silently swallowed.
+  {
+    if command -v afplay &>/dev/null; then
+      # macOS — afplay only handles PCM WAV; use Python3 to unwrap MP3-in-RIFF if needed
+      python3 - "$jingle" <<'PYEOF'
+import sys, struct, tempfile, os, subprocess
+
+path = sys.argv[1]
+with open(path, 'rb') as f:
+    data = f.read()
+
+play_path = path
+tmp = None
+
+if data[:4] == b'RIFF' and data[8:12] == b'WAVE':
+    i = 12
+    while i < len(data) - 8:
+        cid = data[i:i+4]
+        csz = struct.unpack_from('<I', data, i+4)[0]
+        if cid == b'data':
+            raw = data[i+8:i+8+csz]
+            # MP3 sync: ID3 tag or 0xFF 0xEx/0xFF 0xFx frame header
+            if raw[:3] == b'ID3' or (len(raw) > 1 and raw[0] == 0xFF and raw[1] & 0xE0 == 0xE0):
+                tmp = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+                tmp.write(raw)
+                tmp.close()
+                play_path = tmp.name
+            break
+        i += 8 + max(csz, 1)
+
+try:
+    subprocess.run(['afplay', play_path],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+finally:
+    if tmp:
+        os.unlink(tmp.name)
+PYEOF
+    elif command -v paplay         &>/dev/null; then
+      # Linux — PulseAudio / PipeWire
+      paplay "$jingle"
+    elif command -v aplay          &>/dev/null; then
+      # Linux — ALSA
+      aplay -q "$jingle"
+    elif command -v powershell.exe &>/dev/null; then
+      # Windows — Git Bash / WSL boundary
+      local _win_path
+      _win_path="$(command -v cygpath &>/dev/null && cygpath -w "$jingle" 2>/dev/null || echo "$jingle")"
+      powershell.exe -NoProfile -Command \
+        "(New-Object Media.SoundPlayer '$_win_path').PlaySync()"
+    fi
+  } >/dev/null 2>&1 &
+}
+
+
+# ─── init ─────────────────────────────────────────────────────────────────────
+cmd_init() {
+  local TARGET_DIR ASSUME_YES=''
+
+  # Parse flags before positional argument
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --yes|-y) ASSUME_YES=1; shift ;;
+      --) shift; break ;;
+      -*) fail "Unknown flag: $1" ;;
+      *) break ;;
+    esac
+  done
+
+  if [[ $# -gt 0 ]]; then
+    if [[ "$1" = /* ]]; then
+      TARGET_DIR="$1"
+    else
+      TARGET_DIR="$(pwd)/$1"
+    fi
+  else
+    TARGET_DIR="$(pwd)"
+  fi
+
+  header "Initialize Project"
+  info "Template" "$TEMPLATE_DIR"
+  info "Target  " "$TARGET_DIR"
+
+  if [[ -d "$TARGET_DIR" ]] && [[ -n "$(ls -A "$TARGET_DIR" 2>/dev/null)" ]]; then
+    warn "Directory is not empty: $TARGET_DIR"
+    if [[ -n "$ASSUME_YES" ]]; then
+      warn "Proceeding (--yes)"
+    else
+      printf '%b' "  ${BYEL}?${R}  Existing files may be overwritten. Continue? [y/N] "
+      read -r _ans
+      [[ "$_ans" =~ ^[Yy]$ ]] || fail "Aborted."
+    fi
+  fi
+
+  mkdir -p "$TARGET_DIR"
+
+  step "Checking dependencies"
+  local cmd install
+  while IFS=: read -r cmd install; do
+    if command -v "$cmd" &>/dev/null; then
+      ok "$cmd" "$(command -v "$cmd")"
+    else
+      missing "$cmd" "$install"
+    fi
+  done <<'DEPS'
+git:https://git-scm.com
+gh:brew install gh
+docker:https://docker.com
+node:https://nodejs.org
+claude:npm install -g @anthropic-ai/claude-code
+DEPS
+
+  step "Copying template"
+  rsync -a \
+    --exclude='.git' \
+    --exclude='node_modules' \
+    --exclude='*.log' \
+    "$TEMPLATE_DIR/" "$TARGET_DIR/"
+  local FILE_COUNT
+  FILE_COUNT=$(find "$TARGET_DIR" -type f | wc -l | tr -d ' ')
+  ok "Files copied" "$FILE_COUNT files"
+
+  printf "\n%b\n" "$HR"
+
+  step "Initializing git repository"
+  cd "$TARGET_DIR"
+  git init -q
+  git add -A
+  git commit -q -m "chore: initialize from MAPLE Template
+
+Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+Source:    $(basename "$TOOL_DIR")"
+  ok "Repository initialized" "commit $(git rev-parse --short HEAD)"
+  _config_set "init.last_project" "$(basename "$TARGET_DIR")"
+  _config_set "init.last_target"  "$TARGET_DIR"
+  _config_set "init.last_run"     "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  if [[ -f "package.json" ]]; then
+    step "Installing dependencies"
+    npm install --silent
+    ok "npm dependencies installed"
+    if npx playwright install chromium --quiet 2>/dev/null; then
+      ok "Playwright browsers installed"
+    else
+      warn "Playwright install failed — run: npx playwright install"
+    fi
+  fi
+
+  printf "\n%b\n" "$HR"
+  if [[ -z "$ASSUME_YES" ]]; then
+    printf '%b' "  ${CYN}?${R}  Bootstrap GitHub labels? ${D}(requires gh auth + remote repo)${R} [y/N] "
+    read -r _ans
+    if [[ "$_ans" =~ ^[Yy]$ ]]; then
+      cmd_labels
+    fi
+  fi
+
+  local PROJECT_NAME
+  PROJECT_NAME="$(basename "$TARGET_DIR")"
+
+  printf "\n%b\n" "$HR"
+  printf "  ${BGRN}✓${R}  ${B}MAPLE ready${R}  ${D}→${R}  %s\n\n" "$TARGET_DIR"
+  printf '%b\n' "  ${D}Next steps:${R}"
+  [[ "$TARGET_DIR" != "$(pwd)" ]] && \
+    printf "  ${BCYN}›${R}  ${D}cd${R} ${B}%s${R}\n" "$PROJECT_NAME"
+  printf "  ${BCYN}›${R}  ${D}gh repo create${R} ${B}%s${R} ${D}--public --push --source=.${R}\n" "$PROJECT_NAME"
+  printf '%b\n' "  ${BCYN}›${R}  ${D}claude${R} ${B}/feature${R} ${D}\"your first feature\"${R}"
+  printf "\n%b\n\n" "$HR"
+}
+
+# ─── labels ───────────────────────────────────────────────────────────────────
+cmd_labels() {
+  header "Bootstrap GitHub Labels"
+
+  local REPO="${1:-}"
+  [[ -z "$REPO" ]] && \
+    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)
+  [[ -z "$REPO" ]] && \
+    fail "Could not detect repository.  Pass owner/repo as argument:\n     maple labels owner/repo"
+
+  info "Repository  " "$REPO"
+
+  local CREATED=0 SKIPPED=0
+
+  label() {
+    local name="$1" color="$2" desc="$3"
+    if gh label create "$name" --repo "$REPO" --color "$color" \
+         --description "$desc" --force &>/dev/null; then
+      ok "$name" "$desc"
+      CREATED=$((CREATED + 1))
+    else
+      printf "  ${D}–  %-30s  already exists${R}\n" "$name"
+      SKIPPED=$((SKIPPED + 1))
+    fi
+  }
+
+  printf '%b\n' "  ${B}${BCYN}Story & Type${R}"
+  label "story"        "0075ca" "User story"
+  label "bug"          "d73a4a" "Bug report"
+  label "must-have"    "e11d48" "MoSCoW: Must have"
+  label "should-have"  "f97316" "MoSCoW: Should have"
+  label "could-have"   "eab308" "MoSCoW: Could have"
+  label "wont-have"    "6b7280" "MoSCoW: Won't have"
+
+  printf '\n%b\n' "  ${B}${BCYN}Work Type${R}"
+  label "type:feature"  "7c3aed" "New feature"
+  label "type:spike"    "a78bfa" "Time-boxed investigation"
+  label "type:chore"    "6b7280" "Tech debt, maintenance"
+  label "type:bugfix"   "dc2626" "Bug fix"
+
+  printf '\n%b\n' "  ${B}${BCYN}Priority${R}"
+  label "priority:high"   "dc2626" "High priority"
+  label "priority:medium" "f59e0b" "Medium priority"
+  label "priority:low"    "6b7280" "Low priority"
+
+  printf '\n%b\n' "  ${B}${BCYN}Pipeline Phases${R}"
+  label "phase:discover"   "dbeafe" "Phase 1: Discovery"
+  label "phase:architect"  "c7d2fe" "Phase 2: Architecture"
+  label "phase:plan"       "e9d5ff" "Phase 3: Planning"
+  label "phase:infra"      "fce7f3" "Phase 4: Infrastructure"
+  label "phase:implement"  "d1fae5" "Phase 5: Implementation"
+  label "phase:validate"   "bfdbfe" "Phase 6: Validation"
+  label "phase:document"   "fef3c7" "Phase 7: Documentation"
+  label "phase:done"       "dcfce7" "Phase 8: Complete"
+
+  printf '\n%b\n' "  ${B}${BCYN}Status${R}"
+  label "in-progress"      "fde68a" "Work in progress"
+  label "blocked"          "fca5a5" "Blocked — needs human intervention"
+  label "validated"        "86efac" "All tests passing"
+  label "ready-for-review" "a5f3fc" "PR ready for review"
+
+  printf '\n%b\n' "  ${B}${BCYN}TDD State${R}"
+  label "tdd:red"      "fca5a5" "Failing test written"
+  label "tdd:green"    "86efac" "Tests passing"
+  label "tdd:refactor" "fde68a" "Refactor phase"
+
+  printf '\n%b\n' "  ${B}${BCYN}Spec-Kit${R}"
+  label "spec:problem"   "bfdbfe" "Spec-Kit: problem statement"
+  label "spec:spec"      "93c5fd" "Spec-Kit: specification written"
+  label "spec:plan"      "60a5fa" "Spec-Kit: plan decomposed"
+  label "spec:approved"  "2563eb" "Spec-Kit: approved — ready for DISCOVER"
+
+  printf '\n%b\n' "  ${B}${BCYN}Design${R}"
+  label "design:pending"       "f3e8ff" "Design work needed"
+  label "design:wireframe"     "e9d5ff" "Wireframe in progress"
+  label "design:mockup"        "d8b4fe" "Mockup in progress"
+  label "design:approved"      "a855f7" "Design approved"
+  label "design:a11y-passed"   "7e22ce" "Accessibility audit passed"
+  label "ui:required"          "ec4899" "Story requires UI work"
+
+  printf '\n%b\n' "  ${B}${BCYN}ADR${R}"
+  label "adr:required"  "fbbf24" "ADR must be written before proceeding"
+  label "adr:complete"  "d97706" "ADR written and linked"
+
+  _config_set "labels.last_repo" "$REPO"
+  _config_set "labels.last_run"  "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  printf "\n%b\n" "$HR"
+  printf '%b' "  ${BGRN}✓${R}  ${B}Done.${R}  "
+  printf '%b%d created%b  %b·%b  %b%d skipped%b\n' "${GRN}" "$CREATED" "${R}" "${D}" "${R}" "${D}" "$SKIPPED" "${R}"
+  printf '  %b›  https://github.com/%s/labels%b\n\n' "${D}" "$REPO" "${R}"
+}
+
+
+
+# ─── project ──────────────────────────────────────────────────────────────────
+cmd_project() {
+  header "Bootstrap GitHub Project v2"
+
+  local REPO="${1:-}"
+  [[ -z "$REPO" ]] && \
+    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)
+  [[ -z "$REPO" ]] && \
+    fail "Could not detect repository.  Pass owner/repo as argument:\n     maple project owner/repo"
+
+  local OWNER="${REPO%%/*}"
+  local PROJ_TITLE="${REPO##*/} — MAPLE Board"
+
+  info "Repository  " "$REPO"
+  info "Board title " "$PROJ_TITLE"
+
+  # ── Create project ────────────────────────────────────────────────────────
+  printf '\n'
+  step "Creating Project v2 board..."
+  local PROJ_URL
+  PROJ_URL=$(gh project create --owner "$OWNER" --title "$PROJ_TITLE" --format json \
+               2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('url',''))" || true)
+
+  if [[ -z "$PROJ_URL" ]]; then
+    fail "gh project create failed.  Ensure you have admin access to the org/user and run:\n     gh auth refresh -s project"
+  fi
+  ok "Project created" "$PROJ_URL"
+
+  # ── Resolve project number + node ID ─────────────────────────────────────
+  step "Resolving project number and node ID..."
+  local PROJ_NUMBER PROJ_NODE_ID PROJ_QUERY
+  # shellcheck disable=SC2016  # single quotes intentional: GraphQL variables use $login syntax
+  PROJ_QUERY=$(gh api graphql -f query='
+    query($login: String!) {
+      repositoryOwner(login: $login) {
+        projectsV2(first: 20, orderBy: {field: UPDATED_AT, direction: DESC}) {
+          nodes { number id title }
+        }
+      }
+    }' -f login="$OWNER" 2>/dev/null || true)
+
+  PROJ_NUMBER=$(printf '%s' "$PROJ_QUERY" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+nodes = d['data']['repositoryOwner']['projectsV2']['nodes']
+title = '$PROJ_TITLE'
+match = next((n for n in nodes if n['title'] == title), nodes[0] if nodes else None)
+print(match['number'] if match else '')
+" 2>/dev/null || true)
+
+  PROJ_NODE_ID=$(printf '%s' "$PROJ_QUERY" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+nodes = d['data']['repositoryOwner']['projectsV2']['nodes']
+title = '$PROJ_TITLE'
+match = next((n for n in nodes if n['title'] == title), nodes[0] if nodes else None)
+print(match['id'] if match else '')
+" 2>/dev/null || true)
+
+  [[ -z "$PROJ_NUMBER" || -z "$PROJ_NODE_ID" ]] && \
+    fail "Could not resolve project number or node ID.  Visit GitHub Projects to confirm the board was created."
+
+  ok "Project number  " "$PROJ_NUMBER"
+  ok "Node ID         " "$PROJ_NODE_ID"
+
+  # ── Add custom fields ─────────────────────────────────────────────────────
+  step "Adding custom fields..."
+
+  # shellcheck disable=SC2016  # GraphQL uses $var syntax — single quotes are intentional
+  _add_text_field() {
+    local name="$1"
+    gh api graphql -f query='
+      mutation($projectId: ID!, $name: String!) {
+        addProjectV2Field(input: {projectId: $projectId, dataType: TEXT, name: $name}) {
+          projectV2Field { ... on ProjectV2Field { id name } }
+        }
+      }' -f projectId="$PROJ_NODE_ID" -f name="$name" &>/dev/null && ok "Field: $name" || \
+      printf "  ${D}–  %-30s  skipped (may already exist)${R}\n" "$name"
+  }
+
+  _add_select_field() {
+    local name="$1"; shift
+    local opts_json
+    opts_json=$(python3 -c "import json,sys; print(json.dumps([{'name':o} for o in sys.argv[1:]]))" "$@")
+    # shellcheck disable=SC2016
+    gh api graphql -f query='
+      mutation($projectId: ID!, $name: String!, $opts: [ProjectV2SingleSelectFieldOptionInput!]!) {
+        addProjectV2Field(input: {projectId: $projectId, dataType: SINGLE_SELECT, name: $name,
+            singleSelectOptions: $opts}) {
+          projectV2Field { ... on ProjectV2SingleSelectField { id name } }
+        }
+      }' -f projectId="$PROJ_NODE_ID" -f name="$name" \
+         --jq ".data" --input <(printf '{"query":"","variables":{"projectId":"%s","name":"%s","opts":%s}}' \
+           "$PROJ_NODE_ID" "$name" "$opts_json") &>/dev/null 2>&1 && ok "Field: $name" || \
+      printf "  ${D}–  %-30s  skipped (may already exist)${R}\n" "$name"
+  }
+
+  # Epic and Specialist are free-text
+  _add_text_field "Epic"
+  _add_text_field "Specialist"
+
+  # Type: SINGLE_SELECT
+  # shellcheck disable=SC2016
+  gh api graphql -f query='
+    mutation($projectId: ID!, $name: String!) {
+      addProjectV2Field(input: {projectId: $projectId, dataType: SINGLE_SELECT, name: $name,
+          singleSelectOptions: [
+            {name: "feature", color: PURPLE, description: "New feature"},
+            {name: "spike",   color: BLUE,   description: "Investigation"},
+            {name: "chore",   color: GRAY,   description: "Maintenance"},
+            {name: "bugfix",  color: RED,    description: "Bug fix"}
+          ]}) {
+        projectV2Field { ... on ProjectV2SingleSelectField { id name } }
+      }
+    }' -f projectId="$PROJ_NODE_ID" -f name="Type" &>/dev/null \
+    && ok "Field: Type" \
+    || printf "  ${D}–  %-30s  skipped (may already exist)${R}\n" "Type"
+
+  # ADR Required: SINGLE_SELECT acting as boolean (no native CHECKBOX in Projects v2)
+  # shellcheck disable=SC2016
+  gh api graphql -f query='
+    mutation($projectId: ID!, $name: String!) {
+      addProjectV2Field(input: {projectId: $projectId, dataType: SINGLE_SELECT, name: $name,
+          singleSelectOptions: [
+            {name: "yes", color: RED,   description: "ADR required before proceeding"},
+            {name: "no",  color: GREEN, description: "No ADR required"}
+          ]}) {
+        projectV2Field { ... on ProjectV2SingleSelectField { id name } }
+      }
+    }' -f projectId="$PROJ_NODE_ID" -f name="ADR Required" &>/dev/null \
+    && ok "Field: ADR Required" \
+    || printf "  ${D}–  %-30s  skipped (may already exist)${R}\n" "ADR Required"
+
+  # ── Persist to project.config.yaml if present ─────────────────────────────
+  local CONFIG_YAML
+  CONFIG_YAML="$(pwd)/project.config.yaml"
+  if [[ -f "$CONFIG_YAML" ]]; then
+    step "Updating project.config.yaml..."
+    python3 - "$CONFIG_YAML" "$PROJ_NUMBER" "$PROJ_NODE_ID" <<'PYEOF'
+import sys, re
+path, number, node_id = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path) as f: text = f.read()
+text = re.sub(r'(project_number:\s*).*', rf'\g<1>{number}', text)
+text = re.sub(r'(project_node_id:\s*).*', rf'\g<1>"{node_id}"', text)
+with open(path, 'w') as f: f.write(text)
+PYEOF
+    ok "project.config.yaml updated"
+  fi
+
+  printf "\n%b\n" "$HR"
+  printf '  %b›  https://github.com/orgs/%s/projects/%s%b\n\n' \
+    "${D}" "$OWNER" "$PROJ_NUMBER" "${R}"
+}
+
+
+cmd_help() {
+  header "Help"
+
+  printf '%b\n\n' "  ${B}USAGE${R}"
+  printf '%b\n' "    ${D}maple${R} ${B}<command>${R} ${D}[arguments]${R}"
+
+  printf "\n%b\n" "$HR"
+  printf '%b\n\n' "  ${B}COMMANDS${R}"
+
+  printf '%b\n' "  ${BCYN}init${R}    ${D}[-y|--yes] [project-name]${R}"
+  printf '%b\n' "  ${D}    Scaffold the template into a new or existing directory${R}"
+  printf '%b\n\n' "  ${D}    --yes / -y  skip all interactive prompts (for CI)${R}"
+
+  printf '%b\n' "  ${BCYN}labels${R}  ${D}[owner/repo]${R}"
+  printf '%b\n\n' "  ${D}    Create GitHub issue labels for the MAPLE pipeline${R}"
+
+  printf '%b\n' "  ${BCYN}project${R} ${D}[owner/repo]${R}"
+  printf '%b\n\n' "  ${D}    Bootstrap a GitHub Project v2 board with Status columns and custom fields${R}"
+
+  printf "%b\n" "$HR"
+  printf '%b\n\n' "  ${B}EXAMPLES${R}"
+
+  printf '%b\n' "  ${D}# New project${R}"
+  printf '%b\n\n' "  ${BCYN}maple${R} ${B}init${R} my-project"
+
+  printf '%b\n' "  ${D}# Bootstrap labels after connecting a remote repo${R}"
+  printf '%b\n\n' "  ${BCYN}maple${R} ${B}labels${R}"
+
+  printf '%b\n' "  ${D}# Bootstrap GitHub Project v2 board${R}"
+  printf '%b\n\n' "  ${BCYN}maple${R} ${B}project${R}"
+
+  printf "\n%b\n" "$HR"
+  printf '  %bTemplate:  %s%b\n\n' "${D}" "$TEMPLATE_DIR" "${R}"
+}
+
+# ─── Dispatch ─────────────────────────────────────────────────────────────────
+_config_init
+_play_jingle
+
+case "${1:-help}" in
+  init)               shift; cmd_init    "$@" ;;
+  labels)             shift; cmd_labels  "$@" ;;
+  project)            shift; cmd_project "$@" ;;
+  help | -h | --help) cmd_help ;;
+  *)
+    printf "\n  %b✗%b  Unknown command: %b%s%b\n" "${BRED}" "${R}" "${B}" "$1" "${R}" >&2
+    printf '%b\n\n' "  ${D}Run${R} ${B}maple help${R} ${D}for available commands.${R}" >&2
+    exit 1
+    ;;
+esac

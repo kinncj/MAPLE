@@ -11,19 +11,46 @@ import (
 )
 
 // logoRows is the canonical glyph. DO NOT re-kern or redraw.
-var logoRows = [8]string{
-	"                                                                    ",
-	"   ▄▄▄▄   ▄▄▄▄▄    ▄▄▄▄▄▄▄   ▄▄▄▄▄   ▄▄▄  ▄▄▄   ▄▄▄▄   ▄▄▄▄▄▄   ",
-	"  ▄██▀▀██▄  ███    █████▀▀▀ ▄███████▄ ███  ███ ▄██▀▀██▄ ███▀▀██▄  ",
-	"  ███  ███  ███     ▀████▄  ███   ███ ███  ███ ███  ███ ███  ███   ",
-	"  ███▀▀███  ███       ▀████ ███▄█▄███ ███▄▄███ ███▀▀███ ███  ███   ",
-	"  ███  ███ ▄███▄   ███████▀  ▀█████▀  ▀██████▀ ███  ███ ██████▀   ",
-	"                          ▀▀                                        ",
-	"                                                                    ",
+var logoRows = [35]string{
+	"                                        ▄█▄                                        ",
+	"                                       █████                                       ",
+	"                                      ███████                                      ",
+	"                                     █████████                                     ",
+	"                                    ███████████                                    ",
+	"                        ▄▄         █████████████         ▄▄                        ",
+	"                       ████▄      ███████████████      ▄████                       ",
+	"                       ███████▄  █████████████████  ▄███████                       ",
+	"                       ██████████████████████████████████████                      ",
+	"                        ████████████████████████████████████                       ",
+	"              ▄▄        ████████████████████████████████████        ▄▄             ",
+	"             ████▄      ████████████████████████████████████      ▄████            ",
+	"      ▄▄    ███████▄   ██████████████████████████████████████   ▄███████    ▄▄     ",
+	"     █████▄▄██████████ ██████████████████████████████████████ ██████████▄▄█████    ",
+	"      ████████████████████████████████████████████████████████████████████████     ",
+	"       ██████████████████████████████████████████████████████████████████████      ",
+	"        ████████████████████████████████████████████████████████████████████       ",
+	"         ██████████████████████████████████████████████████████████████████        ",
+	"      ▄▄▄███████████████████████████████████████████████████████████████████▄▄▄   ",
+	"         ██████████████████████████████████████████████████████████████████        ",
+	"           ██████████████████████████████████████████████████████████████          ",
+	"             ██████████████████████████████████████████████████████████            ",
+	"                ████████████████████████████████████████████████████               ",
+	"                   ██████████████████████████████████████████████                  ",
+	"                      ████████████████████████████████████████                     ",
+	"                         ██████████████████████████████████                        ",
+	"                           ████████████████████████████████                        ",
+	"                         ▀████████████  ██████  ████████████▀                      ",
+	"                                        ██████                                     ",
+	"                                        ▓▓▓▓▓▓                                     ",
+	"                                        ▓▓▓▓▓▓                                     ",
+	"                                        ▒▒▒▒▒▒                                     ",
+	"                                        ▒▒▒▒▒▒                                     ",
+	"                                        ░░░░░░                                     ",
+	"                                        ░░░░░░                                     ",
 }
 
-// logoColor is the hacker-green used for the logo across all contexts.
-const logoColor = lipgloss.Color("#73daca")
+// logoColor is the Canada red used for the maple leaf logo across all contexts.
+const logoColor = lipgloss.Color("#CC1122")
 
 // logo returns the full static colored logo string (for Bubble Tea views).
 func logo() string {
@@ -56,42 +83,42 @@ func logoTick(frame int) tea.Cmd {
 	return tea.Tick(delay, func(time.Time) tea.Msg { return logoTickMsg{} })
 }
 
-// logoAnimFrame renders the logo at the given animation frame (0..5+).
+// logoAnimFrame renders the logo at the given animation frame (0..4+).
 //
-//	frame 0: edge-on — single dim rule at row 3
-//	frame 1: center 2 rows (3-4) revealed in green
-//	frame 2: center 4 rows (2-5) revealed
-//	frame 3: center 6 rows (1-6) revealed
+//	frame 0: edge-on — single dim rule at center row (17)
+//	frame 1: center 5 rows revealed
+//	frame 2: center 15 rows revealed
+//	frame 3: center 25 rows revealed
 //	frame 4+: full logo
 func logoAnimFrame(frame int) string {
 	N := len(logoRows)
+	center := N / 2 // row 17
 	green := lipgloss.NewStyle().Foreground(logoColor)
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("#414868"))
 
 	var sb strings.Builder
 
 	if frame == 0 {
-		// Edge-on: dim rule at row 3, blank elsewhere
 		for i := 0; i < N; i++ {
-			if i == 3 {
-				sb.WriteString(dim.Render("  " + strings.Repeat("─", 66)))
+			if i == center {
+				sb.WriteString(dim.Render("  " + strings.Repeat("─", 79)))
 			}
 			sb.WriteByte('\n')
 		}
 		return sb.String()
 	}
 
-	// Frames 1-3: expand outward from center pair (rows 3-4)
-	// f=2 → top=3, rows=2; f=1 → top=2, rows=4; f=0 → top=1, rows=6
-	f := 3 - frame // frame 1→f=2, frame 2→f=1, frame 3→f=0
-	if f < 0 {
-		f = 0
+	// Frames 1-3: expand outward from center
+	radii := []int{2, 7, 12}
+	r := 999
+	if frame-1 < len(radii) {
+		r = radii[frame-1]
 	}
-	top := f + 1
-	rowsShown := 6 - 2*f
+	top := center - r
+	bottom := center + r
 
 	for i := 0; i < N; i++ {
-		if i >= top && i < top+rowsShown {
+		if i >= top && i <= bottom {
 			sb.WriteString(green.Render(logoRows[i]))
 		}
 		sb.WriteByte('\n')
@@ -106,7 +133,7 @@ const (
 	logoSweepDelay      = 55 * time.Millisecond // 14 × 55ms ≈ 770ms
 	logoPulseFrameCount = 4
 	logoPulseDelay      = 80 * time.Millisecond
-	logoShimmerWidth    = 68 // canonical logo width in runes
+	logoShimmerWidth    = 81 // canonical logo width in runes
 )
 
 // logoSweepFrame reveals the logo left-to-right. frame ∈ [0, logoSweepFrameCount).
@@ -180,7 +207,8 @@ func printLogoAnimated() {
 	}
 
 	N := len(logoRows)
-	green := "\033[38;2;115;218;202m" // #73daca in 24-bit
+	center := N / 2 // row 17
+	green := "\033[38;2;204;17;34m" // #CC1122 in 24-bit
 	dimClr := "\033[2m"
 	reset := "\033[0m"
 
@@ -192,8 +220,8 @@ func printLogoAnimated() {
 	// Frame 0: edge-on
 	fmt.Printf("\033[%dA", N)
 	for i := 0; i < N; i++ {
-		if i == 3 {
-			fmt.Printf("\033[2K%s  %s%s\n", dimClr, strings.Repeat("─", 66), reset)
+		if i == center {
+			fmt.Printf("\033[2K%s  %s%s\n", dimClr, strings.Repeat("─", 79), reset)
 		} else {
 			fmt.Print("\033[2K\n")
 		}
@@ -201,13 +229,14 @@ func printLogoAnimated() {
 	time.Sleep(logoFrame0Wait)
 
 	// Frames 1-3: expand from center outward
-	for f := 2; f >= 0; f-- {
-		top := f + 1
-		rowsShown := 6 - 2*f
+	radii := []int{2, 7, 12}
+	for _, r := range radii {
+		top := center - r
+		bottom := center + r
 		fmt.Printf("\033[%dA", N)
 		fmt.Print(green)
 		for i := 0; i < N; i++ {
-			if i >= top && i < top+rowsShown {
+			if i >= top && i <= bottom {
 				fmt.Printf("\033[2K%s\n", logoRows[i])
 			} else {
 				fmt.Print("\033[2K\n")
