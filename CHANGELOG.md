@@ -7,6 +7,13 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.4.1] — 2026-04-21
+
+### Fixed
+- `install.sh` now finds the highest semver instead of using `/releases/latest` (which sorts by publish date, not version)
+- Release fetch capped at `?per_page=100` — GitHub API max, single request
+- Added `--version`/`-v` flag and `--install-dir` flag to `install.sh`
+
 ## [4.4.0] — 2026-04-21
 
 ### Changed — Gherkin-first cleanup sweep
