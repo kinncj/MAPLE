@@ -7,6 +7,18 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.5.0] — 2026-04-21
+
+### Added
+- **RTK token optimizer**: `install.sh` and `install.ps1` now auto-install `rtk` alongside `maple` for all platforms (mac/linux/windows). `maple init` runs `rtk init` to wire the `PreToolUse` hook. Boot check shows `rtk` status. Skip with `--skip-rtk`.
+- **Session pinning**: TUI `p` key pins the selected agent session to `.claude/state/sessions.json`; `o` key auto-pins on open. `superpower-runner` reads pinned session IDs to resume work in the right context.
+- **Launch dialog**: TUI `L` key opens a tool picker overlay — select Claude Code / OpenCode / Copilot, type a command, and launch it directly. Pinned sessions shown with ★.
+- **File-based approval handoff**: at human-approval gates, `superpower-runner` writes `.claude/state/approval-pending.txt` and polls for its deletion. TUI `P` → `a` approves from the dashboard without switching to the agent terminal.
+- **Shared state protocol**: `superpower-runner` SKILL.md (both `.claude/` and `.opencode/`) now documents all three shared state files (`maple.json`, `approval-pending.txt`, `sessions.json`) with owner columns so agents and TUI stay in sync.
+
+### Fixed
+- `install.ps1` had stale repo `kinncj/AI-Squad` — corrected to `kinncj/MAPLE`
+
 ## [4.4.2] — 2026-04-21
 
 ### Fixed
