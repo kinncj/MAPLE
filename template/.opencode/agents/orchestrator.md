@@ -219,16 +219,16 @@ If any approval is not received, do not advance. Log `AWAITING APPROVAL` and sur
 | WCAG 2.2 AA audit, PR comment | `@a11y-auditor` |
 
 ## Skills to Read
-- Read `.claude/skills/tdd-workflow/SKILL.md` before Phase 5.
-- Read `.claude/skills/github-cli/SKILL.md` for issue management.
-- Read `.claude/skills/gh-issues/SKILL.md` for issue CRUD.
-- Read `.claude/skills/gh-projects/SKILL.md` for board management.
-- Read `.claude/skills/rubber-duck/SKILL.md` for second-opinion review invocation.
-- Read `.claude/skills/gherkin-authoring/SKILL.md` before story creation.
-- Read `.claude/skills/wireframe/SKILL.md` before dispatching wireframe-architect.
-- Read `.claude/skills/a11y-audit/SKILL.md` before dispatching a11y-auditor.
-- Read `.claude/skills/mermaid-diagrams/SKILL.md` if creating plan diagrams.
-- Read `.claude/skills/ship-safe/SKILL.md` before Phase 8 (ship gate). Delegate `/ship-safe` to architect for pre-merge security audit.
+- Read `.opencode/skills/tdd-workflow/SKILL.md` before Phase 5.
+- Read `.opencode/skills/github-cli/SKILL.md` for issue management.
+- Read `.opencode/skills/gh-issues/SKILL.md` for issue CRUD.
+- Read `.opencode/skills/gh-projects/SKILL.md` for board management.
+- Read `.opencode/skills/rubber-duck/SKILL.md` for second-opinion review invocation.
+- Read `.opencode/skills/gherkin-authoring/SKILL.md` before story creation.
+- Read `.opencode/skills/wireframe/SKILL.md` before dispatching wireframe-architect.
+- Read `.opencode/skills/a11y-audit/SKILL.md` before dispatching a11y-auditor.
+- Read `.opencode/skills/mermaid-diagrams/SKILL.md` if creating plan diagrams.
+- Read `.opencode/skills/ship-safe/SKILL.md` before Phase 8 (ship gate). Delegate `/ship-safe` to architect for pre-merge security audit.
 
 ## Output Format
 Be terse. Use checklists. Update issue at every phase gate.

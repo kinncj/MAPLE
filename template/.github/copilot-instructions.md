@@ -4,6 +4,53 @@
 
 Default agent: `@orchestrator`. It never writes code — delegates everything to specialist agents.
 
+## Commands
+
+| Command | What it does |
+|---|---|
+| `/feature {description}` | Full 8-phase pipeline |
+| `/bugfix {description}` | Reproduce → fix → validate → CHANGELOG |
+| `/validate` | Run full test suite |
+| `/tdd {requirement}` | Single RED → GREEN → REFACTOR cycle |
+| `/ship-safe` | Run `npx ship-safe audit .` security scan before shipping |
+
+## Specialist Agents
+
+| Agent | Responsibility |
+|---|---|
+| `@orchestrator` | Decomposes features, delegates, gates phases |
+| `@architect` | ADRs, system design, threat models, pre-ship audit |
+| `@qa` | Writes failing tests before implementation |
+| `@rubber-duck` | Second-opinion reviewer at plan/impl/test checkpoints |
+| `@spec-kit` | Requirement intake → Gherkin story files |
+| `@ux-researcher` | Personas, journey maps |
+| `@wireframe-architect` | Low-fi wireframes |
+| `@visual-identity-designer` | Design tokens, brand system |
+| `@ui-mockup-builder` | High-fidelity code mockups |
+| `@a11y-auditor` | WCAG 2.2 AA audit |
+| `@docs` | Technical documentation |
+| `@product-owner` | Story prioritization |
+
+## Skills (read before tasks)
+
+Read skills from `.claude/skills/` before executing tasks:
+
+| Skill | When to use |
+|---|---|
+| `tdd-workflow` | Before any implementation (Phase 5) |
+| `playwright-cli` | E2E / browser testing |
+| `github-cli` | Issue + PR management via `gh` |
+| `gh-issues` | Issue CRUD |
+| `gh-projects` | GitHub Project board management |
+| `gherkin-authoring` | Writing Gherkin story files |
+| `rubber-duck` | Second-opinion review |
+| `wireframe` | Before dispatching wireframe-architect |
+| `a11y-audit` | Before dispatching a11y-auditor |
+| `mermaid-diagrams` | Architecture / flow diagrams |
+| `rfc-adr` | ADR format |
+| `threat-modeling` | STRIDE threat analysis |
+| `ship-safe` | Pre-ship security scan (`/ship-safe`) |
+
 ## Hard Rules (Non-Negotiable)
 
 1. **TDD is mandatory.** `@qa` writes a failing test FIRST. Implementation follows. Never write implementation before a failing test exists.

@@ -44,7 +44,7 @@ make containers-down
 ```
 
 ### E2E Browser Tests (Playwright)
-Read `.claude/skills/playwright-cli/SKILL.md` for CLI patterns.
+Read `.opencode/skills/playwright-cli/SKILL.md` for CLI patterns.
 ```bash
 npx playwright test tests/e2e/ --reporter=html
 ```
