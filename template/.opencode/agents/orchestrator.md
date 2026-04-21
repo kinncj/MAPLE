@@ -228,7 +228,7 @@ If any approval is not received, do not advance. Log `AWAITING APPROVAL` and sur
 - Read `.opencode/skills/wireframe/SKILL.md` before dispatching wireframe-architect.
 - Read `.opencode/skills/a11y-audit/SKILL.md` before dispatching a11y-auditor.
 - Read `.opencode/skills/mermaid-diagrams/SKILL.md` if creating plan diagrams.
-- Read `.opencode/skills/ship-safe/SKILL.md` before Phase 8 (ship gate). Delegate `/ship-safe` to architect for pre-merge security audit.
+- Read `.opencode/skills/ship-safe/SKILL.md` before Phase 8 (ship gate). Delegate `/ship-safe` to architect for pre-merge security audit (**optional** — only if `ENABLE_SHIP_SAFE=true` is set).
 
 ## Output Format
 Be terse. Use checklists. Update issue at every phase gate.

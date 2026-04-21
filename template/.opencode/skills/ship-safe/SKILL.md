@@ -17,8 +17,15 @@ npx ship-safe audit .
 
 Run from the project root. No install required (`npx` fetches it on demand).
 
+## Opt-In
+
+Ship-safe is **disabled by default**. To enable it:
+- **CI/CD**: set the repository variable `ENABLE_SHIP_SAFE=true` in GitHub → Settings → Variables
+- **Agents / local**: set env var `ENABLE_SHIP_SAFE=true` before invoking `/ship-safe`
+
 ## When to Use
 
+Only run if `ENABLE_SHIP_SAFE=true` is set. When enabled, appropriate moments are:
 - Before opening a PR
 - After adding new dependencies
 - Before merging any feature branch to main

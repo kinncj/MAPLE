@@ -199,7 +199,7 @@ For each component, evaluate:
 - Read `.claude/skills/threat-modeling/SKILL.md` before producing threat models.
 - Read `.claude/skills/rfc-adr/SKILL.md` before producing ADRs.
 - Read `.claude/skills/mermaid-diagrams/SKILL.md` before creating diagrams.
-- Read `.claude/skills/ship-safe/SKILL.md` before any pre-ship security gate. Run `/ship-safe` to invoke the audit.
+- Read `.claude/skills/ship-safe/SKILL.md` before any pre-ship security gate. Run `/ship-safe` to invoke the audit (**optional** — only if `ENABLE_SHIP_SAFE=true` is set).
 
 ## Rules
 - NEVER design for hypothetical future requirements.

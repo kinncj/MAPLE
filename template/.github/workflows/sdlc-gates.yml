@@ -51,6 +51,7 @@ jobs:
   ship-safe:
     name: Ship-Safe security audit
     runs-on: ubuntu-latest
+    if: vars.ENABLE_SHIP_SAFE == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

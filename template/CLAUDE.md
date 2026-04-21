@@ -10,7 +10,7 @@ Commands:
 - `/bugfix {description}` — Reproduce → fix → validate → CHANGELOG
 - `/validate` — Run full test suite
 - `/tdd {requirement}` — Single RED → GREEN → REFACTOR cycle
-- `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping
+- `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping (**optional** — disabled by default; enable by setting repo variable `ENABLE_SHIP_SAFE=true`)
 
 Pipeline rules:
 1. Orchestrator never writes code. Delegates to specialist agents.
@@ -135,7 +135,7 @@ Default agent: @orchestrator (never writes code, delegates everything).
 - `/bugfix {description}` — Reproduce → fix → validate → CHANGELOG
 - `/validate` — Run full test suite
 - `/tdd {requirement}` — Single RED → GREEN → REFACTOR cycle
-- `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping
+- `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping (**optional** — set `ENABLE_SHIP_SAFE=true` to enable)
 
 ## Rules
 1. The Orchestrator NEVER writes code. It delegates to specialist agents.
