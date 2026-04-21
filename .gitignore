@@ -36,3 +36,4 @@ maple
 tui/template/
 # Stale leftover from running maple init inside this repo's template/ dir
 template/template/
+.playwright-mcp/
