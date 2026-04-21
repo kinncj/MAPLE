@@ -55,13 +55,13 @@ source ~/.zshrc
 **Option C — one-liner from GitHub Releases (no Go required):**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/kinncj/MAPLE/main/scripts/install.sh | bash
 ```
 
 Windows:
 
 ```powershell
-irm https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/kinncj/MAPLE/main/scripts/install.ps1 | iex
 ```
 
 ## Commands

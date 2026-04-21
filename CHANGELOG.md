@@ -7,6 +7,33 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.4.0] — 2026-04-21
+
+### Changed — Gherkin-first cleanup sweep
+- Rewrote `spec-kit` skill: story file IS the spec; dropped PROBLEM→SPEC→PLAN→TASKS state machine
+- All doc examples (`ui-feature`, `api-endpoint`, `spike`) updated to Gherkin-first format
+- Removed stale PROBLEM/SPEC/TASKS references from orchestrator, architect, and spec-kit agents
+- Story frontmatter schema unified across template, validator, and spec-kit skill
+- `copilot-instructions.md` and `stories.instructions` synced to canonical frontmatter
+- Design and a11y gates made phase-aware (skip before design is approved)
+- Pipeline status overlay (`P` key) added to TUI — reads `.claude/state/maple.json`
+- `qa-cucumber` agent added; ADR enforcement gate wired into orchestrator
+- `product-owner` agent deduplicated; `api-endpoint` example added to agents docs
+- Added 8 missing agents to `AGENTS.md` quick-reference table
+
+## [4.3.0] — 2026-04-16
+
+### Added — Gherkin-first gates, orchestrator guardrails, superpowers
+- `ship-safe` skill added to both `.claude/skills/` and `.opencode/skills/`
+- `architect` and `orchestrator` agents updated to reference `ship-safe`
+- OpenCode agents corrected to read `.opencode/skills/` (was wrongly reading `.claude/skills/`)
+- `copilot-instructions.md` fleshed out with full commands, agents, and skills tables
+- Ship-safe CI gate made opt-in via `ENABLE_SHIP_SAFE=true` repo variable
+- TUI binary moved to `tui/`; `template/` stays at repo root via symlink
+- Build dance (`rm symlink → cp -rL → go build → restore symlink`) wired into Makefile and CI
+- Test suite updated: Go file checks target `tui/`, superpowers phase guarded by directory check
+- `maple` binary and `.maple.json` added to `.gitignore`
+
 ## [3.7.0] — 2026-04-16
 
 ### Added — Phase VIII: Reference Implementations
