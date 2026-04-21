@@ -19,6 +19,19 @@ print(m.group(1) if m else 'false')
 
   [ "$UI" != "true" ] && continue
 
+  # Only enforce a11y audit from validate phase onwards.
+  PHASE=$(python3 -c "
+import re
+m = re.search(r'^phase:\s*[\"\']*(\w+)[\"\']*', open('$file').read(), re.MULTILINE)
+print(m.group(1) if m else 'validate')
+" 2>/dev/null || echo "validate")
+  case "$PHASE" in
+    discover|architect|plan|infra|implement)
+      echo "[a11y-gate] SKIP  $file  phase=$PHASE (a11y gate not enforced until validate)"
+      continue
+      ;;
+  esac
+
   STORY_ID=$(python3 -c "
 import re
 m = re.search(r'^id:\s*[\"\'](.*?)[\"\']', open('$file').read(), re.MULTILINE)

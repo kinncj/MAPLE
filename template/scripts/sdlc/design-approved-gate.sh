@@ -35,6 +35,20 @@ print(m.group(1) if m else 'false')
 " 2>/dev/null || echo "false")
   [ "$UI" != "true" ] && continue
 
+  # Only enforce design approval from implement phase onwards.
+  # During discover/architect/plan/infra the design sub-pipeline hasn't run yet.
+  PHASE=$(python3 -c "
+import re
+m = re.search(r'^phase:\s*[\"\']*(\w+)[\"\']*', open('$file').read(), re.MULTILINE)
+print(m.group(1) if m else 'implement')
+" 2>/dev/null || echo "implement")
+  case "$PHASE" in
+    discover|architect|plan|infra)
+      echo "[design-gate] SKIP  $file  phase=$PHASE (design gate not enforced until implement)"
+      continue
+      ;;
+  esac
+
   STORY_ID=$(python3 -c "
 import re
 m = re.search(r'^id:\s*[\"\'](.*?)[\"\']', open('$file').read(), re.MULTILINE)
