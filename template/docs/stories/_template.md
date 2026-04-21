@@ -1,26 +1,29 @@
 ---
-epic: __EPIC__
-story_id: "0001"
-story_slug: __SLUG__
-created_at: __TIMESTAMP__
-priority: medium
-domain: __DOMAIN__
-specialist_hints: []
+id: "__STORY_ID__"
+title: "__TITLE__"
+epic: "__EPIC__"
+priority: "medium"
 ui: false
 adr_required: false
+milestone: null
+phase: discover
+labels:
+  - "type:feature"
+  - "priority:medium"
+status: draft
 issue_number: null
 ---
 
-# __TITLE__
+## Story
 
-## Narrative
+**As a** __ROLE__,
+**I want** __ACTION__,
+**so that** __OUTCOME__.
 
-As a __ROLE__, I want to __ACTION__ so that __OUTCOME__.
-
-## Scenarios
+## Acceptance Criteria
 
 ```gherkin
-@story:__STORY_ID__ @epic:__EPIC__ @priority:__PRIORITY__
+@story:__STORY_ID__ @epic:__EPIC__ @priority:medium
 Feature: __FEATURE_TITLE__
 
   Scenario: __HAPPY_PATH__
@@ -48,4 +51,4 @@ Feature: __FEATURE_TITLE__
 
 ## ADR Links
 
-<!-- populated by adr-author agent -->
+<!-- populated by architect agent when adr_required: true -->

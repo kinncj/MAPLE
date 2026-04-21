@@ -4,7 +4,7 @@
 # Usage: validate-frontmatter.sh <file1> [file2 ...]
 set -euo pipefail
 
-REQUIRED_FIELDS=(id title epic priority ui adr_required milestone labels)
+REQUIRED_FIELDS=(id title epic priority ui adr_required labels)
 FAIL=0
 
 for file in "$@"; do
