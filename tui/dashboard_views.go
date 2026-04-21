@@ -667,7 +667,9 @@ func (m *dashboardModel) pipelineStatusView() string {
 			lipgloss.NewStyle().Foreground(t.Muted).Render("  Launch one with [x] and run /superpower-runner <name> in Claude Code."),
 		)
 	} else {
+		stale := ps.isStale()
 		iconStyle := lipgloss.NewStyle().Foreground(t.Success)
+		displayStatus := ps.Status
 		switch ps.Status {
 		case "PAUSED":
 			iconStyle = lipgloss.NewStyle().Foreground(t.Accent)
@@ -675,13 +677,24 @@ func (m *dashboardModel) pipelineStatusView() string {
 			iconStyle = lipgloss.NewStyle().Foreground(t.Error)
 		case "DONE":
 			iconStyle = lipgloss.NewStyle().Foreground(t.Success)
+		case "RUNNING":
+			if stale {
+				iconStyle = lipgloss.NewStyle().Foreground(t.Muted)
+				displayStatus = "RUNNING (stale — agent may have exited)"
+			}
 		}
 
 		bodyLines = append(bodyLines,
 			fmt.Sprintf("  Superpower:  %s", lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(ps.Superpower)),
 			fmt.Sprintf("  Stage:       %s", lipgloss.NewStyle().Foreground(t.Foreground).Render(ps.Stage)),
-			fmt.Sprintf("  Status:      %s %s", iconStyle.Render(ps.statusIcon()), iconStyle.Render(ps.Status)),
+			fmt.Sprintf("  Status:      %s %s", iconStyle.Render(ps.statusIcon()), iconStyle.Render(displayStatus)),
 		)
+		if stale {
+			bodyLines = append(bodyLines,
+				"",
+				lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("  Last update was >%s ago. If the agent is gone, press [c] to clear.", stalePipelineThreshold)),
+			)
+		}
 		if ps.AwaitingApproval != "" || m.approvalPending != "" {
 			stage := ps.AwaitingApproval
 			if m.approvalPending != "" {
@@ -771,6 +784,70 @@ func (m *dashboardModel) launcherView() string {
 	innerW := m.width - 10
 	if innerW < 50 {
 		innerW = 50
+	}
+	box := lipgloss.NewStyle().
+		Width(innerW).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Primary).
+		Padding(1, 2).
+		Render(inner)
+
+	availH := m.height - 6
+	if availH < 10 {
+		availH = 10
+	}
+	return lipgloss.Place(m.width, availH, lipgloss.Center, lipgloss.Center, box)
+}
+
+// rtkHarnessView renders the RTK harness selector overlay (R key).
+func (m *dashboardModel) rtkHarnessView() string {
+	t := m.theme
+	title := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("[R] RTK Token Optimizer — Wire Harnesses")
+	mutedStyle := lipgloss.NewStyle().Foreground(t.Muted)
+	selStyle := lipgloss.NewStyle().Foreground(t.Primary).Bold(true)
+	doneStyle := lipgloss.NewStyle().Foreground(t.Success)
+	pendStyle := lipgloss.NewStyle().Foreground(t.Accent)
+
+	var bodyLines []string
+	if m.rtkHarnessRunning {
+		bodyLines = append(bodyLines, mutedStyle.Render("  running rtk init …"), "")
+	} else {
+		bodyLines = append(bodyLines, mutedStyle.Render("  [j/k] navigate · [Space] toggle · [Enter] install · [Esc] close"), "")
+	}
+
+	for i, h := range allRTKHarnesses {
+		cursor := "  "
+		nameStyle := mutedStyle
+		if i == m.rtkHarnessCur && !m.rtkHarnessRunning {
+			cursor = "▶ "
+			nameStyle = selStyle
+		}
+		var marker string
+		switch {
+		case m.rtkHarnessInstalled[h.key]:
+			marker = " " + doneStyle.Render("✓ installed")
+		case m.rtkHarnessToggled[h.key]:
+			marker = " " + pendStyle.Render("◉ selected")
+		default:
+			marker = "   " + mutedStyle.Render("○")
+		}
+		bodyLines = append(bodyLines, cursor+nameStyle.Render(h.name)+marker)
+	}
+
+	if !m.rtkHarnessRunning {
+		selected := 0
+		for range m.rtkHarnessToggled {
+			selected++
+		}
+		if selected > 0 {
+			bodyLines = append(bodyLines, "", pendStyle.Render(fmt.Sprintf("  %d harness(es) selected — press Enter to install", selected)))
+		}
+	}
+
+	inner := title + "\n\n" + strings.Join(bodyLines, "\n")
+	innerW := m.width - 10
+	if innerW < 60 {
+		innerW = 60
 	}
 	box := lipgloss.NewStyle().
 		Width(innerW).

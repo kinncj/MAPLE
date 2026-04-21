@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"time"
 )
+
+const stalePipelineThreshold = 10 * time.Minute
 
 // pipelineState mirrors the state written by the superpower-runner skill
 // to .claude/state/maple.json
@@ -22,6 +25,22 @@ type pipelineState struct {
 
 func (p pipelineState) isSuperpower() bool {
 	return p.Superpower != ""
+}
+
+// isStale returns true if the pipeline claims RUNNING but hasn't been updated
+// in stalePipelineThreshold — meaning the agent likely died without writing DONE/FAILED.
+func (p pipelineState) isStale() bool {
+	if strings.ToUpper(p.Status) != "RUNNING" {
+		return false
+	}
+	if p.UpdatedAt == "" {
+		return false
+	}
+	t, err := time.Parse(time.RFC3339, p.UpdatedAt)
+	if err != nil {
+		return false
+	}
+	return time.Since(t) > stalePipelineThreshold
 }
 
 func (p pipelineState) statusIcon() string {

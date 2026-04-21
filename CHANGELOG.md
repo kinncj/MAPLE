@@ -7,6 +7,15 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.6.0] — 2026-04-21
+
+### Added
+- **RTK harness selector**: `R` key opens a multi-select overlay listing all supported harnesses (Claude Code/Copilot, Gemini CLI, Codex, Cursor, Windsurf, Cline/Roo Code, Kilo Code, Google Antigravity). Space toggles, Enter runs `rtk init` with the right flags for each. Already-installed harnesses shown as `✓`. State persisted to `.claude/state/rtk-harnesses.json`.
+
+### Fixed
+- **Stale pipeline**: P overlay now detects when a RUNNING pipeline hasn't been updated in >10 min (agent likely died). Shows grey "RUNNING (stale)" with a hint to press `[c]` to clear.
+- **`[c]` key in P overlay**: deletes `maple.json` and `approval-pending.txt` so a dead pipeline doesn't block future runs.
+
 ## [4.5.0] — 2026-04-21
 
 ### Added

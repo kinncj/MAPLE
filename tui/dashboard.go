@@ -116,6 +116,11 @@ type shipSafeDoneMsg struct {
 	failed bool
 }
 
+type rtkInitDoneMsg struct {
+	key string
+	err string
+}
+
 const dashTickInterval    = 5 * time.Second
 const dashNetTickInterval = 60 * time.Second
 
@@ -247,6 +252,13 @@ type dashboardModel struct {
 	// Pinned sessions (tool → session ID), loaded from .claude/state/sessions.json
 	pinnedSessions map[string]string
 
+	// RTK harness selector overlay
+	showRTKHarness    bool
+	rtkHarnessCur     int
+	rtkHarnessToggled map[string]bool // selected in current session (not yet installed)
+	rtkHarnessInstalled map[string]bool // already installed (from .claude/state/rtk-harnesses.json)
+	rtkHarnessRunning bool
+
 	openTarget []string // command to exec when exitAction == dashActionOpenAgent
 	exitAction dashAction
 }
@@ -272,6 +284,7 @@ func (m *dashboardModel) reload() {
 	m.logLines = loadLogLines(200)
 	m.projectName = loadProjectName()
 	m.pinnedSessions = loadPinnedSessions()
+	m.rtkHarnessInstalled = loadRTKHarnesses()
 	// clamp cursors
 	m.clampCursor(&m.storiesCur, len(m.stories))
 	m.clampCursor(&m.sessionsCur, len(m.sessions))
@@ -382,6 +395,23 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.shipSafeScroll = len(msg.lines) - 1
 		if m.shipSafeScroll < 0 {
 			m.shipSafeScroll = 0
+		}
+
+	case rtkInitDoneMsg:
+		if msg.err != "" {
+			return m, m.setStatus("✗ rtk init "+msg.key+": "+msg.err, true)
+		}
+		saveRTKHarness(msg.key)
+		if m.rtkHarnessInstalled == nil {
+			m.rtkHarnessInstalled = map[string]bool{}
+		}
+		m.rtkHarnessInstalled[msg.key] = true
+		delete(m.rtkHarnessToggled, msg.key)
+		// close overlay once all pending inits are done
+		if len(m.rtkHarnessToggled) == 0 {
+			m.rtkHarnessRunning = false
+			m.showRTKHarness = false
+			return m, m.setStatus("✓ rtk wired for selected harnesses", false)
 		}
 
 	case statusClearMsg:
@@ -710,8 +740,16 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.pipelineState = ps
 				return m, m.setStatus("✓ approved — pipeline resuming", false)
 			}
+		case "c":
+			_ = os.Remove(".claude/state/maple.json")
+			_ = os.Remove(".claude/state/approval-pending.txt")
+			m.pipelineState = pipelineState{}
+			m.approvalPending = ""
+			m.showPipeline = false
+			return m, m.setStatus("✓ pipeline state cleared", false)
+		default:
+			m.showPipeline = false
 		}
-		m.showPipeline = false
 		return m, nil
 	}
 
@@ -757,6 +795,46 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case "q", "esc", "ctrl+c":
 				m.showLauncher = false
 			}
+		}
+		return m, nil
+	}
+
+	// RTK harness selector overlay
+	if m.showRTKHarness {
+		if m.rtkHarnessRunning {
+			return m, nil
+		}
+		switch k {
+		case "j", "down":
+			if m.rtkHarnessCur < len(allRTKHarnesses)-1 {
+				m.rtkHarnessCur++
+			}
+		case "k", "up":
+			if m.rtkHarnessCur > 0 {
+				m.rtkHarnessCur--
+			}
+		case " ":
+			h := allRTKHarnesses[m.rtkHarnessCur]
+			if !m.rtkHarnessInstalled[h.key] {
+				m.rtkHarnessToggled[h.key] = !m.rtkHarnessToggled[h.key]
+			}
+		case "enter":
+			// run rtk init for each toggled harness
+			var cmds []tea.Cmd
+			for _, h := range allRTKHarnesses {
+				if m.rtkHarnessToggled[h.key] {
+					h := h // capture
+					cmds = append(cmds, rtkInitCmd(h))
+				}
+			}
+			if len(cmds) == 0 {
+				m.showRTKHarness = false
+			} else {
+				m.rtkHarnessRunning = true
+				return m, tea.Batch(cmds...)
+			}
+		case "q", "esc", "ctrl+c":
+			m.showRTKHarness = false
 		}
 		return m, nil
 	}
@@ -938,6 +1016,12 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.launcherCmd = ""
 		m.launcherInput = false
 		m.showLauncher = true
+	case "R":
+		m.rtkHarnessInstalled = loadRTKHarnesses()
+		m.rtkHarnessToggled = map[string]bool{}
+		m.rtkHarnessCur = 0
+		m.rtkHarnessRunning = false
+		m.showRTKHarness = true
 	case "o":
 		if m.focus == paneAgents && m.sessionsCur < len(m.sessions) {
 			s := m.sessions[m.sessionsCur]
@@ -1215,6 +1299,9 @@ func (m *dashboardModel) View() string {
 	if m.showLauncher {
 		return m.header() + m.launcherView() + m.footer()
 	}
+	if m.showRTKHarness {
+		return m.header() + m.rtkHarnessView() + m.footer()
+	}
 
 	// Normal 2×2 dashboard
 	return m.header() + m.gridView() + m.footer()
@@ -1241,8 +1328,14 @@ func (m *dashboardModel) footer() string {
 		return "\n" + lipgloss.NewStyle().Foreground(col).Render("  "+m.status) + "\n"
 	}
 
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open+pin session · [p] pin session · [L] launch · [S] ship-safe · [x] superpowers · [P] pipeline · [F] skills · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open+pin session · [p] pin · [L] launch · [R] rtk harnesses · [S] ship-safe · [x] superpowers · [P] pipeline · [F] skills · [?] help · [q] quit"
 	switch {
+	case m.showRTKHarness:
+		if m.rtkHarnessRunning {
+			keys = "  installing…"
+		} else {
+			keys = "  [j/k] navigate · [Space] toggle · [Enter] install selected · [Esc] close"
+		}
 	case m.showLauncher:
 		if m.launcherInput {
 			keys = "  type command · [Enter] launch · [Esc] back"
@@ -1250,10 +1343,13 @@ func (m *dashboardModel) footer() string {
 			keys = "  [j/k] navigate · [Enter] enter command · [Esc] close"
 		}
 	case m.showPipeline:
-		if m.approvalPending != "" {
-			keys = "  [a] approve stage · any other key closes"
-		} else {
-			keys = "  any key closes"
+		switch {
+		case m.approvalPending != "":
+			keys = "  [a] approve stage · [c] clear state · any other key closes"
+		case m.pipelineState.isStale():
+			keys = "  [c] clear stale state · any other key closes"
+		default:
+			keys = "  [c] clear state · any other key closes"
 		}
 	case m.showSuperpowers:
 		keys = "  [j/k] navigate · [Enter] launch · [Esc] close"
@@ -1500,6 +1596,21 @@ func truncate(s string, n int) string {
 		return "…"
 	}
 	return string(runes[:n-1]) + "…"
+}
+
+// rtkInitCmd runs rtk init with the harness-specific flags and reports back.
+func rtkInitCmd(h rtkHarness) tea.Cmd {
+	return func() tea.Msg {
+		rtkPath, err := exec.LookPath("rtk")
+		if err != nil {
+			return rtkInitDoneMsg{key: h.key, err: "rtk not found"}
+		}
+		out, err := exec.Command(rtkPath, h.flags...).CombinedOutput()
+		if err != nil {
+			return rtkInitDoneMsg{key: h.key, err: strings.TrimSpace(string(out))}
+		}
+		return rtkInitDoneMsg{key: h.key}
+	}
 }
 
 // ─── Entry point ─────────────────────────────────────────────────────────────

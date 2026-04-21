@@ -273,6 +273,48 @@ func savePinnedSession(tool, id string) {
 	_ = os.WriteFile(sessionsFile, append(data, '\n'), 0o644)
 }
 
+// ─── RTK harness registry ─────────────────────────────────────────────────────
+
+type rtkHarness struct {
+	name  string   // display name
+	key   string   // storage key
+	flags []string // args passed to rtk init
+}
+
+// allRTKHarnesses lists every supported harness in display order.
+var allRTKHarnesses = []rtkHarness{
+	{"Claude Code / Copilot (default)", "claude", []string{"init", "-g"}},
+	{"Gemini CLI", "gemini", []string{"init", "-g", "--gemini"}},
+	{"Codex (OpenAI)", "codex", []string{"init", "-g", "--codex"}},
+	{"Cursor", "cursor", []string{"init", "--agent", "cursor"}},
+	{"Windsurf", "windsurf", []string{"init", "--agent", "windsurf"}},
+	{"Cline / Roo Code", "cline", []string{"init", "--agent", "cline"}},
+	{"Kilo Code", "kilocode", []string{"init", "--agent", "kilocode"}},
+	{"Google Antigravity", "antigravity", []string{"init", "--agent", "antigravity"}},
+}
+
+const rtkHarnessFile = ".claude/state/rtk-harnesses.json"
+
+func loadRTKHarnesses() map[string]bool {
+	data, err := os.ReadFile(rtkHarnessFile)
+	if err != nil {
+		return map[string]bool{}
+	}
+	var m map[string]bool
+	if err := json.Unmarshal(data, &m); err != nil {
+		return map[string]bool{}
+	}
+	return m
+}
+
+func saveRTKHarness(key string) {
+	_ = os.MkdirAll(".claude/state", 0o755)
+	m := loadRTKHarnesses()
+	m[key] = true
+	data, _ := json.Marshal(m)
+	_ = os.WriteFile(rtkHarnessFile, append(data, '\n'), 0o644)
+}
+
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 func str(v interface{}) string {
