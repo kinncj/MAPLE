@@ -117,27 +117,66 @@ func (m *dashboardModel) prsContent(height int) string {
 
 func (m *dashboardModel) qaContent(height int) string {
 	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("QA / Gherkin")
-	if m.qaFeatures == 0 {
-		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no .feature files in tests/features/")
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("QA / Tests")
+	if len(m.qaEntries) == 0 {
+		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no tests found")
 	}
 	summary := lipgloss.NewStyle().Foreground(t.Muted).Render(
-		fmt.Sprintf("  %d file(s) · %d scenario(s)", m.qaFeatures, m.qaScenarios))
+		fmt.Sprintf("  %d test file(s)", len(m.qaEntries)))
 	lines := []string{title, summary}
 	cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-	for i, p := range m.qaFiles {
+	for i, e := range m.qaEntries {
 		if i >= height-3 {
 			break
 		}
-		name := filepath.Base(p)
-		label := lipgloss.NewStyle().Foreground(t.Foreground).Render(truncate(name, 28))
-		if i == m.qaFileCur && m.focus == paneQA {
-			lines = append(lines, cursor+" "+label)
-		} else {
-			lines = append(lines, "  "+label)
+		badge := testFrameworkBadge(e.framework, t)
+		label := lipgloss.NewStyle().Foreground(t.Foreground).Render(truncate(filepath.Base(e.path), 24))
+		extra := ""
+		if e.count > 0 {
+			extra = lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf(" (%d)", e.count))
 		}
+		var line string
+		if i == m.qaEntryCur && m.focus == paneQA {
+			line = cursor + " " + badge + " " + label + extra
+		} else {
+			line = "  " + badge + " " + label + extra
+		}
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func testFrameworkBadge(fw string, t Theme) string {
+	switch fw {
+	case "gherkin":
+		return lipgloss.NewStyle().Foreground(t.Success).Render("[gherkin]")
+	case "go":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#00ADD8")).Render("[go]    ")
+	case "jest":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#C21325")).Render("[jest]  ")
+	case "vitest":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#FCC72B")).Render("[vitest]")
+	case "mocha":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#8D6748")).Render("[mocha] ")
+	case "npm":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#CB3837")).Render("[npm]   ")
+	case "pytest":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#3572A5")).Render("[pytest]")
+	case "unittest":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#3572A5")).Render("[py]    ")
+	case "rspec":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#CC342D")).Render("[rspec] ")
+	case "maven":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#C71A36")).Render("[maven] ")
+	case "gradle":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#02303A")).Render("[gradle]")
+	case "phpunit":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#777BB4")).Render("[php]   ")
+	case "cargo":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#DEA584")).Render("[cargo] ")
+	default:
+		return lipgloss.NewStyle().Foreground(t.Muted).Render("[test]  ")
+	}
 }
 
 func (m *dashboardModel) designView() string {
@@ -559,9 +598,10 @@ func (m *dashboardModel) sessionDetailView() string {
 	return sb.String()
 }
 
-// qaFileDetailView renders a .feature file as a full-screen overlay.
+// qaFileDetailView renders a test file as a full-screen overlay.
 func (m *dashboardModel) qaFileDetailView() string {
 	t := m.theme
+	badge := testFrameworkBadge(m.qaFileFramework, t)
 	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  " + filepath.Base(m.qaFileTitle))
 	path := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + m.qaFileTitle)
 	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
@@ -577,9 +617,15 @@ func (m *dashboardModel) qaFileDetailView() string {
 	window := m.qaFileLines[m.qaFileScroll:end]
 
 	var sb strings.Builder
-	sb.WriteString(title + "\n" + path + "\n" + sep + "\n\n")
+	sb.WriteString(badge + " " + title + "\n" + path + "\n" + sep + "\n\n")
 	for _, l := range window {
-		sb.WriteString("  " + colorizeGherkin(l, t) + "\n")
+		var rendered string
+		if m.qaFileFramework == "gherkin" {
+			rendered = colorizeGherkin(l, t)
+		} else {
+			rendered = lipgloss.NewStyle().Foreground(t.Foreground).Render(l)
+		}
+		sb.WriteString("  " + rendered + "\n")
 	}
 
 	total := len(m.qaFileLines)
@@ -590,6 +636,58 @@ func (m *dashboardModel) qaFileDetailView() string {
 				fmt.Sprintf("(%d%%)  j/k scroll · r run test · Esc close", pct))))
 	} else {
 		sb.WriteString("\n  " + lipgloss.NewStyle().Foreground(t.Muted).Render("r run test · Esc close") + "\n")
+	}
+	return sb.String()
+}
+
+// testOutputView renders the live/completed test runner output.
+func (m *dashboardModel) testOutputView() string {
+	t := m.theme
+
+	titleCol := t.Success
+	statusStr := "PASSED"
+	if m.testOutRunning {
+		titleCol = t.Muted
+		statusStr = "running…"
+	} else if m.testOutFailed {
+		titleCol = t.Error
+		statusStr = "FAILED"
+	}
+
+	title := lipgloss.NewStyle().Foreground(titleCol).Bold(true).Render("  [" + statusStr + "] " + m.testOutTitle)
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
+
+	visible := m.height - 14
+	if visible < 4 {
+		visible = 4
+	}
+	end := m.testOutScroll + visible
+	if end > len(m.testOutLines) {
+		end = len(m.testOutLines)
+	}
+	window := m.testOutLines[m.testOutScroll:end]
+
+	var sb strings.Builder
+	sb.WriteString(title + "\n" + sep + "\n\n")
+	for _, l := range window {
+		col := t.Foreground
+		tl := strings.TrimSpace(l)
+		if strings.HasPrefix(tl, "FAIL") || strings.HasPrefix(tl, "--- FAIL") ||
+			strings.Contains(tl, "FAILED") || strings.HasPrefix(tl, "Error") {
+			col = t.Error
+		} else if strings.HasPrefix(tl, "ok ") || strings.HasPrefix(tl, "--- PASS") ||
+			strings.Contains(tl, "passed") || strings.HasPrefix(tl, "PASS") {
+			col = t.Success
+		}
+		sb.WriteString("  " + lipgloss.NewStyle().Foreground(col).Render(l) + "\n")
+	}
+
+	total := len(m.testOutLines)
+	if total > visible {
+		pct := (m.testOutScroll * 100) / (total - visible)
+		sb.WriteString(fmt.Sprintf("\n  %s\n",
+			lipgloss.NewStyle().Foreground(t.Muted).Render(
+				fmt.Sprintf("(%d%%)  j/k scroll · Esc close", pct))))
 	}
 	return sb.String()
 }

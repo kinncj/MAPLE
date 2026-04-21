@@ -39,6 +39,13 @@ type agentRow struct {
 	sessionID string // for session detail drill-down
 }
 
+type testEntry struct {
+	path      string   // relative path to display
+	framework string   // "gherkin", "go", "jest", "vitest", "mocha", "pytest", "rspec", "maven", "gradle", "phpunit", "cargo", "npm"
+	runCmd    []string // command to run this test
+	count     int      // test/scenario count if parseable (0 = unknown)
+}
+
 // ─── Dashboard exit actions ───────────────────────────────────────────────────
 
 type dashAction int
@@ -85,8 +92,12 @@ type statusClearMsg struct{}
 type dashTickMsg struct{}    // periodic local-data refresh (no network)
 type dashNetTickMsg struct{} // periodic network refresh (gh pr list)
 
-type qaTestResultMsg struct {
-	output string
+type testRunStartMsg struct {
+	title string
+}
+
+type testRunDoneMsg struct {
+	lines  []string
 	failed bool
 }
 
@@ -145,10 +156,8 @@ type dashboardModel struct {
 	agents    []agentRow
 	agentsCur int
 
-	qaFeatures  int
-	qaScenarios int
-	qaFiles     []string // paths to .feature files
-	qaFileCur   int
+	qaEntries  []testEntry
+	qaEntryCur int
 
 	designTree []string
 	designCur  int
@@ -173,11 +182,21 @@ type dashboardModel struct {
 	sessionTitle  string
 	sessionSource string
 
-	// QA feature file overlay
-	showQAFile   bool
-	qaFileLines  []string
-	qaFileScroll int
-	qaFileTitle  string
+	// QA file viewer overlay
+	showQAFile      bool
+	qaFileLines     []string
+	qaFileScroll    int
+	qaFileTitle     string
+	qaFileFramework string
+	qaFileRunCmd    []string
+
+	// QA test run output overlay
+	showTestOut    bool
+	testOutLines   []string
+	testOutScroll  int
+	testOutTitle   string
+	testOutRunning bool
+	testOutFailed  bool
 
 	// PR detail overlay
 	showPRDetail    bool
@@ -205,14 +224,14 @@ func newDashboard(t Theme, noAnimate bool) *dashboardModel {
 func (m *dashboardModel) reload() {
 	m.stories = loadStories()
 	m.agents = loadAgents()
-	m.qaFeatures, m.qaScenarios, m.qaFiles = loadQA()
+	m.qaEntries = loadTestEntries()
 	m.designTree = loadDesignTree()
 	m.logLines = loadLogLines(200)
 	m.projectName = loadProjectName()
 	// clamp cursors
 	m.clampCursor(&m.storiesCur, len(m.stories))
 	m.clampCursor(&m.agentsCur, len(m.agents))
-	m.clampCursor(&m.qaFileCur, len(m.qaFiles))
+	m.clampCursor(&m.qaEntryCur, len(m.qaEntries))
 	m.clampCursor(&m.designCur, len(m.designTree))
 	m.clampCursor(&m.logsCur, len(m.logLines))
 }
@@ -282,11 +301,22 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.prsLoading = true
 		return m, tea.Batch(loadPRsCmd(), dashNetTickCmd())
 
-	case qaTestResultMsg:
-		if msg.failed {
-			return m, m.setStatus("✗ "+msg.output, true)
+	case testRunStartMsg:
+		m.testOutRunning = true
+		m.testOutFailed = false
+		m.testOutLines = []string{"running…"}
+		m.testOutTitle = msg.title
+		m.testOutScroll = 0
+		m.showTestOut = true
+
+	case testRunDoneMsg:
+		m.testOutRunning = false
+		m.testOutFailed = msg.failed
+		m.testOutLines = msg.lines
+		m.testOutScroll = len(msg.lines) - 1 // scroll to bottom
+		if m.testOutScroll < 0 {
+			m.testOutScroll = 0
 		}
-		return m, m.setStatus("✓ "+msg.output, false)
 
 	case statusClearMsg:
 		m.status = ""
@@ -524,6 +554,33 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Test run output overlay
+	if m.showTestOut {
+		maxScroll := len(m.testOutLines) - (m.height - 14)
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		switch k {
+		case "j", "down":
+			if m.testOutScroll < maxScroll {
+				m.testOutScroll++
+			}
+		case "k", "up":
+			if m.testOutScroll > 0 {
+				m.testOutScroll--
+			}
+		case "g":
+			m.testOutScroll = 0
+		case "G":
+			m.testOutScroll = maxScroll
+		case "q", "esc", "b", "ctrl+c":
+			if !m.testOutRunning {
+				m.showTestOut = false
+			}
+		}
+		return m, nil
+	}
+
 	// QA feature file overlay
 	if m.showQAFile {
 		maxScroll := len(m.qaFileLines) - (m.height - 14)
@@ -545,7 +602,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.qaFileScroll = maxScroll
 		case "r":
 			m.showQAFile = false
-			return m, m.runFeatureTestCmd(m.qaFileTitle)
+			return m, m.runTestCmd(testEntry{path: m.qaFileTitle, framework: m.qaFileFramework, runCmd: m.qaFileRunCmd})
 		case "q", "esc", "b", "ctrl+c":
 			m.showQAFile = false
 		}
@@ -657,8 +714,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.openStoryDetail(m.stories[m.storiesCur])
 		} else if m.focus == paneAgents && m.agentsCur < len(m.agents) {
 			m.openSessionDetail(m.agents[m.agentsCur])
-		} else if m.focus == paneQA && m.qaFileCur < len(m.qaFiles) {
-			m.openQAFile(m.qaFiles[m.qaFileCur])
+		} else if m.focus == paneQA && m.qaEntryCur < len(m.qaEntries) {
+			m.openQAFile(m.qaEntries[m.qaEntryCur])
 		} else if m.focus == panePRs && m.prsCur < len(m.prList) {
 			pr := m.prList[m.prsCur]
 			m.prDetailLoading = true
@@ -672,8 +729,10 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.setStatus("opening PR in browser…", false)
 		}
 	case "r":
-		if m.focus == paneQA {
-			return m, m.runFeatureTestCmd("")
+		if m.focus == paneQA && m.qaEntryCur < len(m.qaEntries) {
+			return m, m.runTestCmd(m.qaEntries[m.qaEntryCur])
+		} else if m.focus == paneQA {
+			return m, m.setStatus("no tests found", true)
 		}
 		m.reload()
 		m.prsLoading = true
@@ -726,8 +785,8 @@ func (m *dashboardModel) moveCursorDown() {
 				m.prsCur++
 			}
 		case paneQA:
-			if m.qaFileCur < len(m.qaFiles)-1 {
-				m.qaFileCur++
+			if m.qaEntryCur < len(m.qaEntries)-1 {
+				m.qaEntryCur++
 			}
 		}
 	}
@@ -758,8 +817,8 @@ func (m *dashboardModel) moveCursorUp() {
 				m.prsCur--
 			}
 		case paneQA:
-			if m.qaFileCur > 0 {
-				m.qaFileCur--
+			if m.qaEntryCur > 0 {
+				m.qaEntryCur--
 			}
 		}
 	}
@@ -780,7 +839,7 @@ func (m *dashboardModel) moveCursorTop() {
 		case panePRs:
 			m.prsCur = 0
 		case paneQA:
-			m.qaFileCur = 0
+			m.qaEntryCur = 0
 		}
 	}
 }
@@ -810,8 +869,8 @@ func (m *dashboardModel) moveCursorBottom() {
 				m.prsCur = len(m.prList) - 1
 			}
 		case paneQA:
-			if len(m.qaFiles) > 0 {
-				m.qaFileCur = len(m.qaFiles) - 1
+			if len(m.qaEntries) > 0 {
+				m.qaEntryCur = len(m.qaEntries) - 1
 			}
 		}
 	}
@@ -899,6 +958,9 @@ func (m *dashboardModel) View() string {
 	if m.showStory {
 		return m.header() + m.storyDetailView() + m.footer()
 	}
+	if m.showTestOut {
+		return m.header() + m.testOutputView() + m.footer()
+	}
 	if m.showQAFile {
 		return m.header() + m.qaFileDetailView() + m.footer()
 	}
@@ -949,6 +1011,14 @@ func (m *dashboardModel) footer() string {
 		keys = "  [j/k] scroll · [Esc] close"
 	} else if m.showStory {
 		keys = "  [j/k] scroll · [e] re-edit · [Esc] close"
+	} else if m.showTestOut {
+		if m.testOutRunning {
+			keys = "  running…"
+		} else if m.testOutFailed {
+			keys = "  FAILED · [j/k] scroll · [Esc] close"
+		} else {
+			keys = "  PASSED · [j/k] scroll · [Esc] close"
+		}
 	} else if m.showQAFile {
 		keys = "  [j/k] scroll · [r] run test · [Esc] close"
 	} else if m.showPRDetail || m.prDetailLoading {
@@ -1002,8 +1072,8 @@ func (m *dashboardModel) narrowView() string {
 	t := m.theme
 	lines := []string{
 		lipgloss.NewStyle().Foreground(t.Warning).Render("  Terminal < 80 cols — narrow mode"),
-		lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("  %d stories · %d PRs · %d scenarios",
-			len(m.stories), len(m.prList), m.qaScenarios)),
+		lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf("  %d stories · %d PRs · %d tests",
+			len(m.stories), len(m.prList), len(m.qaEntries))),
 		"",
 	}
 	for i, s := range m.stories {
@@ -1017,45 +1087,40 @@ func (m *dashboardModel) narrowView() string {
 	return strings.Join(lines, "\n")
 }
 
-// openQAFile loads a .feature file into the QA file overlay.
-func (m *dashboardModel) openQAFile(path string) {
-	raw, err := os.ReadFile(path)
+// openQAFile loads a test file into the QA file overlay.
+func (m *dashboardModel) openQAFile(e testEntry) {
+	raw, err := os.ReadFile(e.path)
 	if err != nil {
-		m.status = "✗ could not read " + path
+		m.status = "✗ could not read " + e.path
 		m.statusErr = true
 		return
 	}
 	m.qaFileLines = strings.Split(string(raw), "\n")
 	m.qaFileScroll = 0
-	m.qaFileTitle = path
+	m.qaFileTitle = e.path
+	m.qaFileFramework = e.framework
+	m.qaFileRunCmd = e.runCmd
 	m.showQAFile = true
 }
 
-// runFeatureTestCmd runs the test suite. If path is non-empty, runs only that file.
-func (m *dashboardModel) runFeatureTestCmd(path string) tea.Cmd {
-	return func() tea.Msg {
-		var cmd *exec.Cmd
-		if path != "" {
-			cmd = exec.Command("make", "test-features", "FEATURE="+path)
-		} else {
-			cmd = exec.Command("make", "test-features")
-		}
-		out, err := cmd.CombinedOutput()
-		summary := strings.TrimSpace(string(out))
-		// Keep last 72 chars of output as the status summary
-		lines := strings.Split(summary, "\n")
-		last := strings.TrimSpace(lines[len(lines)-1])
-		if last == "" && len(lines) > 1 {
-			last = strings.TrimSpace(lines[len(lines)-2])
-		}
-		if len(last) > 72 {
-			last = "…" + last[len(last)-72:]
-		}
-		if last == "" {
-			last = "tests ran"
-		}
-		return qaTestResultMsg{output: last, failed: err != nil}
-	}
+// runTestCmd runs a test entry and streams output to the test output overlay.
+func (m *dashboardModel) runTestCmd(e testEntry) tea.Cmd {
+	title := e.framework + ": " + e.path
+	return tea.Batch(
+		func() tea.Msg { return testRunStartMsg{title: title} },
+		func() tea.Msg {
+			if len(e.runCmd) == 0 {
+				return testRunDoneMsg{lines: []string{"no run command configured"}, failed: true}
+			}
+			cmd := exec.Command(e.runCmd[0], e.runCmd[1:]...)
+			out, err := cmd.CombinedOutput()
+			lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+			if len(lines) == 0 {
+				lines = []string{"(no output)"}
+			}
+			return testRunDoneMsg{lines: lines, failed: err != nil}
+		},
+	)
 }
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
