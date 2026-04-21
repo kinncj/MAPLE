@@ -154,14 +154,19 @@ func runDashboardLoop(t Theme, noAnimate bool, tools Tools, fsys fs.FS) {
 		switch action {
 		case dashActionOpenAgent, dashActionLaunch:
 			if len(openTarget) > 0 {
+				fmt.Printf("\n  → launching %s  (maple resumes when it exits)\n\n", openTarget[0])
 				cmd := exec.Command(openTarget[0], openTarget[1:]...)
 				cmd.Stdin = os.Stdin
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 				_ = cmd.Run()
+				fmt.Println("\n  ← back to maple")
+				tools = Detect()
 			}
-			return
+			// loop back — maple restarts the dashboard
 		case dashActionSuperpower:
+			// superpowers now go through dashActionOpenAgent via the launch overlay;
+			// this path is kept for any external caller that still uses it
 			printSuperpowerLaunch(openTarget)
 			return
 		case dashActionReq:

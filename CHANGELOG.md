@@ -7,6 +7,11 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.7.1] — 2026-04-21
+
+### Fixed
+- Launching a harness from the superpower overlay (or `L` launcher) no longer kills maple. The harness runs in the foreground of the same terminal; when it exits maple restarts the dashboard automatically. Works on all platforms and terminals — no new-tab/window APIs needed.
+
 ## [4.7.0] — 2026-04-21
 
 ### Changed
