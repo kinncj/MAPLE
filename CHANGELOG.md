@@ -7,6 +7,14 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.7.0] — 2026-04-21
+
+### Changed
+- **Superpower selection now launches directly**: pressing Enter on a superpower no longer exits and prints instructions. Instead it opens a launch overlay:
+  - If a pinned session exists: goes straight to prompt input, showing the harness + session that will be resumed
+  - If no pinned session: shows a harness picker first (Claude Code / OpenCode / Copilot), then prompt input
+  - Optional context/prompt can be typed; Enter builds `<harness> [--resume <id>] "/superpower-runner <name> <context>"` and execs it
+
 ## [4.6.0] — 2026-04-21
 
 ### Added

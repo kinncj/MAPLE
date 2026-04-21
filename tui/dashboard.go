@@ -252,6 +252,14 @@ type dashboardModel struct {
 	// Pinned sessions (tool → session ID), loaded from .claude/state/sessions.json
 	pinnedSessions map[string]string
 
+	// Superpower launch overlay (shown after picking a superpower with Enter)
+	showSuperpowerLaunch      bool
+	superpowerLaunchName      string // name of the selected superpower
+	superpowerLaunchPrompt    string // optional extra context typed by user
+	superpowerLaunchHarness   string // chosen harness (tool)
+	superpowerLaunchPickHarness bool // true = showing harness picker, false = prompt input
+	superpowerLaunchHarnessCur  int
+
 	// RTK harness selector overlay
 	showRTKHarness    bool
 	rtkHarnessCur     int
@@ -718,13 +726,93 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if m.superpowerCur < len(m.superpowerDefs) {
+				name := m.superpowerDefs[m.superpowerCur].name
 				m.showSuperpowers = false
-				m.openTarget = []string{m.superpowerDefs[m.superpowerCur].name}
-				m.exitAction = dashActionSuperpower
-				return m, tea.Quit
+				m.superpowerLaunchName = name
+				m.superpowerLaunchPrompt = ""
+				m.superpowerLaunchHarnessCur = 0
+				// if we have a pinned session for any harness, skip the picker
+				tools := launcherTools()
+				m.superpowerLaunchHarness = ""
+				for _, t := range tools {
+					if m.pinnedSessions[t] != "" {
+						m.superpowerLaunchHarness = t
+						break
+					}
+				}
+				m.superpowerLaunchPickHarness = m.superpowerLaunchHarness == ""
+				m.showSuperpowerLaunch = true
 			}
 		case "q", "esc", "ctrl+c":
 			m.showSuperpowers = false
+		}
+		return m, nil
+	}
+
+	// Superpower launch overlay
+	if m.showSuperpowerLaunch {
+		tools := launcherTools()
+		if m.superpowerLaunchPickHarness {
+			// harness picker mode
+			switch k {
+			case "j", "down":
+				if m.superpowerLaunchHarnessCur < len(tools)-1 {
+					m.superpowerLaunchHarnessCur++
+				}
+			case "k", "up":
+				if m.superpowerLaunchHarnessCur > 0 {
+					m.superpowerLaunchHarnessCur--
+				}
+			case "enter":
+				if m.superpowerLaunchHarnessCur < len(tools) {
+					m.superpowerLaunchHarness = tools[m.superpowerLaunchHarnessCur]
+					m.superpowerLaunchPickHarness = false
+				}
+			case "q", "esc", "ctrl+c":
+				m.showSuperpowerLaunch = false
+			}
+		} else {
+			// prompt input mode
+			switch k {
+			case "enter":
+				cmd := "/superpower-runner " + m.superpowerLaunchName
+				if m.superpowerLaunchPrompt != "" {
+					cmd += " " + m.superpowerLaunchPrompt
+				}
+				m.showSuperpowerLaunch = false
+				m.openTarget = buildLaunchCmd(m.superpowerLaunchHarness, cmd, m.pinnedSessions)
+				m.exitAction = dashActionOpenAgent
+				return m, tea.Quit
+			case "esc":
+				if m.superpowerLaunchPickHarness {
+					m.showSuperpowerLaunch = false
+				} else {
+					// go back to harness picker if we arrived from it (no pinned session)
+					hadSession := false
+					for _, t := range tools {
+						if m.pinnedSessions[t] != "" {
+							hadSession = true
+							break
+						}
+					}
+					if !hadSession {
+						m.superpowerLaunchPickHarness = true
+					} else {
+						m.showSuperpowerLaunch = false
+					}
+				}
+			case "ctrl+c":
+				m.showSuperpowerLaunch = false
+			case "backspace":
+				if len(m.superpowerLaunchPrompt) > 0 {
+					_, size := utf8.DecodeLastRuneInString(m.superpowerLaunchPrompt)
+					m.superpowerLaunchPrompt = m.superpowerLaunchPrompt[:len(m.superpowerLaunchPrompt)-size]
+				}
+			default:
+				if len(k) == 1 {
+					m.superpowerLaunchPrompt += k
+				}
+			}
 		}
 		return m, nil
 	}
@@ -1293,6 +1381,9 @@ func (m *dashboardModel) View() string {
 	if m.showSuperpowers {
 		return m.header() + m.superpowersView() + m.footer()
 	}
+	if m.showSuperpowerLaunch {
+		return m.header() + m.superpowerLaunchView() + m.footer()
+	}
 	if m.showPipeline {
 		return m.header() + m.pipelineStatusView() + m.footer()
 	}
@@ -1351,8 +1442,14 @@ func (m *dashboardModel) footer() string {
 		default:
 			keys = "  [c] clear state · any other key closes"
 		}
+	case m.showSuperpowerLaunch:
+		if m.superpowerLaunchPickHarness {
+			keys = "  [j/k] navigate · [Enter] select harness · [Esc] back"
+		} else {
+			keys = "  type context · [Enter] launch superpower · [Esc] back"
+		}
 	case m.showSuperpowers:
-		keys = "  [j/k] navigate · [Enter] launch · [Esc] close"
+		keys = "  [j/k] navigate · [Enter] select · [Esc] close"
 	case m.showSkills:
 		if !m.skillsTabSearch {
 			if m.installedLoading {

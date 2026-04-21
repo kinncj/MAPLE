@@ -612,9 +612,64 @@ func (m *dashboardModel) superpowersView() string {
 	}
 
 	body := strings.Join(bodyLines, "\n")
-	hint := "j/k navigate · Enter launch → prints /superpower-runner command · Esc close"
+	hint := "j/k navigate · Enter select · Esc close"
 
 	return m.popupBox(title, body, hint, t.Accent)
+}
+
+// superpowerLaunchView renders the superpower launch overlay.
+// Mode A (superpowerLaunchPickHarness==true): harness picker — no pinned session found.
+// Mode B: prompt input — harness + optional pinned session known.
+func (m *dashboardModel) superpowerLaunchView() string {
+	t := m.theme
+	tools := launcherTools()
+
+	selStyle := lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
+	mutedStyle := lipgloss.NewStyle().Foreground(t.Muted)
+	pinnedStyle := lipgloss.NewStyle().Foreground(t.Success)
+
+	titleText := fmt.Sprintf("Launch superpower: %s", lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render(m.superpowerLaunchName))
+	var bodyLines []string
+	var hint string
+
+	if m.superpowerLaunchPickHarness {
+		// ── Harness picker ──────────────────────────────────────────────────────
+		bodyLines = append(bodyLines, mutedStyle.Render("No pinned session found — choose a harness:"), "")
+		for i, tool := range tools {
+			cursor := "  "
+			style := mutedStyle
+			if i == m.superpowerLaunchHarnessCur {
+				cursor = "▶ "
+				style = selStyle
+			}
+			bodyLines = append(bodyLines, cursor+style.Render(tool))
+		}
+		hint = "j/k navigate · Enter select harness · Esc back"
+	} else {
+		// ── Prompt input ────────────────────────────────────────────────────────
+		harness := m.superpowerLaunchHarness
+		sessionID := m.pinnedSessions[harness]
+
+		harnessLine := "  Harness:  " + selStyle.Render(harness)
+		if sessionID != "" {
+			short := sessionID
+			if len(short) > 8 {
+				short = short[:8] + "…"
+			}
+			harnessLine += "  " + pinnedStyle.Render("★ resuming session "+short)
+		}
+
+		cmd := "/superpower-runner " + m.superpowerLaunchName
+		bodyLines = append(bodyLines,
+			harnessLine,
+			"",
+			mutedStyle.Render("  Add context (optional — press Enter to launch now):"),
+			"  "+cmd+" "+m.superpowerLaunchPrompt+"█",
+		)
+		hint = "type context · Enter launch · Esc back"
+	}
+
+	return m.popupBox(titleText, strings.Join(bodyLines, "\n"), hint, t.Primary)
 }
 
 // popupBox renders a centered rounded-border popup over the content area.
