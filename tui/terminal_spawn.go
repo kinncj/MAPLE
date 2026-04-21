@@ -15,16 +15,20 @@ var errNoNewTerminal = errors.New("no supported new-terminal mechanism found")
 // spawnInNewTerminal opens args in a new terminal tab or window, keeping the
 // current terminal (and maple) alive. Detection order:
 //
-//  1. tmux       — new-window
-//  2. GNU screen — new window via STY
-//  3. WezTerm    — cli spawn
-//  4. Kitty      — @launch --type=tab
-//  5. macOS      — iTerm2 or Terminal.app via osascript
-//  6. Linux      — first found: x-terminal-emulator, gnome-terminal, konsole, xfce4-terminal, xterm
-//  7. Windows    — Windows Terminal (wt), then cmd start
+//  1. zellij     — action new-tab (ZELLIJ env var)
+//  2. tmux       — new-window (TMUX env var)
+//  3. GNU screen — new window via STY
+//  4. WezTerm    — cli spawn
+//  5. Kitty      — @launch --type=tab
+//  6. macOS      — iTerm2 or Terminal.app via osascript
+//  7. Linux      — first found: x-terminal-emulator, gnome-terminal, konsole, xfce4-terminal, xterm
+//  8. Windows    — Windows Terminal (wt), then cmd start
 //
 // Returns errNoNewTerminal if nothing works; caller should fall back to
 // suspend-and-resume in the same terminal.
+//
+// Tip: running maple inside tmux or zellij gives the best experience —
+// harnesses open in a new tab automatically without any configuration.
 func spawnInNewTerminal(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("empty command")
@@ -32,6 +36,10 @@ func spawnInNewTerminal(args []string) error {
 
 	// ── multiplexers (reliable on any OS, no display needed) ─────────────────
 
+	if os.Getenv("ZELLIJ") != "" {
+		// zellij action new-tab -- <cmd> [args...]
+		return exec.Command("zellij", append([]string{"action", "new-tab", "--"}, args...)...).Start()
+	}
 	if os.Getenv("TMUX") != "" {
 		return exec.Command("tmux", append([]string{"new-window", "--"}, args...)...).Start()
 	}

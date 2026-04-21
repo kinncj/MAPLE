@@ -11,6 +11,21 @@ The template is **embedded in the binary** — no separate template directory ne
 
 No runtime dependencies beyond the Go standard library and the Bubble Tea family.
 
+## Recommended setup — terminal multiplexer
+
+When you launch a harness (Claude Code, OpenCode, Copilot) from maple, it tries to open it in a **new tab or window** so the dashboard stays visible. This works automatically if you run maple inside a multiplexer:
+
+| Multiplexer | How to start | How maple opens harnesses |
+|---|---|---|
+| **tmux** | `tmux new-session -s work` then `maple` | `tmux new-window` |
+| **zellij** | `zellij` then `maple` | `zellij action new-tab` |
+
+Both are cross-platform (macOS, Linux; tmux also works in WSL on Windows).
+
+If no multiplexer is detected, maple falls back through: WezTerm → Kitty → macOS (iTerm2, Terminal.app) → Linux terminal emulators → Windows Terminal → suspend-and-resume in the same terminal.
+
+You don't need a multiplexer — maple works fine without one — but it's the lowest-friction setup.
+
 ## Build
 
 From the **repo root** (preferred):
@@ -73,6 +88,8 @@ irm https://raw.githubusercontent.com/kinncj/MAPLE/main/scripts/install.ps1 | ie
 | `maple req` | Write requirements and generate a Gherkin story |
 | `maple labels` | Bootstrap the canonical GitHub label set |
 | `maple project` | Create a GitHub Project v2 and update project.config.yaml |
+| `maple resume-session` | Resume the pinned session (reads `.claude/state/sessions.json`) |
+| `maple resume-session claude` | Resume specifically the pinned claude session |
 | `maple --version` | Print version |
 | `maple --help` | Show usage |
 
