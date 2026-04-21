@@ -42,8 +42,8 @@
 🍁 ▐▌  ▐▌▐▌ ▐▌▐▌   ▐▙▄▄▖▐▙▄▄▖ 🍁
 ```
 
-[![CI](https://github.com/kinncj/AI-Squad/actions/workflows/ci.yml/badge.svg)](https://github.com/kinncj/AI-Squad/actions/workflows/ci.yml)
-[![Integration Validation](https://github.com/kinncj/AI-Squad/actions/workflows/validate-integrations.yml/badge.svg)](https://github.com/kinncj/AI-Squad/actions/workflows/validate-integrations.yml)
+[![CI](https://github.com/kinncj/MAPLE/actions/workflows/ci.yml/badge.svg)](https://github.com/kinncj/MAPLE/actions/workflows/ci.yml)
+[![Integration Validation](https://github.com/kinncj/MAPLE/actions/workflows/validate-integrations.yml/badge.svg)](https://github.com/kinncj/MAPLE/actions/workflows/validate-integrations.yml)
 
 **MAPLE** is the orchestration layer that connects Claude Code, OpenCode, and GitHub Copilot CLI into a unified, TDD-enforced development lifecycle.
 
@@ -107,7 +107,7 @@ Rules, testing, and compliance are enforced, not just encouraged.
 ## Quick Start
 
 ```bash
-git clone https://github.com/kinncj/AI-Squad.git maple-src
+git clone https://github.com/kinncj/MAPLE.git maple-src
 cd maple-src
 make build-tui              # produces ./maple
 export PATH="$PWD:$PATH"   # or move to any directory on your PATH
@@ -121,7 +121,7 @@ Open your project in **Claude Code**, **GitHub Copilot CLI**, or **OpenCode**, t
 
 > **Pre-built binaries** — if you don't have Go installed:
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/kinncj/AI-Squad/main/scripts/install.sh | bash
+> curl -fsSL https://raw.githubusercontent.com/kinncj/MAPLE/main/scripts/install.sh | bash
 > ```
 > Installs `maple` to `~/.tools/maple/bin/`. Add that to your `PATH`.
 
