@@ -455,27 +455,27 @@ done
 
 # ─── Phase VI: TUI ────────────────────────────────────────────────────────────
 
-for f in go.mod go.sum main.go detect.go init.go req.go gh_cmds.go themes.go README.md; do
-  if [[ -f "tui/$f" ]]; then
-    ok "tui/$f present"
+for f in go.mod go.sum main.go detect.go init.go req.go gh_cmds.go themes.go; do
+  if [[ -f "$f" ]]; then
+    ok "$f present"
   else
-    fail "tui/$f missing"
+    fail "$f missing"
   fi
 done
 
 # go.mod declares Bubble Tea (not Ratatui)
-if grep -q "bubbletea" tui/go.mod; then
-  ok "tui uses Bubble Tea (Go, not Rust/Ratatui)"
+if grep -q "bubbletea" go.mod; then
+  ok "uses Bubble Tea (Go, not Rust/Ratatui)"
 else
-  fail "tui go.mod missing bubbletea"
+  fail "go.mod missing bubbletea"
 fi
 
 # All 5 themes present
 for theme in tokyoNight catppuccinMocha gruvbox nord everforest; do
-  if grep -q "$theme" tui/themes.go; then
-    ok "tui theme present: $theme"
+  if grep -q "$theme" themes.go; then
+    ok "theme present: $theme"
   else
-    fail "tui theme missing: $theme"
+    fail "theme missing: $theme"
   fi
 done
 

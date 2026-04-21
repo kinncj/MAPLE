@@ -21,13 +21,13 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: tui/go.mod
-          cache-dependency-path: tui/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Build maple
         run: |
           cp -r template tui/template
-          go build -C tui -o ../maple .
+          go build -o maple .
 
 
       - name: Validate agent frontmatter (structural)

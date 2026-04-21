@@ -30,5 +30,3 @@ var/*
 # Swarm v2 session data (worktrees, status files, result.md)
 .swarm/squad
 
-# Generated template copy for Go embed (built by make sync-template)
-tui/template/

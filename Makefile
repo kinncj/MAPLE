@@ -1,40 +1,34 @@
 # Makefile — maple repo root
 # Targets for building, testing, and maintaining the MAPLE platform itself.
 # For targets in your project template, see template/Makefile.
-.PHONY: build-tui build-tui-all sync-template test lint sdlc-report sdlc-rotate-logs clean help
+.PHONY: build-tui build-tui-all test lint sdlc-report sdlc-rotate-logs clean help
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS  = -s -w -X main.version=$(VERSION)
 
-## Sync template/ into tui/template/ for embedding
-sync-template:
-	@rm -rf tui/template
-	@cp -r template tui/template
-	@echo "Template synced to tui/template/"
-
 ## Build the maple TUI binary
-build-tui: sync-template
+build-tui:
 	@echo "Building maple TUI..."
-	@cd tui && go build -ldflags="$(LDFLAGS)" -o ../maple .
+	@go build -ldflags="$(LDFLAGS)" -o maple .
 	@echo "Built: ./maple"
 
 ## Cross-compile maple for all platforms
-build-tui-all: sync-template
+build-tui-all:
 	@mkdir -p dist
-	GOOS=darwin  GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/maple-darwin-amd64  .
-	GOOS=darwin  GOARCH=arm64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/maple-darwin-arm64  .
-	GOOS=linux   GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/maple-linux-amd64   .
-	GOOS=linux   GOARCH=arm64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/maple-linux-arm64   .
-	GOOS=windows GOARCH=amd64  go build -C tui -ldflags="$(LDFLAGS)" -o ../dist/maple-windows-amd64.exe .
+	GOOS=darwin  GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-darwin-amd64  .
+	GOOS=darwin  GOARCH=arm64  go build -ldflags="$(LDFLAGS)" -o dist/maple-darwin-arm64  .
+	GOOS=linux   GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-linux-amd64   .
+	GOOS=linux   GOARCH=arm64  go build -ldflags="$(LDFLAGS)" -o dist/maple-linux-arm64   .
+	GOOS=windows GOARCH=amd64  go build -ldflags="$(LDFLAGS)" -o dist/maple-windows-amd64.exe .
 	@echo "Binaries in dist/"
 
 ## Run the test suite for this repo
 test:
 	@bash tests/cli/test_ai_squad.sh
 
-## Lint Go TUI code
+## Lint Go code
 lint:
-	@cd tui && gofmt -e . >/dev/null && echo "gofmt: clean" || (echo "gofmt: issues found" && exit 1)
+	@gofmt -e . >/dev/null && echo "gofmt: clean" || (echo "gofmt: issues found" && exit 1)
 
 ## Print per-story agent invocation counts and estimated costs
 ## Reads .claude/logs/skills.jsonl; safe to run offline (shows cached data)
@@ -64,7 +58,6 @@ sdlc-rotate-logs:
 ## Remove built binaries
 clean:
 	@rm -f maple dist/maple-*
-	@rm -rf tui/template
 	@echo "Cleaned."
 
 ## Show available targets
@@ -72,9 +65,8 @@ help:
 	@echo ""
 	@echo "  make build-tui          Build maple TUI binary"
 	@echo "  make build-tui-all      Cross-compile for darwin/linux/windows"
-	@echo "  make sync-template      Sync template/ into tui/template/ for embedding"
 	@echo "  make test               Run test suite (218 tests)"
-	@echo "  make lint               Lint TUI Go code"
+	@echo "  make lint               Lint Go code"
 	@echo "  make sdlc-report        Print cost + invocation report"
 	@echo "  make sdlc-rotate-logs   Rotate .claude/logs/ (keep last 5)"
 	@echo "  make clean              Remove built binaries"
