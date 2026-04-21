@@ -48,6 +48,7 @@ func newBootModel(t Theme) *bootModel {
 			{label: "project.config.yaml", check: checkProjectConfig},
 			{label: "Claude Code (claude)", check: checkClaudeBin},
 			{label: "OpenCode (opencode)", optional: true, check: checkOpenCodeBin},
+			{label: "npx (skills marketplace)", optional: true, check: checkNPXBin},
 		},
 	}
 }
@@ -81,6 +82,13 @@ func checkClaudeBin() error {
 func checkOpenCodeBin() error {
 	if _, err := exec.LookPath("opencode"); err != nil {
 		return fmt.Errorf("not found — install from opencode.ai")
+	}
+	return nil
+}
+
+func checkNPXBin() error {
+	if _, err := exec.LookPath("npx"); err != nil {
+		return fmt.Errorf("not found — install Node.js from nodejs.org to use skills marketplace")
 	}
 	return nil
 }

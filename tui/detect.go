@@ -13,6 +13,7 @@ type Tools struct {
 	GHCopilot bool   // gh copilot extension (explain/suggest shell commands only)
 	GH        string // gh CLI path
 	Lefthook  string // lefthook binary path
+	NPX       string // npx (Node.js) — needed for skills marketplace
 }
 
 // Detect checks which tools are available on PATH.
@@ -23,6 +24,7 @@ func Detect() Tools {
 	t.Copilot, _ = exec.LookPath("copilot")
 	t.GH, _ = exec.LookPath("gh")
 	t.Lefthook, _ = exec.LookPath("lefthook")
+	t.NPX, _ = exec.LookPath("npx")
 
 	// Check gh copilot extension (shell-command helper only)
 	if t.GH != "" {
@@ -84,6 +86,7 @@ func (t Tools) Summary() []string {
 	check(t.GHCopilot, "gh-copilot")
 	check(t.GH != "", "gh")
 	check(t.Lefthook != "", "lefthook")
+	check(t.NPX != "", "npx")
 
 	var lines []string
 	if len(found) > 0 {

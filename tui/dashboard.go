@@ -42,11 +42,6 @@ type agentRow struct {
 	ts    string
 }
 
-type spRow struct {
-	name string
-	desc string
-	path string
-}
 
 // ─── Dashboard exit actions ───────────────────────────────────────────────────
 
@@ -97,10 +92,15 @@ type dashboardModel struct {
 
 	focus      dashPane
 	fullscreen dashPane // paneDesign or paneLogs, -1 = none
-	showHelp   bool
-	showSP     bool
-	spFilter   string
-	cmdMode    bool
+	showHelp      bool
+	showSkills    bool
+	skillsQuery   string
+	skillsItems   []skillRow
+	skillsCur     int
+	skillsLoading bool
+	skillsErr     string
+	npxPath       string // cached npx binary path
+	cmdMode       bool
 	cmdBuf     string
 	searchMode bool
 	searchBuf  string
@@ -128,9 +128,6 @@ type dashboardModel struct {
 	logLines []string
 	logsCur  int
 
-	spItems []spRow
-	spCur   int
-
 	lastKey    string // for gg double-key detection
 	debugMode  bool   // :debug — tee state to .claude/logs/tui.log
 
@@ -145,10 +142,12 @@ type dashboardModel struct {
 }
 
 func newDashboard(t Theme, noAnimate bool) *dashboardModel {
+	npx, _ := exec.LookPath("npx")
 	m := &dashboardModel{
 		theme:      t,
 		noAnimate:  noAnimate,
 		fullscreen: -1,
+		npxPath:    npx,
 	}
 	m.reload()
 	return m
@@ -161,14 +160,12 @@ func (m *dashboardModel) reload() {
 	m.qaFeatures, m.qaScenarios = loadQA()
 	m.designTree = loadDesignTree()
 	m.logLines = loadLogLines(200)
-	m.spItems = loadSuperpowers()
 	m.projectName = loadProjectName()
 	// clamp cursors
 	m.clampCursor(&m.storiesCur, len(m.stories))
 	m.clampCursor(&m.agentsCur, len(m.agents))
 	m.clampCursor(&m.designCur, len(m.designTree))
 	m.clampCursor(&m.logsCur, len(m.logLines))
-	m.clampCursor(&m.spCur, len(m.spItems))
 }
 
 // setStatus sets a status message and returns a Cmd to auto-clear it after 3s.
@@ -220,6 +217,24 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statusClearMsg:
 		m.status = ""
 		m.statusErr = false
+
+	case skillsSearchedMsg:
+		m.skillsLoading = false
+		if msg.err != nil {
+			m.skillsErr = msg.err.Error()
+		} else {
+			m.skillsItems = msg.items
+			m.skillsErr = ""
+			m.skillsCur = 0
+		}
+
+	case skillInstalledMsg:
+		m.skillsLoading = false
+		if msg.err != nil {
+			return m, m.setStatus("✗ install "+msg.pkg+": "+msg.err.Error(), true)
+		}
+		m.showSkills = false
+		return m, m.setStatus("✓ installed "+msg.pkg, false)
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -281,38 +296,46 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Superpower picker input
-	if m.showSP {
+	// Skills marketplace browser
+	if m.showSkills {
 		switch k {
 		case "esc", "ctrl+c", "F":
-			m.showSP = false
-			m.spFilter = ""
+			m.showSkills = false
+			m.skillsQuery = ""
 		case "enter":
-			m.showSP = false
-			m.spFilter = ""
-			if m.spCur < len(m.filteredSP()) {
-				sp := m.filteredSP()[m.spCur]
-				m.status = "▸ Superpower: " + sp.name + " — use /feature in Claude Code to run"
+			if m.skillsLoading {
+				// ignore while loading
+			} else if len(m.skillsItems) > 0 && m.skillsCur < len(m.skillsItems) {
+				// install selected skill
+				sk := m.skillsItems[m.skillsCur]
+				m.skillsLoading = true
+				return m, installSkillCmd(sk.pkg)
+			} else {
+				// search
+				m.skillsLoading = true
+				m.skillsItems = nil
+				m.skillsCur = 0
+				m.skillsErr = ""
+				return m, searchSkillsCmd(m.skillsQuery)
 			}
 		case "backspace":
-			if len(m.spFilter) > 0 {
-				_, size := utf8.DecodeLastRuneInString(m.spFilter)
-				m.spFilter = m.spFilter[:len(m.spFilter)-size]
-				m.spCur = 0
+			if len(m.skillsQuery) > 0 {
+				_, size := utf8.DecodeLastRuneInString(m.skillsQuery)
+				m.skillsQuery = m.skillsQuery[:len(m.skillsQuery)-size]
+				m.skillsItems = nil
 			}
 		case "up", "k":
-			if m.spCur > 0 {
-				m.spCur--
+			if m.skillsCur > 0 {
+				m.skillsCur--
 			}
 		case "down", "j":
-			fsp := m.filteredSP()
-			if m.spCur < len(fsp)-1 {
-				m.spCur++
+			if m.skillsCur < len(m.skillsItems)-1 {
+				m.skillsCur++
 			}
 		default:
 			if len(k) == 1 {
-				m.spFilter += k
-				m.spCur = 0
+				m.skillsQuery += k
+				m.skillsItems = nil
 			}
 		}
 		return m, nil
@@ -383,9 +406,11 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchMode = true
 		m.searchBuf = ""
 	case "F":
-		m.showSP = true
-		m.spFilter = ""
-		m.spCur = 0
+		m.showSkills = true
+		m.skillsQuery = ""
+		m.skillsItems = nil
+		m.skillsCur = 0
+		m.skillsErr = ""
 	case "r":
 		m.reload()
 		m.prsLoading = true
@@ -699,8 +724,8 @@ func (m *dashboardModel) View() string {
 	if m.showHelp {
 		return m.header() + m.helpView() + m.footer()
 	}
-	if m.showSP {
-		return m.header() + m.spPickerView() + m.footer()
+	if m.showSkills {
+		return m.header() + m.skillsBrowserView() + m.footer()
 	}
 
 	// Normal 2×2 dashboard
@@ -714,13 +739,21 @@ func (m *dashboardModel) header() string {
 		name = "—"
 	}
 	info := lipgloss.NewStyle().Foreground(t.Muted).Render("  project: " + name + " · theme: " + t.Name)
-	return logoCompact() + info + "\n"
+	return logoCompact(t.Primary) + info + "\n"
 }
 
 func (m *dashboardModel) footer() string {
 	t := m.theme
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [j/k] nav · [Enter] open story · [n] new · [u] update · [F] superpowers · [?] help · [q] quit"
-	if m.showStory {
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [j/k] nav · [Enter] open story · [n] new · [u] update · [F] skills.sh · [?] help · [q] quit"
+	if m.showSkills {
+		if m.skillsLoading {
+			keys = "  searching skills.sh…"
+		} else if len(m.skillsItems) > 0 {
+			keys = "  [j/k] navigate · [Enter] install · type to search · Esc close"
+		} else {
+			keys = "  type a query · [Enter] search · Esc close"
+		}
+	} else if m.showStory {
 		keys = "  [j/k] scroll · [e] re-edit · [Esc] close"
 	} else if m.searchMode {
 		keys = "  /" + m.searchBuf + "█"
@@ -939,44 +972,44 @@ func (m *dashboardModel) logsView() string {
 	return strings.Join(lines, "\n")
 }
 
-func (m *dashboardModel) filteredSP() []spRow {
-	if m.spFilter == "" {
-		return m.spItems
-	}
-	f := strings.ToLower(m.spFilter)
-	var out []spRow
-	for _, sp := range m.spItems {
-		if strings.Contains(strings.ToLower(sp.name), f) || strings.Contains(strings.ToLower(sp.desc), f) {
-			out = append(out, sp)
-		}
-	}
-	return out
-}
-
-func (m *dashboardModel) spPickerView() string {
+func (m *dashboardModel) skillsBrowserView() string {
 	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Superpowers")
-	filter := lipgloss.NewStyle().Foreground(t.Muted).Render("  filter: ") +
-		lipgloss.NewStyle().Foreground(t.Foreground).Render(m.spFilter+"█")
-	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("─", 52))
-	fsp := m.filteredSP()
-	lines := []string{title, filter, sep}
-	cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-	if len(fsp) == 0 {
-		lines = append(lines, lipgloss.NewStyle().Foreground(t.Muted).Render("  no matches"))
-	}
-	for i, sp := range fsp {
-		name := lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(fmt.Sprintf("%-22s", sp.name))
-		desc := lipgloss.NewStyle().Foreground(t.Muted).Render(truncate(sp.desc, 36))
-		var line string
-		if i == m.spCur {
-			line = cursor + " " + name + " " + desc
-		} else {
-			line = "    " + name + " " + desc
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  Skills Marketplace — skills.sh")
+	search := lipgloss.NewStyle().Foreground(t.Muted).Render("  search: ") +
+		lipgloss.NewStyle().Foreground(t.Foreground).Render(m.skillsQuery+"█")
+	sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 62))
+
+	lines := []string{title, search, sep}
+
+	if m.npxPath == "" {
+		lines = append(lines,
+			"",
+			lipgloss.NewStyle().Foreground(t.Warning).Render("  npx not found — install Node.js from nodejs.org"),
+			"",
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  Then run: npx skills add obra/superpowers --all -y"),
+		)
+	} else if m.skillsLoading {
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  searching…"))
+	} else if m.skillsErr != "" {
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Error).Render("  "+m.skillsErr))
+	} else if len(m.skillsItems) == 0 {
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  type a query and press Enter to search skills.sh"))
+	} else {
+		cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
+		for i, sk := range m.skillsItems {
+			pkg := lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(fmt.Sprintf("%-42s", sk.pkg))
+			installs := lipgloss.NewStyle().Foreground(t.Muted).Render(sk.installs + " installs")
+			if i == m.skillsCur {
+				lines = append(lines, "  "+cursor+" "+pkg+" "+installs)
+				if sk.url != "" {
+					lines = append(lines, "       "+lipgloss.NewStyle().Foreground(t.Muted).Render(sk.url))
+				}
+			} else {
+				lines = append(lines, "      "+pkg+" "+installs)
+			}
 		}
-		lines = append(lines, line)
 	}
-	lines = append(lines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  Enter select · Esc cancel · type to filter"))
+
 	return strings.Join(lines, "\n")
 }
 
@@ -1064,7 +1097,7 @@ func (m *dashboardModel) helpView() string {
 		{"n", "new story → Gherkin requirements wizard"},
 		{"u", "update — re-sync template files"},
 		{"r", "reload all pane data"},
-		{"F", "Superpower picker (fuzzy)"},
+		{"F", "Skills marketplace (skills.sh)"},
 		{"/", "search within active pane"},
 		{"?", "this help overlay"},
 		{"q  /  Ctrl+C", "quit"},
@@ -1391,47 +1424,6 @@ func loadLogLines(n int) []string {
 	return out
 }
 
-func loadSuperpowers() []spRow {
-	var rows []spRow
-	for _, dir := range []string{".claude/superpowers", "template/.claude/superpowers"} {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if !strings.HasSuffix(e.Name(), ".yaml") || e.Name() == "schema.yaml" {
-				continue
-			}
-			data, err := os.ReadFile(filepath.Join(dir, e.Name()))
-			if err != nil {
-				continue
-			}
-			name, desc := parseSuperpowerYAML(string(data))
-			if name != "" {
-				rows = append(rows, spRow{name: name, desc: desc, path: filepath.Join(dir, e.Name())})
-			}
-		}
-		if len(rows) > 0 {
-			break
-		}
-	}
-	return rows
-}
-
-func parseSuperpowerYAML(content string) (name, desc string) {
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "name:") {
-			name = strings.TrimSpace(strings.TrimPrefix(line, "name:"))
-			name = strings.Trim(name, `"'`)
-		}
-		if strings.HasPrefix(line, "description:") {
-			desc = strings.TrimSpace(strings.TrimPrefix(line, "description:"))
-			desc = strings.Trim(desc, `"'`)
-		}
-	}
-	return
-}
 
 func loadProjectName() string {
 	data, err := os.ReadFile("project.config.yaml")

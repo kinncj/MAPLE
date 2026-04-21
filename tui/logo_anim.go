@@ -71,9 +71,9 @@ var logoCompactRows = [4]string{
 	"🍁 ▐▌  ▐▌▐▌ ▐▌▐▌   ▐▙▄▄▖▐▙▄▄▖ 🍁",
 }
 
-// logoCompact returns the 4-line wordmark styled in Canada red.
-func logoCompact() string {
-	style := lipgloss.NewStyle().Foreground(logoColor)
+// logoCompact returns the 4-line wordmark styled in the given color.
+func logoCompact(col lipgloss.Color) string {
+	style := lipgloss.NewStyle().Foreground(col)
 	var sb strings.Builder
 	for _, row := range logoCompactRows {
 		sb.WriteString(style.Render(row))
