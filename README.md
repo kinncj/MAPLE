@@ -149,6 +149,7 @@ maple --help   # all flags
 | `F` | Skills marketplace — browse, install, remove via skills.sh |
 | `S` | Run `ship-safe` audit — security/quality scan with colored findings |
 | `x` | Superpowers picker — browse and launch named agent/skill workflows |
+| `P` | Pipeline status — show active superpower progress from `.claude/state/maple.json` |
 | `o` | Open selected session in its agent (Agents pane: `claude --resume` or `opencode`) |
 | `n` | New story → Gherkin requirements wizard |
 | `u` | Update — re-sync template files (preserves your Makefile edits) |

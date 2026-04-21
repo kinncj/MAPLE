@@ -231,6 +231,10 @@ type dashboardModel struct {
 	superpowerDefs   []superpowerDef
 	superpowerCur    int
 
+	// Pipeline status overlay
+	showPipeline  bool
+	pipelineState pipelineState
+
 	openTarget []string // command to exec when exitAction == dashActionOpenAgent
 	exitAction dashAction
 }
@@ -682,6 +686,12 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Pipeline status overlay — any key closes
+	if m.showPipeline {
+		m.showPipeline = false
+		return m, nil
+	}
+
 	// ShipSafe audit overlay
 	if m.showShipSafe {
 		maxScroll := len(m.shipSafeLines) - (m.height - 15)
@@ -831,6 +841,10 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.superpowerDefs = loadSuperpowers()
 		m.superpowerCur = 0
 		m.showSuperpowers = true
+	case "P":
+		ps, _ := loadPipelineState()
+		m.pipelineState = ps
+		m.showPipeline = true
 	case "o":
 		if m.focus == paneAgents && m.sessionsCur < len(m.sessions) {
 			s := m.sessions[m.sessionsCur]
@@ -1097,6 +1111,9 @@ func (m *dashboardModel) View() string {
 	if m.showSuperpowers {
 		return m.header() + m.superpowersView() + m.footer()
 	}
+	if m.showPipeline {
+		return m.header() + m.pipelineStatusView() + m.footer()
+	}
 
 	// Normal 2×2 dashboard
 	return m.header() + m.gridView() + m.footer()
@@ -1123,7 +1140,7 @@ func (m *dashboardModel) footer() string {
 		return "\n" + lipgloss.NewStyle().Foreground(col).Render("  "+m.status) + "\n"
 	}
 
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open in agent (Sessions)/browser (PR) · [S] ship-safe · [x] superpowers · [F] skills · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open in agent (Sessions)/browser (PR) · [S] ship-safe · [x] superpowers · [P] pipeline · [F] skills · [?] help · [q] quit"
 	switch {
 	case m.showSuperpowers:
 		keys = "  [j/k] navigate · [Enter] launch · [Esc] close"

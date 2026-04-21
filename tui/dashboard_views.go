@@ -416,6 +416,7 @@ func (m *dashboardModel) helpView() string {
 		{"r", "reload all pane data"},
 		{"F", "Skills marketplace (skills.sh)"},
 		{"x", "Superpowers — browse and launch named workflows"},
+		{"P", "Pipeline status — show active superpower progress"},
 		{"/", "search within active pane"},
 		{"?", "this help overlay"},
 		{"q  /  Ctrl+C", "quit"},
@@ -640,6 +641,72 @@ func (m *dashboardModel) popupBox(title, body, hint string, borderColor lipgloss
 		Width(innerW).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
+		Padding(1, 2).
+		Render(inner)
+
+	availH := m.height - 6
+	if availH < 10 {
+		availH = 10
+	}
+	return lipgloss.Place(m.width, availH, lipgloss.Center, lipgloss.Center, box)
+}
+
+// pipelineStatusView shows the current superpower pipeline state from .claude/state/maple.json.
+func (m *dashboardModel) pipelineStatusView() string {
+	t := m.theme
+	ps := m.pipelineState
+
+	title := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("[P] Pipeline Status")
+
+	var bodyLines []string
+
+	if !ps.isSuperpower() {
+		bodyLines = append(bodyLines,
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  No active superpower pipeline."),
+			"",
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  Launch one with [x] and run /superpower-runner <name> in Claude Code."),
+		)
+	} else {
+		iconStyle := lipgloss.NewStyle().Foreground(t.Success)
+		switch ps.Status {
+		case "PAUSED":
+			iconStyle = lipgloss.NewStyle().Foreground(t.Accent)
+		case "FAILED":
+			iconStyle = lipgloss.NewStyle().Foreground(t.Error)
+		case "DONE":
+			iconStyle = lipgloss.NewStyle().Foreground(t.Success)
+		}
+
+		bodyLines = append(bodyLines,
+			fmt.Sprintf("  Superpower:  %s", lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(ps.Superpower)),
+			fmt.Sprintf("  Stage:       %s", lipgloss.NewStyle().Foreground(t.Foreground).Render(ps.Stage)),
+			fmt.Sprintf("  Status:      %s %s", iconStyle.Render(ps.statusIcon()), iconStyle.Render(ps.Status)),
+		)
+		if ps.AwaitingApproval != "" {
+			bodyLines = append(bodyLines,
+				"",
+				lipgloss.NewStyle().Foreground(t.Accent).Render("  ⏸ Awaiting approval: "+ps.AwaitingApproval),
+			)
+		}
+		if ps.UpdatedAt != "" {
+			bodyLines = append(bodyLines,
+				"",
+				lipgloss.NewStyle().Foreground(t.Muted).Render("  Updated: "+ps.UpdatedAt),
+			)
+		}
+	}
+
+	bodyLines = append(bodyLines, "", lipgloss.NewStyle().Foreground(t.Muted).Render("  Press any key to close"))
+
+	inner := title + "\n\n" + strings.Join(bodyLines, "\n")
+	innerW := m.width - 10
+	if innerW < 40 {
+		innerW = 40
+	}
+	box := lipgloss.NewStyle().
+		Width(innerW).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Primary).
 		Padding(1, 2).
 		Render(inner)
 
