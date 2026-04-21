@@ -38,24 +38,27 @@ func (m *dashboardModel) storiesContent(height int) string {
 
 func (m *dashboardModel) agentsContent(height int) string {
 	t := m.theme
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Recent Agents")
-	if len(m.agents) == 0 {
-		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no agent activity for this project")
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Sessions")
+	if len(m.sessions) == 0 {
+		return title + "\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("no agent sessions for this project")
 	}
 	lines := []string{title}
 	cursor := lipgloss.NewStyle().Foreground(t.Accent).Render("▸")
-	for i, a := range m.agents {
+	for i, s := range m.sessions {
 		if i >= height-2 {
 			break
 		}
-		badge := agentSourceBadge(a.source, t)
-		name := lipgloss.NewStyle().Foreground(t.Foreground).Render(truncate(a.agent, 10))
-		op := lipgloss.NewStyle().Foreground(t.Muted).Render(truncate(a.op, 18))
+		badge := agentSourceBadge(s.source, t)
+		sessionTitle := lipgloss.NewStyle().Foreground(t.Foreground).Render(truncate(s.title, 26))
+		meta := ""
+		if s.toolCount > 0 {
+			meta = lipgloss.NewStyle().Foreground(t.Muted).Render(fmt.Sprintf(" %dt", s.toolCount))
+		}
 		var line string
-		if i == m.agentsCur && m.focus == paneAgents {
-			line = cursor + " " + badge + " " + name + " " + op
+		if i == m.sessionsCur && m.focus == paneAgents {
+			line = cursor + " " + badge + " " + sessionTitle + meta
 		} else {
-			line = "  " + badge + " " + name + " " + op
+			line = "  " + badge + " " + sessionTitle + meta
 		}
 		lines = append(lines, line)
 	}
@@ -532,38 +535,23 @@ func (m *dashboardModel) openStoryDetail(s storyRow) {
 	m.showStory = true
 }
 
-// openSessionDetail loads session detail lines for the selected agent row and
-// scrolls to the line closest to the row's timestamp.
-func (m *dashboardModel) openSessionDetail(row agentRow) {
-	m.sessionTitle = row.agent + ": " + truncate(row.op, 48)
-	m.sessionSource = row.source
+// openSessionDetail loads the full activity timeline for a session.
+func (m *dashboardModel) openSessionDetail(s sessionRow) {
+	m.sessionTitle = s.title
+	m.sessionSource = s.source
 	m.sessionScroll = 0
 	m.sessionLines = nil
 
-	switch row.source {
+	switch s.source {
 	case "claude":
-		m.sessionLines = loadClaudeSessionLines(row.sessionID)
+		m.sessionLines = loadClaudeSessionLines(s.id)
 	case "opencode":
-		m.sessionLines = loadOpenCodeSessionLines(row.sessionID)
+		m.sessionLines = loadOpenCodeSessionLines(s.id)
 	default:
-		m.sessionLines = []string{"(no detail available for source: " + row.source + ")"}
+		m.sessionLines = []string{"(no detail available for source: " + s.source + ")"}
 	}
 	if len(m.sessionLines) == 0 {
 		m.sessionLines = []string{"(no entries found)"}
-	}
-	// Scroll to the line that mentions this row's op or ts so different
-	// rows from the same session open at different positions.
-	needle := row.op
-	if row.ts != "" {
-		needle = row.ts[:min(len(row.ts), 16)]
-	}
-	if needle != "" {
-		for i, l := range m.sessionLines {
-			if strings.Contains(l, needle) {
-				m.sessionScroll = i
-				break
-			}
-		}
 	}
 	m.showSession = true
 }

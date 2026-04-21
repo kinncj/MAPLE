@@ -11,71 +11,22 @@ import (
 	"time"
 )
 
-// ─── Agent activity loaders ───────────────────────────────────────────────────
+// ─── Session list loaders ─────────────────────────────────────────────────────
 
-func loadAgents() []agentRow {
+func loadSessions() []sessionRow {
 	cwd, _ := os.Getwd()
-
-	var rows []agentRow
-	seen := map[string]bool{}
-	add := func(r agentRow) {
-		key := r.agent + "|" + r.op + "|" + r.file
-		if seen[key] {
-			return
-		}
-		seen[key] = true
-		rows = append(rows, r)
-	}
-
-	// Primary: MAPLE skills log
-	if data, err := os.ReadFile(".claude/logs/skills.jsonl"); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		for i := len(lines) - 1; i >= 0; i-- {
-			line := strings.TrimSpace(lines[i])
-			if line == "" {
-				continue
-			}
-			var e map[string]interface{}
-			if err := json.Unmarshal([]byte(line), &e); err != nil {
-				continue
-			}
-			agent, _ := e["agent"].(string)
-			if agent == "" {
-				agent, _ = e["skill"].(string)
-			}
-			if agent == "" {
-				continue
-			}
-			add(agentRow{
-				agent:  agent,
-				op:     str(e["op"]),
-				file:   str(e["file"]),
-				ts:     str(e["ts"]),
-				source: "maple",
-			})
-		}
-	}
-
-	rows = append(rows, loadClaudeSessionActivity(cwd)...)
-	rows = append(rows, loadOpenCodeActivity(cwd)...)
-
-	final := rows[:0]
-	finalSeen := map[string]bool{}
-	for _, r := range rows {
-		key := r.agent + "|" + r.op + "|" + r.file
-		if finalSeen[key] {
-			continue
-		}
-		finalSeen[key] = true
-		final = append(final, r)
-		if len(final) >= 15 {
-			break
-		}
-	}
-	return final
+	var out []sessionRow
+	out = append(out, loadClaudeSessions(cwd)...)
+	out = append(out, loadOpenCodeSessions(cwd)...)
+	// Sort newest first across sources
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ts > out[j].ts
+	})
+	return out
 }
 
-func loadClaudeSessionActivity(cwd string) []agentRow {
+// loadClaudeSessions returns one sessionRow per Claude Code JSONL file for cwd.
+func loadClaudeSessions(cwd string) []sessionRow {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil
@@ -88,11 +39,11 @@ func loadClaudeSessionActivity(cwd string) []agentRow {
 		return nil
 	}
 
-	type mtime struct {
+	type finfo struct {
 		path string
 		t    time.Time
 	}
-	var files []mtime
+	var files []finfo
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
 			continue
@@ -101,49 +52,72 @@ func loadClaudeSessionActivity(cwd string) []agentRow {
 		if err != nil {
 			continue
 		}
-		files = append(files, mtime{filepath.Join(projectDir, e.Name()), info.ModTime()})
+		files = append(files, finfo{filepath.Join(projectDir, e.Name()), info.ModTime()})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].t.After(files[j].t) })
 
-	var rows []agentRow
-	seen := map[string]bool{}
-
+	var rows []sessionRow
 	for _, f := range files {
-		if len(rows) >= 8 {
+		if len(rows) >= 10 {
 			break
 		}
 		data, err := os.ReadFile(f.path)
 		if err != nil {
 			continue
 		}
-		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-		for i := len(lines) - 1; i >= 0 && len(rows) < 8; i-- {
-			line := strings.TrimSpace(lines[i])
+
+		title := ""
+		toolCount := 0
+
+		for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+			line = strings.TrimSpace(line)
 			if line == "" {
 				continue
 			}
 			var e map[string]interface{}
-			if err := json.Unmarshal([]byte(line), &e); err != nil {
+			if json.Unmarshal([]byte(line), &e) != nil {
 				continue
 			}
-			r, ok := claudeEntryToRow(e)
-			if !ok {
-				continue
+			if e["type"] == "ai-title" {
+				if t, _ := e["aiTitle"].(string); t != "" {
+					title = t
+				}
 			}
-			r.source = "claude"
-			r.sessionID = f.path
-			key := r.agent + "|" + r.op + "|" + r.file
-			if seen[key] {
-				continue
+			if e["type"] == "assistant" {
+				if msg, ok := e["message"].(map[string]interface{}); ok {
+					if content, ok := msg["content"].([]interface{}); ok {
+						for _, c := range content {
+							if cm, ok := c.(map[string]interface{}); ok && cm["type"] == "tool_use" {
+								toolCount++
+							}
+						}
+					}
+				}
 			}
-			seen[key] = true
-			rows = append(rows, r)
 		}
+
+		if title == "" {
+			// Fall back to file name without extension as a unique identifier
+			base := filepath.Base(f.path)
+			title = strings.TrimSuffix(base, ".jsonl")
+			if len(title) > 20 {
+				title = title[:8] + "…" + title[len(title)-8:]
+			}
+		}
+
+		rows = append(rows, sessionRow{
+			id:        f.path,
+			title:     title,
+			source:    "claude",
+			ts:        f.t.Format("2006-01-02 15:04"),
+			toolCount: toolCount,
+		})
 	}
 	return rows
 }
 
-func loadOpenCodeActivity(cwd string) []agentRow {
+// loadOpenCodeSessions returns one sessionRow per OpenCode session for cwd.
+func loadOpenCodeSessions(cwd string) []sessionRow {
 	sqlite3Path, err := exec.LookPath("sqlite3")
 	if err != nil {
 		return nil
@@ -155,29 +129,33 @@ func loadOpenCodeActivity(cwd string) []agentRow {
 	}
 
 	escapedCwd := strings.ReplaceAll(cwd, "'", "''")
-	sessionsSQL := fmt.Sprintf(
-		"SELECT s.id,s.title,datetime(s.time_updated,'unixepoch') FROM session s JOIN project p ON s.project_id=p.id WHERE p.worktree='%s' ORDER BY s.time_updated DESC LIMIT 5;",
+	// Include tool count via subquery
+	query := fmt.Sprintf(
+		"SELECT s.id, s.title, datetime(s.time_updated,'unixepoch'), "+
+			"(SELECT COUNT(*) FROM part p WHERE p.session_id=s.id AND json_extract(p.data,'$.type')='tool') "+
+			"FROM session s JOIN project pr ON s.project_id=pr.id "+
+			"WHERE pr.worktree='%s' ORDER BY s.time_updated DESC LIMIT 10;",
 		escapedCwd,
 	)
-	out, err := exec.Command(sqlite3Path, db, sessionsSQL).Output()
+	out, err := exec.Command(sqlite3Path, db, query).Output()
 	if err != nil {
 		return nil
 	}
 
-	var rows []agentRow
-	seen := map[string]bool{}
-
-	for _, sessLine := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		sessLine = strings.TrimSpace(sessLine)
-		if sessLine == "" {
+	var rows []sessionRow
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(sessLine, "|", 3)
+		parts := strings.SplitN(line, "|", 4)
 		if len(parts) < 2 {
 			continue
 		}
-		sessionID := parts[0]
-		sessionTitle := parts[1]
+		title := parts[1]
+		if title == "" {
+			title = parts[0][:min(len(parts[0]), 16)]
+		}
 		ts := ""
 		if len(parts) >= 3 {
 			ts = parts[2]
@@ -185,154 +163,19 @@ func loadOpenCodeActivity(cwd string) []agentRow {
 				ts = ts[:16]
 			}
 		}
-
-		key := "opencode|session|" + sessionID
-		if !seen[key] {
-			seen[key] = true
-			rows = append(rows, agentRow{
-				agent:     "opencode",
-				op:        truncate(sessionTitle, 36),
-				ts:        ts,
-				source:    "opencode",
-				sessionID: sessionID,
-			})
+		toolCount := 0
+		if len(parts) >= 4 {
+			fmt.Sscanf(parts[3], "%d", &toolCount)
 		}
-
-		partsSQL := fmt.Sprintf(
-			"SELECT p.data FROM part p WHERE p.session_id='%s' AND json_extract(p.data,'$.type')='tool' ORDER BY p.time_created DESC LIMIT 8;",
-			sessionID,
-		)
-		partsOut, err := exec.Command(sqlite3Path, db, partsSQL).Output()
-		if err != nil {
-			continue
-		}
-		for _, dataLine := range strings.Split(strings.TrimSpace(string(partsOut)), "\n") {
-			dataLine = strings.TrimSpace(dataLine)
-			if dataLine == "" {
-				continue
-			}
-			var d map[string]interface{}
-			if err := json.Unmarshal([]byte(dataLine), &d); err != nil {
-				continue
-			}
-			toolName, _ := d["tool"].(string)
-			if toolName == "" {
-				continue
-			}
-			file := ""
-			if state, ok := d["state"].(map[string]interface{}); ok {
-				if inp, ok := state["input"].(map[string]interface{}); ok {
-					for _, k := range []string{"file_path", "path", "command"} {
-						if v, _ := inp[k].(string); v != "" {
-							file = v
-							if len(file) > 32 {
-								file = "…" + file[len(file)-32:]
-							}
-							break
-						}
-					}
-				}
-			}
-			rkey := "opencode|" + toolName + "|" + file
-			if seen[rkey] {
-				continue
-			}
-			seen[rkey] = true
-			rows = append(rows, agentRow{
-				agent:     "opencode",
-				op:        toolName,
-				file:      file,
-				ts:        ts,
-				source:    "opencode",
-				sessionID: sessionID,
-			})
-			if len(rows) >= 10 {
-				return rows
-			}
-		}
+		rows = append(rows, sessionRow{
+			id:        parts[0],
+			title:     title,
+			source:    "opencode",
+			ts:        ts,
+			toolCount: toolCount,
+		})
 	}
 	return rows
-}
-
-func claudeEntryToRow(e map[string]interface{}) (agentRow, bool) {
-	ts, _ := e["timestamp"].(string)
-	if ts != "" && len(ts) > 19 {
-		ts = ts[:19]
-	}
-
-	switch e["type"] {
-	case "ai-title":
-		title, _ := e["aiTitle"].(string)
-		if title == "" {
-			return agentRow{}, false
-		}
-		return agentRow{agent: "claude", op: title, ts: ts}, true
-
-	case "last-prompt":
-		prompt, _ := e["lastPrompt"].(string)
-		if prompt == "" {
-			return agentRow{}, false
-		}
-		if len(prompt) > 48 {
-			prompt = prompt[:48] + "…"
-		}
-		return agentRow{agent: "user", op: prompt, ts: ts}, true
-
-	case "user":
-		msg, _ := e["message"].(map[string]interface{})
-		if msg == nil {
-			return agentRow{}, false
-		}
-		content, _ := msg["content"].([]interface{})
-		for _, c := range content {
-			cm, _ := c.(map[string]interface{})
-			if cm == nil {
-				continue
-			}
-			agentType, _ := e["agentType"].(string)
-			if agentType == "" {
-				agentType, _ = cm["agentType"].(string)
-			}
-			if agentType != "" {
-				toolCount := ""
-				if v, ok := e["totalToolUseCount"].(float64); ok {
-					toolCount = fmt.Sprintf("%d tools", int(v))
-				}
-				return agentRow{agent: agentType, op: toolCount, ts: ts}, true
-			}
-		}
-
-	case "assistant":
-		msg, _ := e["message"].(map[string]interface{})
-		if msg == nil {
-			return agentRow{}, false
-		}
-		content, _ := msg["content"].([]interface{})
-		for _, c := range content {
-			cm, _ := c.(map[string]interface{})
-			if cm == nil || cm["type"] != "tool_use" {
-				continue
-			}
-			toolName, _ := cm["name"].(string)
-			if toolName == "" {
-				continue
-			}
-			file := ""
-			if inp, ok := cm["input"].(map[string]interface{}); ok {
-				for _, k := range []string{"file_path", "path", "command"} {
-					if v, _ := inp[k].(string); v != "" {
-						file = v
-						if len(file) > 32 {
-							file = "…" + file[len(file)-32:]
-						}
-						break
-					}
-				}
-			}
-			return agentRow{agent: "claude", op: toolName, file: file, ts: ts}, true
-		}
-	}
-	return agentRow{}, false
 }
 
 // ─── Session detail loaders ───────────────────────────────────────────────────
@@ -349,7 +192,7 @@ func loadClaudeSessionLines(filePath string) []string {
 			continue
 		}
 		var e map[string]interface{}
-		if err := json.Unmarshal([]byte(raw), &e); err != nil {
+		if json.Unmarshal([]byte(raw), &e) != nil {
 			continue
 		}
 		ts, _ := e["timestamp"].(string)
@@ -359,7 +202,7 @@ func loadClaudeSessionLines(filePath string) []string {
 		switch e["type"] {
 		case "ai-title":
 			if title, _ := e["aiTitle"].(string); title != "" {
-				lines = append(lines, fmt.Sprintf("[%s] session: %s", ts, title))
+				lines = append(lines, fmt.Sprintf("[%s] ── %s", ts, title))
 			}
 		case "last-prompt":
 			prompt, _ := e["lastPrompt"].(string)
@@ -367,7 +210,7 @@ func loadClaudeSessionLines(filePath string) []string {
 				if len(prompt) > 72 {
 					prompt = prompt[:72] + "…"
 				}
-				lines = append(lines, fmt.Sprintf("[%s] user: %s", ts, prompt))
+				lines = append(lines, fmt.Sprintf("[%s] ▶ %s", ts, prompt))
 			}
 		case "assistant":
 			msg, _ := e["message"].(map[string]interface{})
@@ -397,9 +240,9 @@ func loadClaudeSessionLines(filePath string) []string {
 					}
 				}
 				if file != "" {
-					lines = append(lines, fmt.Sprintf("[%s] tool: %-14s %s", ts, toolName, file))
+					lines = append(lines, fmt.Sprintf("[%s]   %-16s %s", ts, toolName, file))
 				} else {
-					lines = append(lines, fmt.Sprintf("[%s] tool: %s", ts, toolName))
+					lines = append(lines, fmt.Sprintf("[%s]   %s", ts, toolName))
 				}
 			}
 		}
@@ -442,9 +285,8 @@ func loadOpenCodeSessionLines(sessionID string) []string {
 		if len(ts) > 16 {
 			ts = ts[:16]
 		}
-		dataStr := row[idx+1:]
 		var d map[string]interface{}
-		if err := json.Unmarshal([]byte(dataStr), &d); err != nil {
+		if json.Unmarshal([]byte(row[idx+1:]), &d) != nil {
 			continue
 		}
 		switch d["type"] {
@@ -454,7 +296,7 @@ func loadOpenCodeSessionLines(sessionID string) []string {
 				if len(text) > 72 {
 					text = text[:72] + "…"
 				}
-				lines = append(lines, fmt.Sprintf("[%s] text: %s", ts, text))
+				lines = append(lines, fmt.Sprintf("[%s] ▶ %s", ts, text))
 			}
 		case "tool":
 			toolName, _ := d["tool"].(string)
@@ -473,13 +315,13 @@ func loadOpenCodeSessionLines(sessionID string) []string {
 				}
 			}
 			if file != "" {
-				lines = append(lines, fmt.Sprintf("[%s] tool: %-14s %s", ts, toolName, file))
+				lines = append(lines, fmt.Sprintf("[%s]   %-16s %s", ts, toolName, file))
 			} else {
-				lines = append(lines, fmt.Sprintf("[%s] tool: %s", ts, toolName))
+				lines = append(lines, fmt.Sprintf("[%s]   %s", ts, toolName))
 			}
 		case "step-start":
 			if title, _ := d["title"].(string); title != "" {
-				lines = append(lines, fmt.Sprintf("[%s] step: %s", ts, title))
+				lines = append(lines, fmt.Sprintf("[%s] ── %s", ts, title))
 			}
 		}
 	}

@@ -30,13 +30,12 @@ type prRow struct {
 	state  string // OPEN / CLOSED / MERGED
 }
 
-type agentRow struct {
-	agent     string
-	op        string
-	file      string
-	ts        string
-	source    string // "claude", "opencode", "maple"
-	sessionID string // for session detail drill-down
+type sessionRow struct {
+	id        string // JSONL file path (claude) or SQLite session ID (opencode)
+	title     string
+	source    string // "claude", "opencode"
+	ts        string // last activity timestamp
+	toolCount int    // number of tool calls
 }
 
 type testEntry struct {
@@ -85,6 +84,11 @@ type prDetailLoadedMsg struct {
 	lines []string
 	title string
 	err   string
+}
+
+type prApproveResultMsg struct {
+	number int
+	err    string
 }
 
 type dashRefreshMsg struct{}
@@ -153,8 +157,8 @@ type dashboardModel struct {
 	prsLoading bool
 	prsErr     string
 
-	agents    []agentRow
-	agentsCur int
+	sessions    []sessionRow
+	sessionsCur int
 
 	qaEntries  []testEntry
 	qaEntryCur int
@@ -224,14 +228,14 @@ func newDashboard(t Theme, noAnimate bool) *dashboardModel {
 // reload refreshes all local (fast) data sources.
 func (m *dashboardModel) reload() {
 	m.stories = loadStories()
-	m.agents = loadAgents()
+	m.sessions = loadSessions()
 	m.qaEntries = loadTestEntries()
 	m.designTree = loadDesignTree()
 	m.logLines = loadLogLines(200)
 	m.projectName = loadProjectName()
 	// clamp cursors
 	m.clampCursor(&m.storiesCur, len(m.stories))
-	m.clampCursor(&m.agentsCur, len(m.agents))
+	m.clampCursor(&m.sessionsCur, len(m.sessions))
 	m.clampCursor(&m.qaEntryCur, len(m.qaEntries))
 	m.clampCursor(&m.designCur, len(m.designTree))
 	m.clampCursor(&m.logsCur, len(m.logLines))
@@ -281,13 +285,19 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case prDetailLoadedMsg:
 		m.prDetailLoading = false
 		if msg.err != "" {
-			m.prDetailLines = []string{"error: " + msg.err}
-		} else {
-			m.prDetailLines = msg.lines
+			return m, m.setStatus("✗ "+msg.err, true)
 		}
+		m.prDetailLines = msg.lines
 		m.prDetailTitle = msg.title
 		m.prDetailScroll = 0
 		m.showPRDetail = true
+
+	case prApproveResultMsg:
+		m.prDetailLoading = false
+		if msg.err != "" {
+			return m, m.setStatus("✗ "+msg.err, true)
+		}
+		return m, m.setStatus(fmt.Sprintf("✓ PR #%d approved", msg.number), false)
 
 	case dashRefreshMsg:
 		m.reload()
@@ -714,8 +724,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if m.focus == paneStories && m.storiesCur < len(m.stories) {
 			m.openStoryDetail(m.stories[m.storiesCur])
-		} else if m.focus == paneAgents && m.agentsCur < len(m.agents) {
-			m.openSessionDetail(m.agents[m.agentsCur])
+		} else if m.focus == paneAgents && m.sessionsCur < len(m.sessions) {
+			m.openSessionDetail(m.sessions[m.sessionsCur])
 		} else if m.focus == paneQA && m.qaEntryCur < len(m.qaEntries) {
 			m.openQAFile(m.qaEntries[m.qaEntryCur])
 		} else if m.focus == panePRs && m.prsCur < len(m.prList) {
@@ -780,8 +790,8 @@ func (m *dashboardModel) moveCursorDown() {
 				m.storiesCur++
 			}
 		case paneAgents:
-			if m.agentsCur < len(m.agents)-1 {
-				m.agentsCur++
+			if m.sessionsCur < len(m.sessions)-1 {
+				m.sessionsCur++
 			}
 		case panePRs:
 			if m.prsCur < len(m.prList)-1 {
@@ -812,8 +822,8 @@ func (m *dashboardModel) moveCursorUp() {
 				m.storiesCur--
 			}
 		case paneAgents:
-			if m.agentsCur > 0 {
-				m.agentsCur--
+			if m.sessionsCur > 0 {
+				m.sessionsCur--
 			}
 		case panePRs:
 			if m.prsCur > 0 {
@@ -838,7 +848,7 @@ func (m *dashboardModel) moveCursorTop() {
 		case paneStories:
 			m.storiesCur = 0
 		case paneAgents:
-			m.agentsCur = 0
+			m.sessionsCur = 0
 		case panePRs:
 			m.prsCur = 0
 		case paneQA:
@@ -864,8 +874,8 @@ func (m *dashboardModel) moveCursorBottom() {
 				m.storiesCur = len(m.stories) - 1
 			}
 		case paneAgents:
-			if len(m.agents) > 0 {
-				m.agentsCur = len(m.agents) - 1
+			if len(m.sessions) > 0 {
+				m.sessionsCur = len(m.sessions) - 1
 			}
 		case panePRs:
 			if len(m.prList) > 0 {
