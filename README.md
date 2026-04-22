@@ -53,7 +53,7 @@ maple init            # scaffold agents, skills, hooks, Makefile
 maple                 # open the dashboard
 ```
 
-Inside the dashboard press `n` to write requirements and generate a Gherkin story, then hand off to your harness:
+Inside the dashboard press `n` to capture requirements and generate a Gherkin story, then hand off to your harness:
 
 ```
 /feature "user can reset password via email link"
@@ -65,46 +65,31 @@ Inside the dashboard press `n` to write requirements and generate a Gherkin stor
 
 **M**ulti-Agent · **A**rtifact-Driven · **P**hase-Gated · **L**ocal-First · **E**nforced.
 
-### M — Multi-Agent Orchestration
-
-27+ specialist agents, each with a defined role and restricted toolset. The orchestrator never writes code — it delegates to the right specialist every time.
-
-- **TAFFY** — task-isolated, async, fault-tolerant, file-synced, YAML-driven workflow engine. `new-ui-feature` fires Spec-Kit → wireframe → mockup → component scaffold in one command. See [TAFFY](#taffy) below.
-- **Capability hierarchy** — Agents (reasoning) → Skills (deterministic) → MCPs (last resort).
-
-### A — Artifact-Driven Specification
-
-Implementation never starts until human-approved artifacts exist.
-
-- A Gherkin story file in `docs/stories/` is required before any code is written.
-- `ui: true` stories require approved wireframes and mockups.
-- Design tokens (`tokens.json`) and ADRs are generated and stored in `docs/design/` and `docs/adrs/`.
-
-### P — Phase-Gated Pipeline
-
-Eight phases, in order, no skipping:
-
-**DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE**
-
-Agents prepare; humans approve at defined gates. File-based handoffs between the TUI and agents via `.claude/state/`.
-
-### L — Local-First
-
-- Self-contained `maple` binary — template embedded, no runtime dependencies.
-- BubbleTea dashboard with live Stories, Agents, PRs, and QA panes.
-- RTK token optimizer wired as a `PreToolUse` hook — 60–90% fewer tokens on build/grep/test output, transparent to all commands.
-
-### E — Enforced
-
-- TDD: failing tests before implementation, always.
-- `lefthook` gates on pre-push: spec-kit, frontmatter, design-approved, a11y.
-- WCAG 2.2 AA audit required for all `ui: true` stories before merge.
+| | |
+|---|---|
+| **M — Multi-Agent** | 27+ specialist agents, each with a defined role. The orchestrator never writes code — it delegates to the right specialist every time. TAFFY chains them into named workflows. |
+| **A — Artifact-Driven** | A Gherkin story in `docs/stories/` is required before any code is written. `ui: true` stories require approved wireframes and mockups. No artifact, no implementation. |
+| **P — Phase-Gated** | Eight phases in order: DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE. Humans approve at defined gates. No skipping. |
+| **L — Local-First** | Self-contained binary — template embedded, no runtime dependencies. RTK wired as a `PreToolUse` hook reduces token usage 60–90% on build/grep/test output. |
+| **E — Enforced** | TDD always. `lefthook` gates on pre-push: spec-kit, frontmatter, design-approved, a11y. WCAG 2.2 AA required for all `ui: true` stories before merge. |
 
 ---
 
-## `maple` TUI
+## Harness Support
 
-Run `maple` inside any project initialized with `maple init`. Recommended: run inside **tmux** or **zellij** so harnesses open in new tabs without closing the dashboard.
+MAPLE works across all three AI coding harnesses. Agents, skills, and TAFFY workflows are mirrored across each.
+
+| Harness | Config dir | TAFFY workflows | Skill entry point |
+|---------|-----------|----------------|-------------------|
+| Claude Code | `.claude/` | `.claude/taffy/` | `.claude/skills/pipeline-runner/` |
+| OpenCode | `.opencode/` | `.opencode/taffy/` | `.opencode/skills/pipeline-runner/` |
+| GitHub Copilot CLI | `.github/` | shared via instructions | `/pipeline-runner` in chat |
+
+---
+
+## The `maple` Dashboard
+
+Run `maple` inside any project initialized with `maple init`. Recommended: open inside **tmux** or **zellij** so harnesses launch in new tabs without closing the dashboard.
 
 ```bash
 tmux new-session -s work   # then: maple
@@ -120,19 +105,19 @@ zellij                      # then: maple
 | `j` / `k` | Move cursor down / up |
 | `s` `a` `p` `Q` | Jump to Stories / Agents / PRs / QA pane |
 | `Enter` | Open detail (story, session, PR, test file) |
-| `o` | Open selected session + auto-pin it (`claude --resume` or `opencode --session`) |
+| `o` | Open selected session + auto-pin it |
 | `p` | Pin selected session to `.claude/state/sessions.json` |
 | `L` | Launch overlay — pick harness, type optional command, open in new tab |
-| `x` | Taffy picker — select a named workflow to launch |
-| `P` | Pipeline status — live view of active taffy workflow from `.claude/state/maple.json`; `[a]` to approve a gate, `[c]` to clear stale state |
-| `R` | RTK harness selector — toggle which harnesses get `rtk init` wired |
+| `x` | TAFFY picker — select a workflow, skill, or agent to launch |
+| `P` | Pipeline status — live view of active TAFFY run; `[a]` approve gate, `[c]` clear stale |
+| `n` | Requirements wizard → new Gherkin story |
 | `r` | Run selected test (QA pane) / reload all panes |
 | `d` | Design artifacts pane (full-screen toggle) |
 | `l` | Logs pane (full-screen toggle) |
-| `n` | Requirements wizard → new Gherkin story |
-| `u` | Update — re-sync template files |
+| `R` | RTK harness selector — toggle which harnesses have the token optimizer wired |
 | `S` | `ship-safe` security audit |
 | `F` | Skills marketplace — browse, install, remove |
+| `u` | Update — re-sync template files |
 | `/` | Search within active pane |
 | `:` | Command mode (`:theme <name>`, `:update`, `:req`, `:help`) |
 | `?` | Help overlay |
@@ -140,7 +125,7 @@ zellij                      # then: maple
 
 **Themes:** `tokyo-night` (default) · `catppuccin-mocha` · `gruvbox` · `nord` · `everforest`
 
-Switch with `:theme <name>` or auto-detected from `~/.config/omarchy/current/theme`.
+Switch with `:theme <name>`, or auto-detected from `~/.config/omarchy/current/theme`.
 
 ### CLI Commands
 
@@ -150,17 +135,19 @@ maple init                     # scaffold MAPLE into current directory
 maple init --force             # overwrite existing files
 maple req                      # requirements wizard → Gherkin story
 maple resume-session           # resume pinned session (reads sessions.json)
-maple resume-session claude    # resume specifically the pinned Claude session
+maple resume-session claude    # resume the pinned Claude session specifically
 maple labels                   # bootstrap GitHub label set
 maple project                  # create GitHub Project v2
-maple self-update              # upgrade maple to the latest release
+maple self-update              # upgrade to the latest release
 maple --version                # print version
 maple --no-animate             # skip animations (SSH / slow terminals)
 ```
 
 ---
 
-## Agent Commands (inside Claude Code or OpenCode)
+## Agent Commands
+
+These run inside any harness (Claude Code, OpenCode, Copilot CLI):
 
 | Command | What it does |
 |---------|-------------|
@@ -168,47 +155,24 @@ maple --no-animate             # skip animations (SSH / slow terminals)
 | `/bugfix "description"` | Reproduce → fix → validate → CHANGELOG |
 | `/validate` | Run full test suite |
 | `/tdd "requirement"` | RED → GREEN → REFACTOR cycle |
-| `/pipeline-runner <name>` | Launch a named taffy workflow |
+| `/pipeline-runner <name>` | Launch a named TAFFY workflow |
 | `/ship-safe` | Security/quality scan, reports blockers by severity |
 
 ---
 
-## TAFFY
+## TAFFY — Workflow Engine
 
 **T**ask-Isolated · **A**synchronous · **F**ault-Tolerant · **F**ile-Synced · **Y**AML-Driven
 
 MAPLE sets the rules. TAFFY runs the jobs.
 
-### T — Task-Isolated
-
-Each agent job runs in a dedicated subprocess. A 60-second generation loop from Claude Code or OpenCode never freezes the TUI — you keep reviewing PRs or reading specs in other panes while the agent works.
-
-### A — Asynchronous
-
-Fire-and-forget from the orchestrator's perspective. MAPLE hands off a job and moves on. TAFFY manages the waiting, polling, and completion signal so the rest of the pipeline stays non-blocking.
-
-### F — Fault-Tolerant
-
-LLMs hallucinate, APIs rate-limit, agents loop. TAFFY is the circuit breaker:
-
-- **Hard timeouts** — if an agent is stuck, TAFFY kills the process and flags the job `FAILED`.
-- **Rate-limit elasticity** — on a `429`, TAFFY pauses, sets state to `RATE_LIMITED`, and resumes when the window clears.
-- **3-strike escalation** — three consecutive failures on any stage → escalate to human.
-
-### F — File-Synced
-
-No Redis, no message broker. TAFFY broadcasts state by writing to `.claude/state/maple.json`. The TUI tails this file:
-
-- `RUNNING` → spinner animates
-- `PAUSED` → gate indicator, press `[a]` to approve
-- `BLOCKED` / `RATE_LIMITED` → flagged yellow
-- `DONE` / `FAILED` → final status
-
-### Y — YAML-Driven
-
-Workflows are stateless and deterministic. Each job is a YAML manifest — stage list, agent assignments, gates, guards, artifact expectations. No hidden state, no magic.
-
----
+| | |
+|---|---|
+| **T — Task-Isolated** | Each agent job runs in a dedicated subprocess. A 60-second generation loop never freezes the TUI — you keep reviewing PRs or reading specs while the agent works. |
+| **A — Asynchronous** | Fire-and-forget from the orchestrator's perspective. TAFFY manages waiting, polling, and completion signals so the rest of the pipeline stays non-blocking. |
+| **F — Fault-Tolerant** | Hard timeouts kill stuck agents and mark the job `FAILED`. On `429` rate limits, state is set to `RATE_LIMITED` and the job resumes when the window clears. Three consecutive failures escalate to human. |
+| **F — File-Synced** | No Redis, no broker. TAFFY writes state to `.claude/state/maple.json`. The TUI reacts: `RUNNING` → spinner, `PAUSED` → gate indicator, `RATE_LIMITED` → yellow flag, `DONE`/`FAILED` → final status. |
+| **Y — YAML-Driven** | Workflows are stateless and deterministic. Each job is a YAML manifest: stage list, agent assignments, gates, guards, artifact expectations. No hidden state. |
 
 ### Built-in workflows
 
@@ -221,31 +185,21 @@ Workflows are stateless and deterministic. Each job is a YAML manifest — stage
 
 ### Running a workflow
 
-**From the TUI** — press `x` to open the taffy picker, select a workflow, and it launches in your active harness.
+**From the dashboard** — press `x` to open the TAFFY picker, select a workflow, and it launches in your active harness.
 
-**From any harness** — `/pipeline-runner <name>` works across Claude Code, OpenCode, and Copilot CLI:
+**From any harness chat:**
 ```
 /pipeline-runner new-ui-feature
 /pipeline-runner api-endpoint
 ```
 
-### Harness support
-
-Workflow files are mirrored across all harnesses — same YAML, same behavior:
-
-| Harness | Workflow dir | Skill |
-|---------|-------------|-------|
-| Claude Code | `.claude/taffy/` | `.claude/skills/pipeline-runner/` |
-| OpenCode | `.opencode/taffy/` | `.opencode/skills/pipeline-runner/` |
-| GitHub Copilot CLI | `.github/copilot-instructions.md` | Same `/pipeline-runner` command |
-
 ### Human-approval gates
 
-Stages with `gate: human-approval` pause and write `PAUSED` to `maple.json`. The TUI shows the blocked stage in `[P]`. Press `a` to approve, or type "approved" in the harness chat.
+Stages with `gate: human-approval` pause and write `PAUSED` to `maple.json`. The `[P]` overlay shows the blocked stage. Press `a` in the dashboard to approve and advance, or type "approved" directly in the harness.
 
 ### Custom workflows
 
-Add a YAML file to `.claude/taffy/` (and mirror to `.opencode/taffy/`). Schema reference: `.claude/taffy/schema.yaml`.
+Add a YAML file to `.claude/taffy/` (mirror to `.opencode/taffy/` for OpenCode support). Schema: `.claude/taffy/schema.yaml`.
 
 ```yaml
 name: db-migration
@@ -270,29 +224,28 @@ stages:
 
 ---
 
-## Shared State Protocol
+## Skills Marketplace
 
-The TUI and agents communicate through files in `.claude/state/`:
+`F` opens the skills.sh marketplace browser. Two tabs:
 
-| File | Owner | Purpose |
-|------|-------|---------|
-| `maple.json` | Skill writes pipeline fields; TUI writes `state`/`ts` | Taffy pipeline progress |
-| `approval-pending.txt` | Skill creates; TUI deletes on approve | Human-in-the-loop gate handoff |
-| `sessions.json` | TUI writes on `p`/`o`; skill reads for resume | Pinned harness session IDs |
-| `rtk-harnesses.json` | TUI writes after `R` overlay; skill reads | Which harnesses have rtk wired |
+- **Installed** — all project and global skills; `d` to remove
+- **Search** — type a query, `Enter` to find and install
 
-Both sides **merge** rather than overwrite `maple.json` — the skill owns the taffy fields, the TUI owns `state` and `ts`.
+Skills install via `npx skills add <pkg> --all -y` and work across Claude Code, Cursor, and other editors.
 
 ---
 
-## Skills Marketplace
+## Prerequisites
 
-`F` opens the skills.sh marketplace. Two tabs:
+| Tool | Purpose | Required |
+|------|---------|----------|
+| [Claude Code](https://claude.ai/claude-code), [OpenCode](https://opencode.ai), or [Copilot CLI](https://github.com/features/copilot/cli) | Run the agents | At least one |
+| [GitHub CLI `gh`](https://cli.github.com) | Issues, PRs, project management | Yes |
+| [Go 1.22+](https://go.dev) | Build from source | Source builds only |
+| [Node.js](https://nodejs.org) | Cucumber E2E tests + `npx skills` | Optional |
+| [Docker](https://docker.com) | Test infrastructure | Optional |
 
-- **Installed** — all project and global skills; `d` to remove
-- **Search** — type a query, `Enter` to search, `Enter` again to install
-
-Skills install via `npx skills add <pkg> --all -y` and work across Claude Code, Cursor, and other editors.
+> Pre-built binaries for macOS / Linux / Windows are on every [release](https://github.com/kinncj/MAPLE/releases). Go is only needed to build from source.
 
 ---
 
@@ -301,27 +254,13 @@ Skills install via `npx skills add <pkg> --all -y` and work across Claude Code, 
 | Doc | Contents |
 |-----|---------|
 | [Quickstart — Claude Code](./docs/quickstart-claude-code.md) | Install, scaffold, first feature |
-| [Quickstart — Copilot CLI](./docs/quickstart-copilot-cli.md) | Install, enable Rubber Duck, first feature |
 | [Quickstart — OpenCode](./docs/quickstart-opencode.md) | Install, configure providers, first feature |
+| [Quickstart — Copilot CLI](./docs/quickstart-copilot-cli.md) | Install, enable Rubber Duck, first feature |
 | [The 8-Phase Pipeline](./docs/pipeline.md) | Phase details, TDD loop, Makefile contract |
 | [The Agents](./docs/agents.md) | Full agent roster, skills, adding custom agents |
 | [Customization Guide](./docs/customization.md) | Add agents, restrict permissions, extend skills |
 | [Architecture Article](./ARTICLE.md) | Design decisions, why specialist agents |
 | [Changelog](./CHANGELOG.md) | Full version history |
-
----
-
-## Prerequisites
-
-| Tool | Purpose | Required |
-|------|---------|----------|
-| [Claude Code](https://claude.ai/claude-code), [Copilot CLI](https://github.com/features/copilot/cli), or [OpenCode](https://opencode.ai) | Run the agents | At least one |
-| [GitHub CLI `gh`](https://cli.github.com) | Issues, PRs, project management | Yes |
-| [Go 1.22+](https://go.dev) | Build `maple` from source | Only for source builds |
-| [Node.js](https://nodejs.org) | Cucumber E2E tests + `npx skills` | Optional |
-| [Docker](https://docker.com) | Test infrastructure | Optional |
-
-> Pre-built binaries for macOS/Linux/Windows are available on every [release](https://github.com/kinncj/MAPLE/releases). Go is only needed to build from source.
 
 ---
 
