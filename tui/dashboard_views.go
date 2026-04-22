@@ -577,20 +577,48 @@ func min(a, b int) int {
 func (m *dashboardModel) quickPromptView() string {
 	t := m.theme
 
+	filtered := quickFilter(m.quickItems, m.quickSearch)
+
+	// search bar line shown in title area
+	searchBar := ""
+	if m.quickSearch != "" {
+		searchBar = "  " + lipgloss.NewStyle().Foreground(t.Warning).Render("/ "+m.quickSearch)
+	} else {
+		searchBar = "  " + lipgloss.NewStyle().Foreground(t.Muted).Render("/ type to filter…")
+	}
 	title := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("[x] Quick Prompt") +
-		lipgloss.NewStyle().Foreground(t.Muted).Render("  — pick a skill or agent, type a prompt, launch")
+		lipgloss.NewStyle().Foreground(t.Muted).Render("  — skill · agent · launch") +
+		"\n" + searchBar
+
+	// visible window: each item is 3 lines (name, desc, blank)
+	visibleItems := (m.height - 18) / 3
+	if visibleItems < 3 {
+		visibleItems = 3
+	}
 
 	var bodyLines []string
-	if len(m.quickItems) == 0 {
-		bodyLines = append(bodyLines,
-			lipgloss.NewStyle().Foreground(t.Muted).Render("  No skills or agents found. Run maple init."),
-		)
+	if len(filtered) == 0 {
+		if m.quickSearch != "" {
+			bodyLines = append(bodyLines,
+				lipgloss.NewStyle().Foreground(t.Muted).Render("  No matches for \""+m.quickSearch+"\"."),
+			)
+		} else {
+			bodyLines = append(bodyLines,
+				lipgloss.NewStyle().Foreground(t.Muted).Render("  No skills or agents found. Run maple init."),
+			)
+		}
 	} else {
-		for i, item := range m.quickItems {
+		scroll := m.quickItemScroll
+		end := scroll + visibleItems
+		if end > len(filtered) {
+			end = len(filtered)
+		}
+		for i, item := range filtered[scroll:end] {
+			abs := scroll + i
 			cursor := "  "
 			nameStyle := lipgloss.NewStyle().Foreground(t.Foreground)
 			descStyle := lipgloss.NewStyle().Foreground(t.Muted)
-			if i == m.quickItemCur {
+			if abs == m.quickItemCur {
 				cursor = "▶ "
 				nameStyle = lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
 				descStyle = lipgloss.NewStyle().Foreground(t.Foreground)
@@ -603,17 +631,28 @@ func (m *dashboardModel) quickPromptView() string {
 				badge = lipgloss.NewStyle().Foreground(t.Primary).Render("[agent]")
 			}
 
-			nameStr := nameStyle.Render(item.name)
 			bodyLines = append(bodyLines,
-				cursor+badge+"  "+nameStr,
+				cursor+badge+"  "+nameStyle.Render(item.name),
 				"    "+descStyle.Render(item.description),
 				"",
+			)
+		}
+
+		// scroll indicator
+		if len(filtered) > visibleItems {
+			pct := 0
+			if len(filtered)-visibleItems > 0 {
+				pct = (m.quickItemScroll * 100) / (len(filtered) - visibleItems)
+			}
+			bodyLines = append(bodyLines,
+				lipgloss.NewStyle().Foreground(t.Muted).Render(
+					fmt.Sprintf("  %d/%d  (%d%%)", m.quickItemCur+1, len(filtered), pct)),
 			)
 		}
 	}
 
 	body := strings.Join(bodyLines, "\n")
-	hint := "j/k navigate · Enter select · Esc close"
+	hint := "j/k scroll · Enter select · type to search · Esc close"
 
 	return m.popupBox(title, body, hint, t.Accent)
 }

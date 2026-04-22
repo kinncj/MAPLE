@@ -84,3 +84,27 @@ func parseAgentFile(path string) quickItem {
 	}
 	return quickItem{name: name, description: description, kind: "agent"}
 }
+
+// quickFilter returns items whose name or description contains all words in query.
+func quickFilter(items []quickItem, query string) []quickItem {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return items
+	}
+	words := strings.Fields(strings.ToLower(query))
+	var out []quickItem
+	for _, item := range items {
+		haystack := strings.ToLower(item.name + " " + item.description + " " + item.kind)
+		match := true
+		for _, w := range words {
+			if !strings.Contains(haystack, w) {
+				match = false
+				break
+			}
+		}
+		if match {
+			out = append(out, item)
+		}
+	}
+	return out
+}

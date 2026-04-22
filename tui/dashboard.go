@@ -240,6 +240,8 @@ type dashboardModel struct {
 	showQuickPrompt  bool
 	quickItems       []quickItem
 	quickItemCur     int
+	quickItemScroll  int    // top of visible window
+	quickSearch      string // live filter string
 
 	// Pipeline status overlay
 	showPipeline    bool
@@ -736,18 +738,29 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Quick Prompt overlay
 	if m.showQuickPrompt {
+		filtered := quickFilter(m.quickItems, m.quickSearch)
+		visibleItems := (m.height - 18) / 3
+		if visibleItems < 3 {
+			visibleItems = 3
+		}
 		switch k {
 		case "j", "down":
-			if m.quickItemCur < len(m.quickItems)-1 {
+			if m.quickItemCur < len(filtered)-1 {
 				m.quickItemCur++
+				if m.quickItemCur >= m.quickItemScroll+visibleItems {
+					m.quickItemScroll = m.quickItemCur - visibleItems + 1
+				}
 			}
 		case "k", "up":
 			if m.quickItemCur > 0 {
 				m.quickItemCur--
+				if m.quickItemCur < m.quickItemScroll {
+					m.quickItemScroll = m.quickItemCur
+				}
 			}
 		case "enter":
-			if m.quickItemCur < len(m.quickItems) {
-				item := m.quickItems[m.quickItemCur]
+			if m.quickItemCur < len(filtered) {
+				item := filtered[m.quickItemCur]
 				m.showQuickPrompt = false
 				m.quickLaunchName = item.name
 				m.quickLaunchPrompt = ""
@@ -763,8 +776,27 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.quickLaunchPickHarness = m.quickLaunchHarness == ""
 				m.showQuickLaunch = true
 			}
+		case "backspace":
+			if len(m.quickSearch) > 0 {
+				_, size := utf8.DecodeLastRuneInString(m.quickSearch)
+				m.quickSearch = m.quickSearch[:len(m.quickSearch)-size]
+				m.quickItemCur = 0
+				m.quickItemScroll = 0
+			}
 		case "q", "esc", "ctrl+c":
-			m.showQuickPrompt = false
+			if m.quickSearch != "" {
+				m.quickSearch = ""
+				m.quickItemCur = 0
+				m.quickItemScroll = 0
+			} else {
+				m.showQuickPrompt = false
+			}
+		default:
+			if len(k) == 1 && k >= " " {
+				m.quickSearch += k
+				m.quickItemCur = 0
+				m.quickItemScroll = 0
+			}
 		}
 		return m, nil
 	}
@@ -1130,6 +1162,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "x":
 		m.quickItems = loadQuickItems()
 		m.quickItemCur = 0
+		m.quickItemScroll = 0
+		m.quickSearch = ""
 		m.showQuickPrompt = true
 	case "P":
 		// pipelineState and approvalPending are kept fresh by reload() every tick
@@ -1535,7 +1569,12 @@ func (m *dashboardModel) footer() string {
 			keys = "  type context · [Enter] launch · [Esc] back"
 		}
 	case m.showQuickPrompt:
-		keys = "  [j/k] navigate · [Enter] select · [Esc] close"
+		filtered := quickFilter(m.quickItems, m.quickSearch)
+		if m.quickSearch != "" {
+			keys = fmt.Sprintf("  search: %s  · %d match(es) · [j/k] navigate · [Enter] select · [Esc] clear · [Backspace] edit", m.quickSearch, len(filtered))
+		} else {
+			keys = "  [j/k] navigate · [Enter] select · type to search · [Esc] close"
+		}
 	case m.showSkills:
 		if !m.skillsTabSearch {
 			if m.installedLoading {
