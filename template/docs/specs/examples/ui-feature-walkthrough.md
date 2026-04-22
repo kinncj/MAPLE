@@ -116,8 +116,8 @@ Story's `phase` frontmatter field advances as gates pass:
 ```
 
 Press `d` to view wireframes and tokens in the Design pane.
-Press `P` to show the active superpower pipeline status.
-Press `x` to launch the `new-ui-feature` superpower on a new story.
+Press `P` to show the active taffy pipeline status.
+Press `x` to launch the `new-ui-feature` taffy workflow on a new story.
 
 ---
 

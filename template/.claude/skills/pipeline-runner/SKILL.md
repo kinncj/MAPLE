@@ -1,53 +1,67 @@
 ---
-name: superpower-runner
-description: "Execute a named superpower workflow from .claude/superpowers/<name>.yaml. Chains agents and skills in declared stage order, pausing at human-approval gates. Tracks pipeline state in .claude/state/maple.json."
+name: pipeline-runner
+description: "Universal dispatcher: run a named taffy workflow (.claude/taffy/<name>.yaml), a skill (/skill-name), or a sub-agent (@agent-name). Tracks all runs in .claude/state/maple.json so the maple TUI shows live progress."
 ---
 
-# SKILL: superpower-runner
+# SKILL: pipeline-runner
 
 ## What It Does
 
-Reads a superpower workflow definition (`.claude/superpowers/<name>.yaml`), executes each stage in order by delegating to the appropriate agent or skill, and pauses at `gate: human-approval` stages until the human confirms.
+Dispatches any named workflow, skill, or agent from a single entry point. Resolution order:
 
-Pipeline state is written to `.claude/state/maple.json` at every transition so the TUI can show progress.
+1. **Taffy workflow** — look for `.claude/taffy/<name>.yaml`; if found, execute each stage in order
+2. **Skill** — look for `.claude/skills/<name>/`; if found, invoke the skill
+3. **Agent** — look for `.claude/agents/<name>.md`; if found, delegate to `@<name>`
+
+Pipeline state is written to `.claude/state/maple.json` at every transition.
 
 ## Usage
 
 ```
-/superpower-runner <name>
+/pipeline-runner <name>
 ```
 
 Examples:
 ```
-/superpower-runner new-ui-feature
-/superpower-runner api-endpoint
-/superpower-runner bugfix
-/superpower-runner design-refresh
+/pipeline-runner new-ui-feature
+/pipeline-runner api-endpoint
+/pipeline-runner tdd-workflow
+/pipeline-runner orchestrator
 ```
 
-Available superpowers are in `.claude/superpowers/` — list them with:
+List available taffy workflows:
 ```bash
-ls .claude/superpowers/*.yaml | grep -v schema
+ls .claude/taffy/*.yaml | grep -v schema
 ```
 
-## Execution Protocol
+List available skills:
+```bash
+ls .claude/skills/
+```
 
-### 1. Load the workflow
+## Dispatch Protocol
+
+### Step 1: Resolve the target
 
 ```bash
-cat .claude/superpowers/<name>.yaml
+# Check taffy first
+[ -f ".claude/taffy/<name>.yaml" ] && dispatch=taffy
+# Then skill
+[ -d ".claude/skills/<name>" ] && dispatch=skill
+# Then agent
+[ -f ".claude/agents/<name>.md" ] && dispatch=agent
 ```
 
-Parse the `stages:` list. Resolve `depends_on` to execution order.
+If nothing matches, report: `pipeline-runner: no taffy workflow, skill, or agent named '<name>'`
 
-### 2. Initialise state
+### Step 2: Initialise state
 
-Write to `.claude/state/maple.json`:
+Write to `.claude/state/maple.json` (merge — do not overwrite unowned fields):
 
 ```json
 {
-  "superpower": "<name>",
-  "stage": "<first-stage-name>",
+  "taffy": "<name>",
+  "stage": "<first-stage or skill-name>",
   "status": "RUNNING",
   "awaiting_approval": null,
   "started_at": "<iso8601>",
@@ -55,151 +69,119 @@ Write to `.claude/state/maple.json`:
 }
 ```
 
-Create `.claude/state/` if it doesn't exist.
+### Step 3a: Taffy workflow execution
 
-### 3. Execute each stage
+Load `.claude/taffy/<name>.yaml`, parse `stages:`, resolve `depends_on` order.
 
-For each stage in order:
+For each stage:
 
-**Check `when:` guard:**
-- `when: ui:true` — read the current story's `ui:` frontmatter field. Skip stage if `ui: false`.
-- `when: ui:false` — skip if `ui: true`.
-- `when: always` — always run.
+**`when:` guard:**
+- `when: ui:true` — skip if story has `ui: false`
+- `when: ui:false` — skip if story has `ui: true`
+- `when: always` — always run
 
-**Check `depends_on`:** All listed stages must have status `DONE` before this stage starts.
+**`depends_on`:** all listed stages must be `DONE` before this one starts.
 
 **Dispatch:**
-- `agent: <name>` → delegate to `@<name>` with the current story context
-- `skill: <name>` → invoke the skill directly
+- `agent: <name>` → delegate to `@<name>` with current story context
+- `skill: <name>` → invoke the skill
 - `pipeline: standard` → run the full 8-phase orchestrator pipeline
 
-**After each stage completes**, update `maple.json`:
-```json
-{
-  "stage": "<current-stage>",
-  "status": "RUNNING",
-  "updated_at": "<iso8601>"
-}
-```
+After each stage: update `maple.json` with current stage + `RUNNING`.
 
-### 4. Human-approval gates
+### Step 3b: Skill invocation
+
+Invoke the skill directly. Update `maple.json` on start and completion.
+
+### Step 3c: Agent delegation
+
+Delegate to `@<name>`. Update `maple.json` on start and completion.
+
+### Step 4: Human-approval gates (taffy only)
 
 When a stage has `gate: human-approval`:
 
-1. Complete the stage work (produce the artifact).
-2. Write PAUSED state to `maple.json`:
+1. Complete stage work (produce artifact).
+2. Write PAUSED state:
 ```json
-{
-  "stage": "<stage-name>",
-  "status": "PAUSED",
-  "awaiting_approval": "<stage-name>",
-  "updated_at": "<iso8601>"
-}
+{ "stage": "<name>", "status": "PAUSED", "awaiting_approval": "<name>", "updated_at": "<iso8601>" }
 ```
-3. Write the stage name to `.claude/state/approval-pending.txt` so the TUI can surface it:
-```bash
-echo "<stage-name>" > .claude/state/approval-pending.txt
-```
+3. Write stage name to `.claude/state/approval-pending.txt`.
 4. Output:
 ```
-SUPERPOWER PAUSED — awaiting human approval
+TAFFY PAUSED — awaiting human approval
 Stage:    <stage-name>
 Artifact: <artifact path or description>
 
 Approve via the maple TUI ([P] pipeline → [a] approve) or reply "approved" / "continue".
 I will not advance to the next stage until approval is confirmed.
 ```
-5. Poll for the approval signal — the TUI deletes the file when the user presses [a]:
-```bash
-until [ ! -f .claude/state/approval-pending.txt ]; do sleep 2; done
-```
-   Also accept an explicit "approved" or "continue" reply in chat as an alternative.
-6. On resume: update `maple.json` to `RUNNING`, advance to next stage.
+5. Poll: `until [ ! -f .claude/state/approval-pending.txt ]; do sleep 2; done`
+   Also accept explicit "approved" / "continue" reply in chat.
+6. On resume: update to `RUNNING`, advance to next stage.
 
-### Session context
-
-On startup, read `.claude/state/sessions.json` if it exists — it contains pinned session IDs for each harness:
+### Step 5: Completion
 
 ```json
-{ "claude": "<uuid>", "opencode": "<id>", "copilot": "<id>" }
-```
-
-Use the matching session ID when the superpower needs to resume or continue work within an existing agent session. If the file is absent or the relevant key is missing, start a new session normally.
-
-### 5. Completion
-
-When all stages are done:
-
-```json
-{
-  "superpower": "<name>",
-  "stage": "DONE",
-  "status": "DONE",
-  "awaiting_approval": null,
-  "updated_at": "<iso8601>"
-}
+{ "taffy": "<name>", "stage": "DONE", "status": "DONE", "awaiting_approval": null, "updated_at": "<iso8601>" }
 ```
 
 Output:
 ```
-SUPERPOWER COMPLETE — <name>
+TAFFY COMPLETE — <name>
 Stages run: N
 Duration:   <elapsed>
-
-Next steps: <PR creation if standard-8-phase was last stage>
 ```
 
 ## Failure Handling
 
-If a stage fails after 3 attempts:
+After 3 consecutive failures on any stage:
 
 ```json
-{
-  "stage": "<stage-name>",
-  "status": "FAILED",
-  "error": "<failure summary>",
-  "updated_at": "<iso8601>"
-}
+{ "stage": "<name>", "status": "FAILED", "error": "<summary>", "updated_at": "<iso8601>" }
 ```
 
-Stop execution. Report to human with the failed stage name and error. Do not attempt subsequent stages.
+Stop. Report failed stage and error to human. Do not proceed.
 
-## State File Reference
+## Session Context
 
-All state files live in `.claude/state/`. Both this skill and the maple TUI read and write these files — they are the shared communication channel between the running agent and the dashboard.
-
-### `.claude/state/maple.json`
-
-Written by the skill at every stage transition. The TUI reads it to display pipeline progress. **Do not overwrite fields you don't own** — the TUI writes `state` and `ts` recovery marker fields into this same file; merge your fields on top.
-
-| Field | Owner | Values |
-|---|---|---|
-| `superpower` | skill | workflow name |
-| `stage` | skill | current stage name |
-| `status` | skill | `RUNNING`, `PAUSED`, `DONE`, `FAILED` |
-| `awaiting_approval` | skill | stage name blocked on human approval, or `null` |
-| `pipeline` | skill | `standard` if running 8-phase |
-| `started_at` | skill | ISO 8601 |
-| `updated_at` | skill | ISO 8601 |
-| `state` | TUI | `running` or `exited` (recovery marker) |
-| `ts` | TUI | ISO 8601 (recovery marker timestamp) |
-
-### `.claude/state/approval-pending.txt`
-
-Written by the skill: contains the stage name waiting for approval.
-Deleted by the TUI: when the user presses `[a]` in the pipeline overlay.
-The skill polls for deletion; TUI polls for creation.
-
-### `.claude/state/sessions.json`
-
-Written by the TUI: maps harness name → pinned session ID.
-Read by the skill: use pinned session IDs when resuming within an existing session.
+On startup, read `.claude/state/sessions.json` if it exists:
 
 ```json
 { "claude": "<uuid>", "opencode": "<id>", "copilot": "<id>" }
 ```
 
+Use the matching session ID when resuming work within an existing agent session.
+
+## State File Reference
+
+All state in `.claude/state/`. TUI and skill share these files.
+
+### `.claude/state/maple.json`
+
+| Field | Owner | Values |
+|---|---|---|
+| `taffy` | skill | workflow/skill/agent name |
+| `stage` | skill | current stage name |
+| `status` | skill | `RUNNING`, `PAUSED`, `DONE`, `FAILED` |
+| `awaiting_approval` | skill | stage name or `null` |
+| `pipeline` | skill | `standard` if running 8-phase |
+| `started_at` | skill | ISO 8601 |
+| `updated_at` | skill | ISO 8601 |
+| `state` | TUI | `running` or `exited` |
+| `ts` | TUI | ISO 8601 |
+
+**Merge-not-overwrite:** read existing file, update only owned fields, re-write.
+
+### `.claude/state/approval-pending.txt`
+
+Skill writes stage name. TUI deletes when user presses `[a]`.
+
+### `.claude/state/sessions.json`
+
+TUI writes harness→session-ID map. Skill reads for session resume.
+
 ## Skip Conditions
 
-- `spike/*` and `chore/*` branches: skip Spec-Kit stages but run implementation stages.
-- Stage `when: ui:true` on a `ui: false` story: skip silently, log `[superpower] SKIP stage=<name> reason=ui:false`.
+- `spike/*` and `chore/*` branches: skip Spec-Kit stages, run implementation stages.
+- Stage `when: ui:true` on a `ui: false` story: skip silently, log `[pipeline-runner] SKIP stage=<name> reason=ui:false`.

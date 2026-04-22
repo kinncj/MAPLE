@@ -30,7 +30,7 @@ echo "$BRANCH" | grep -qE '^(spike|chore)/' && {
 }
 ```
 
-Also skip for `type:bug` stories — use the `bugfix` superpower instead.
+Also skip for `type:bug` stories — use the `bugfix` taffy workflow instead.
 
 ## Story File Naming
 

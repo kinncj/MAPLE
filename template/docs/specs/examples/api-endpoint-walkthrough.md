@@ -77,10 +77,10 @@ No design approvals needed. No a11y hook fires.
 
 ---
 
-## Superpower shortcut
+## Taffy shortcut
 
 ```
-/superpower-runner api-endpoint
+/pipeline-runner api-endpoint
 ```
 
 Runs: spec-kit → 8-phase pipeline.

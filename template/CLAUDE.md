@@ -10,7 +10,7 @@ Commands:
 - `/bugfix {description}` — Reproduce → fix → validate → CHANGELOG
 - `/validate` — Run full test suite
 - `/tdd {requirement}` — Single RED → GREEN → REFACTOR cycle
-- `/superpower-runner {name}` — Launch a named workflow (e.g. `new-ui-feature`, `api-endpoint`, `bugfix`, `design-refresh`)
+- `/pipeline-runner {name}` — Launch a named taffy workflow (e.g. `new-ui-feature`, `api-endpoint`, `bugfix`, `design-refresh`)
 - `/ship-safe` — Run `npx ship-safe audit .` security scan before shipping (**optional** — disabled by default; enable by setting repo variable `ENABLE_SHIP_SAFE=true`)
 
 ## RTK Token Optimizer
@@ -136,4 +136,4 @@ Makefile    # all CI/CD calls Makefile targets
 ## Skills
 
 Read skills from `.claude/skills/` before executing tasks.
-Key skills: `tdd-workflow`, `playwright-cli`, `github-cli`, `mermaid-diagrams`, `superpower-runner`, `ship-safe`.
+Key skills: `tdd-workflow`, `playwright-cli`, `github-cli`, `mermaid-diagrams`, `pipeline-runner`, `ship-safe`.

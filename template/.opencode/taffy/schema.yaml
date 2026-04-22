@@ -1,9 +1,9 @@
 # Taffy workflow schema
 # A taffy workflow is a named, composable pipeline of agents and skills.
-# The superpower-runner skill reads this format and executes each stage in order.
+# The pipeline-runner skill reads this format and executes each stage in order.
 #
 # Top-level fields:
-#   name        string   — machine identifier, used in /superpower-runner <name>
+#   name        string   — machine identifier, used in /pipeline-runner <name>
 #   description string   — shown in the TUI picker
 #   version     string   — semver
 #   tags        [string] — for filtering in the TUI (ui, api, bugfix, design, ...)
@@ -21,7 +21,7 @@
 #   pipeline     string   — standard (run the full 8-phase pipeline for the current story)
 #
 # State tracking:
-#   The superpower-runner writes progress to .claude/state/maple.json:
+#   pipeline-runner writes progress to .claude/state/maple.json:
 #   {
 #     "taffy": "<name>",
 #     "stage": "<current-stage-name>",

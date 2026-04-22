@@ -1,33 +1,37 @@
 ---
-name: superpower-runner
-description: "Execute a named superpower workflow from .claude/superpowers/<name>.yaml. Chains agents and skills in declared stage order, pausing at human-approval gates. Tracks pipeline state in .claude/state/maple.json."
+name: pipeline-runner
+description: "Universal dispatcher: run a named taffy workflow (.opencode/taffy/<name>.yaml), a skill, or a sub-agent. Tracks all runs in .claude/state/maple.json so the maple TUI shows live progress."
 ---
 
-# SKILL: superpower-runner
+# SKILL: pipeline-runner
 
 ## What It Does
 
-Reads a superpower workflow definition (`.claude/superpowers/<name>.yaml`), executes each stage in order by delegating to the appropriate agent or skill, and pauses at `gate: human-approval` stages until the human confirms.
+Dispatches any named workflow, skill, or agent. Resolution order:
 
-Pipeline state is written to `.claude/state/maple.json` at every transition so the TUI can show progress.
+1. **Taffy workflow** — look for `.opencode/taffy/<name>.yaml`; if found, execute each stage in order
+2. **Skill** — look for `.opencode/skills/<name>/`; if found, invoke the skill
+3. **Agent** — look for `.opencode/agents/<name>.md`; if found, delegate to `@<name>`
+
+Pipeline state is written to `.claude/state/maple.json` at every transition.
 
 ## Usage
 
 ```
-/superpower-runner <name>
+/pipeline-runner <name>
 ```
 
 Examples:
 ```
-/superpower-runner new-ui-feature
-/superpower-runner api-endpoint
-/superpower-runner bugfix
-/superpower-runner design-refresh
+/pipeline-runner new-ui-feature
+/pipeline-runner api-endpoint
+/pipeline-runner bugfix
+/pipeline-runner design-refresh
 ```
 
-Available superpowers are in `.claude/superpowers/` — list them with:
+Available taffy workflows are in `.opencode/taffy/` — list them with:
 ```bash
-ls .claude/superpowers/*.yaml | grep -v schema
+ls .opencode/taffy/*.yaml | grep -v schema
 ```
 
 ## Execution Protocol
@@ -35,7 +39,7 @@ ls .claude/superpowers/*.yaml | grep -v schema
 ### 1. Load the workflow
 
 ```bash
-cat .claude/superpowers/<name>.yaml
+cat .claude/taffy/<name>.yaml
 ```
 
 Parse the `stages:` list. Resolve `depends_on` to execution order.
@@ -46,7 +50,7 @@ Write to `.claude/state/maple.json`:
 
 ```json
 {
-  "superpower": "<name>",
+  "taffy": "<name>",
   "stage": "<first-stage-name>",
   "status": "RUNNING",
   "awaiting_approval": null,
@@ -102,7 +106,7 @@ echo "<stage-name>" > .claude/state/approval-pending.txt
 ```
 4. Output:
 ```
-SUPERPOWER PAUSED — awaiting human approval
+TAFFY PAUSED — awaiting human approval
 Stage:    <stage-name>
 Artifact: <artifact path or description>
 
@@ -124,7 +128,7 @@ On startup, read `.claude/state/sessions.json` if it exists — it contains pinn
 { "claude": "<uuid>", "opencode": "<id>", "copilot": "<id>" }
 ```
 
-Use the matching session ID when the superpower needs to resume or continue work within an existing agent session. If the file is absent or the relevant key is missing, start a new session normally.
+Use the matching session ID when the taffy workflow needs to resume or continue work within an existing agent session. If the file is absent or the relevant key is missing, start a new session normally.
 
 ### 5. Completion
 
@@ -132,7 +136,7 @@ When all stages are done:
 
 ```json
 {
-  "superpower": "<name>",
+  "taffy": "<name>",
   "stage": "DONE",
   "status": "DONE",
   "awaiting_approval": null,
@@ -142,7 +146,7 @@ When all stages are done:
 
 Output:
 ```
-SUPERPOWER COMPLETE — <name>
+TAFFY COMPLETE — <name>
 Stages run: N
 Duration:   <elapsed>
 
@@ -174,7 +178,7 @@ Written by the skill at every stage transition. The TUI reads it to display pipe
 
 | Field | Owner | Values |
 |---|---|---|
-| `superpower` | skill | workflow name |
+| `taffy` | skill | workflow name |
 | `stage` | skill | current stage name |
 | `status` | skill | `RUNNING`, `PAUSED`, `DONE`, `FAILED` |
 | `awaiting_approval` | skill | stage name blocked on human approval, or `null` |
@@ -202,4 +206,4 @@ Read by the skill: use pinned session IDs when resuming within an existing sessi
 ## Skip Conditions
 
 - `spike/*` and `chore/*` branches: skip Spec-Kit stages but run implementation stages.
-- Stage `when: ui:true` on a `ui: false` story: skip silently, log `[superpower] SKIP stage=<name> reason=ui:false`.
+- Stage `when: ui:true` on a `ui: false` story: skip silently, log `[taffy] SKIP stage=<name> reason=ui:false`.

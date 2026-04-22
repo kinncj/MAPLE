@@ -12,7 +12,7 @@ Default agent: `@orchestrator`. It never writes code — delegates everything to
 | `/bugfix {description}` | Reproduce → fix → validate → CHANGELOG |
 | `/validate` | Run full test suite |
 | `/tdd {requirement}` | Single RED → GREEN → REFACTOR cycle |
-| `/superpower-runner {name}` | Named workflow: `new-ui-feature`, `api-endpoint`, `bugfix`, `design-refresh` |
+| `/pipeline-runner {name}` | Named taffy workflow: `new-ui-feature`, `api-endpoint`, `bugfix`, `design-refresh` |
 | `/ship-safe` | Run `npx ship-safe audit .` security scan before shipping |
 
 ## RTK Token Optimizer
