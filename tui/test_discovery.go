@@ -56,7 +56,10 @@ func detectGherkinEntries() []testEntry {
 
 func gherkinRunCmd(path string) []string {
 	if data, err := os.ReadFile("Makefile"); err == nil {
-		if strings.Contains(string(data), "test-features") {
+		// check for an actual "test-features:" target, not just the substring
+		// (avoid false-positive on test-features-sync / test-features-scaffold)
+		content := string(data)
+		if strings.Contains(content, "test-features:") || strings.Contains(content, "test-features :") {
 			return []string{"make", "test-features", "FEATURE=" + path}
 		}
 	}
