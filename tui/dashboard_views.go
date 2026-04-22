@@ -813,7 +813,11 @@ func (m *dashboardModel) launcherView() string {
 			}
 			pinned := ""
 			if id := m.pinnedSessions[tool]; id != "" {
-				pinned = " " + pinnedStyle.Render("★ pinned: "+id[:8]+"…")
+				short := id
+				if len(short) > 8 {
+					short = short[:8]
+				}
+				pinned = " " + pinnedStyle.Render("★ pinned: "+short+"…")
 			}
 			bodyLines = append(bodyLines, cursor+style.Render(tool)+pinned)
 		}
@@ -831,7 +835,11 @@ func (m *dashboardModel) launcherView() string {
 			mutedStyle.Render("  [Enter] launch · [Esc] back"),
 		)
 		if id := m.pinnedSessions[tool]; id != "" {
-			bodyLines = append(bodyLines, "", pinnedStyle.Render("  ★ Will resume pinned session "+id[:8]+"…"))
+			short := id
+			if len(short) > 8 {
+				short = short[:8]
+			}
+			bodyLines = append(bodyLines, "", pinnedStyle.Render("  ★ Will resume pinned session "+short+"…"))
 		}
 	}
 

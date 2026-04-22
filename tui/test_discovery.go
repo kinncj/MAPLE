@@ -24,18 +24,21 @@ func loadTestEntries() []testEntry {
 }
 
 func detectGherkinEntries() []testEntry {
-	globs := []string{"tests/features/*.feature", "features/*.feature", "test/features/*.feature"}
+	// WalkDir instead of Glob so we recurse into feature subdirectories
+	roots := []string{"tests/features", "features", "test/features"}
 	seen := map[string]bool{}
 	var out []testEntry
-	for _, g := range globs {
-		paths, _ := filepath.Glob(g)
-		for _, p := range paths {
-			if seen[p] {
-				continue
+	for _, root := range roots {
+		_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if !strings.HasSuffix(p, ".feature") || seen[p] {
+				return nil
 			}
 			seen[p] = true
 			count := 0
-			if data, err := os.ReadFile(p); err == nil {
+			if data, err2 := os.ReadFile(p); err2 == nil {
 				for _, l := range strings.Split(string(data), "\n") {
 					t := strings.TrimSpace(l)
 					if strings.HasPrefix(t, "Scenario:") || strings.HasPrefix(t, "Scenario Outline:") {
@@ -49,7 +52,8 @@ func detectGherkinEntries() []testEntry {
 				runCmd:    gherkinRunCmd(p),
 				count:     count,
 			})
-		}
+			return nil
+		})
 	}
 	return out
 }
@@ -76,7 +80,9 @@ func detectGoTestEntries() []testEntry {
 	if _, err := os.Stat("go.mod"); err != nil {
 		return nil
 	}
-	var paths []string
+	// collect unique packages, not individual files — avoids one entry per _test.go
+	pkgSeen := map[string]bool{}
+	var pkgs []string
 	_ = filepath.WalkDir(".", func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -85,19 +91,23 @@ func detectGoTestEntries() []testEntry {
 			return filepath.SkipDir
 		}
 		if !d.IsDir() && strings.HasSuffix(p, "_test.go") {
-			paths = append(paths, p)
+			dir := filepath.Dir(p)
+			pkg := "./" + dir + "/..."
+			if dir == "." {
+				pkg = "./..."
+			}
+			if !pkgSeen[pkg] {
+				pkgSeen[pkg] = true
+				pkgs = append(pkgs, pkg)
+			}
 		}
 		return nil
 	})
 	var out []testEntry
-	for _, p := range paths {
-		dir := filepath.Dir(p)
-		pkg := "./" + dir + "/..."
-		if dir == "." {
-			pkg = "./..."
-		}
+	for _, pkg := range pkgs {
+		// display path is the package pattern, not a specific file
 		out = append(out, testEntry{
-			path:      p,
+			path:      pkg,
 			framework: "go",
 			runCmd:    []string{"go", "test", "-v", pkg},
 		})
@@ -113,21 +123,27 @@ func detectNodeTestEntries() []testEntry {
 	if fw == "" {
 		return nil
 	}
-	globs := []string{
-		"src/**/*.test.ts", "src/**/*.test.js",
-		"src/**/*.spec.ts", "src/**/*.spec.js",
-		"test/**/*.test.ts", "test/**/*.test.js",
-		"tests/**/*.test.ts", "tests/**/*.test.js",
-		"__tests__/**/*.ts", "__tests__/**/*.js",
-		"*.test.ts", "*.test.js", "*.spec.ts", "*.spec.js",
-	}
+	// use WalkDir so we recurse into src/, test/, tests/, __tests__/ properly
+	// (filepath.Glob does not support ** in Go stdlib)
+	testRoots := []string{"src", "test", "tests", "__tests__", "."}
 	seen := map[string]bool{}
 	var out []testEntry
-	for _, g := range globs {
-		paths, _ := filepath.Glob(g)
-		for _, p := range paths {
-			if seen[p] || strings.Contains(p, "node_modules") {
-				continue
+	for _, root := range testRoots {
+		_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if strings.Contains(p, "node_modules") {
+				return filepath.SkipDir
+			}
+			if seen[p] {
+				return nil
+			}
+			base := filepath.Base(p)
+			isTest := strings.HasSuffix(base, ".test.ts") || strings.HasSuffix(base, ".test.js") ||
+				strings.HasSuffix(base, ".spec.ts") || strings.HasSuffix(base, ".spec.js")
+			if !isTest {
+				return nil
 			}
 			seen[p] = true
 			out = append(out, testEntry{
@@ -135,7 +151,8 @@ func detectNodeTestEntries() []testEntry {
 				framework: fw,
 				runCmd:    nodeRunCmd(fw, p),
 			})
-		}
+			return nil
+		})
 	}
 	return out
 }
@@ -205,29 +222,42 @@ func detectPythonTestEntries() []testEntry {
 			break
 		}
 	}
-	globs := []string{
-		"test_*.py", "tests/test_*.py", "test/**/test_*.py",
-		"**/test_*.py", "**/*_test.py",
-	}
+	// WalkDir to recurse into test/ and tests/ (** doesn't work in filepath.Glob)
+	testRoots := []string{".", "test", "tests"}
 	seen := map[string]bool{}
 	var out []testEntry
-	for _, g := range globs {
-		paths, _ := filepath.Glob(g)
-		for _, p := range paths {
-			if seen[p] || strings.Contains(p, ".venv") || strings.Contains(p, "node_modules") {
-				continue
+	for _, root := range testRoots {
+		_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if strings.Contains(p, ".venv") || strings.Contains(p, "node_modules") {
+				return filepath.SkipDir
+			}
+			base := filepath.Base(p)
+			isPyTest := strings.HasPrefix(base, "test_") && strings.HasSuffix(base, ".py") ||
+				strings.HasSuffix(base, "_test.py")
+			if !isPyTest || seen[p] {
+				return nil
 			}
 			seen[p] = true
 			fw := "pytest"
-			if !hasPytest {
+			var runCmd []string
+			if hasPytest {
+				runCmd = []string{"python", "-m", "pytest", "-v", p}
+			} else {
 				fw = "unittest"
+				// convert path to dotted module name for unittest
+				mod := strings.TrimSuffix(strings.ReplaceAll(p, string(os.PathSeparator), "."), ".py")
+				runCmd = []string{"python", "-m", "unittest", "-v", mod}
 			}
 			out = append(out, testEntry{
 				path:      p,
 				framework: fw,
-				runCmd:    []string{"python", "-m", "pytest", "-v", p},
+				runCmd:    runCmd,
 			})
-		}
+			return nil
+		})
 	}
 	return out
 }
@@ -236,23 +266,23 @@ func detectRubyTestEntries() []testEntry {
 	if _, err := os.Stat("spec"); err != nil {
 		return nil
 	}
-	globs := []string{"spec/**/*_spec.rb", "spec/*_spec.rb"}
 	seen := map[string]bool{}
 	var out []testEntry
-	for _, g := range globs {
-		paths, _ := filepath.Glob(g)
-		for _, p := range paths {
-			if seen[p] {
-				continue
-			}
-			seen[p] = true
-			out = append(out, testEntry{
-				path:      p,
-				framework: "rspec",
-				runCmd:    []string{"bundle", "exec", "rspec", p},
-			})
+	_ = filepath.WalkDir("spec", func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
 		}
-	}
+		if !strings.HasSuffix(p, "_spec.rb") || seen[p] {
+			return nil
+		}
+		seen[p] = true
+		out = append(out, testEntry{
+			path:      p,
+			framework: "rspec",
+			runCmd:    []string{"bundle", "exec", "rspec", p},
+		})
+		return nil
+	})
 	return out
 }
 
@@ -325,14 +355,15 @@ func detectPHPTestEntries() []testEntry {
 	if _, err := os.Stat(runner); err != nil {
 		runner = "phpunit"
 	}
-	globs := []string{"tests/**/*Test.php", "test/**/*Test.php", "tests/*Test.php"}
 	seen := map[string]bool{}
 	var out []testEntry
-	for _, g := range globs {
-		paths, _ := filepath.Glob(g)
-		for _, p := range paths {
-			if seen[p] {
-				continue
+	for _, root := range []string{"tests", "test"} {
+		_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			if !strings.HasSuffix(p, "Test.php") || seen[p] {
+				return nil
 			}
 			seen[p] = true
 			out = append(out, testEntry{
@@ -340,7 +371,8 @@ func detectPHPTestEntries() []testEntry {
 				framework: "phpunit",
 				runCmd:    []string{runner, p},
 			})
-		}
+			return nil
+		})
 	}
 	return out
 }
