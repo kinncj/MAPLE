@@ -844,7 +844,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				cmd := buildQuickPromptCmd(name, prompt)
 				m.showQuickLaunch = false
 				target := buildLaunchCmd(m.quickLaunchHarness, cmd, m.pinnedSessions)
-				return m, trySpawnCmd(target)
+				return m, trySpawnCmdForHarness(m.quickLaunchHarness, target)
 			case "esc":
 				m.quickLaunchPickHarness = true
 			case "ctrl+c":
@@ -872,7 +872,12 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.approvalPending = ""
 				ps, _ := loadPipelineState()
 				m.pipelineState = ps
-				return m, m.setStatus("✓ approved — pipeline resuming", false)
+				n := notifyAllPanesContinue()
+				msg := "✓ approved — pipeline resuming"
+				if n > 0 {
+					msg = fmt.Sprintf("✓ approved — sent 'continue' to %d pane(s)", n)
+				}
+				return m, m.setStatus(msg, false)
 			}
 		case "c":
 			_ = os.Remove(".claude/state/maple.json")
@@ -898,7 +903,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					tool := tools[m.launcherCur]
 					m.showLauncher = false
 					cmd := buildLaunchCmd(tool, m.launcherCmd, m.pinnedSessions)
-					return m, trySpawnCmd(cmd)
+					return m, trySpawnCmdForHarness(tool, cmd)
 				}
 			case "esc":
 				m.launcherInput = false
@@ -1105,13 +1110,6 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = paneStories
 		m.fullscreen = -1
 	case "a":
-		if m.showPipeline && m.approvalPending != "" {
-			_ = os.Remove(".claude/state/approval-pending.txt")
-			m.approvalPending = ""
-			ps, _ := loadPipelineState()
-			m.pipelineState = ps
-			return m, m.setStatus("✓ approved — pipeline resuming", false)
-		}
 		m.focus = paneAgents
 		m.fullscreen = -1
 	case "p":
@@ -1191,7 +1189,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				savePinnedSession(s.source, sessionUUID(s))
 				m.pinnedSessions = loadPinnedSessions()
 			}
-			return m, trySpawnCmd(cmd)
+			return m, trySpawnCmdForHarness(s.source, cmd)
 		}
 		if m.focus == panePRs && m.prsCur < len(m.prList) {
 			_ = exec.Command("gh", "pr", "view", fmt.Sprintf("%d", m.prList[m.prsCur].number), "--web").Start()
@@ -1407,15 +1405,33 @@ func (m *dashboardModel) execCmd(input string) string {
 // On success it returns spawnSucceededMsg; on failure it returns spawnFailedMsg
 // so the TUI can show the manual-launch modal — maple never exits.
 func trySpawnCmd(args []string) tea.Cmd {
+	return trySpawnCmdForHarness("", args)
+}
+
+// trySpawnCmdForHarness spawns args and records a paneRef keyed by harness so
+// approvals can later send "continue" back to the running agent. Harness may be
+// "" for launches that should not be tracked (e.g. story editors).
+func trySpawnCmdForHarness(harness string, args []string) tea.Cmd {
 	return func() tea.Msg {
 		if len(args) == 0 {
 			return spawnFailedMsg{}
 		}
-		harness := args[0]
+		label := harness
+		if label == "" {
+			label = args[0]
+		}
+		if harness != "" {
+			p, err := spawnWithPane(harness, args)
+			if err != nil {
+				return spawnFailedMsg{args: args}
+			}
+			savePaneRef(harness, p)
+			return spawnSucceededMsg{harness: label}
+		}
 		if err := spawnInNewTerminal(args); err != nil {
 			return spawnFailedMsg{args: args}
 		}
-		return spawnSucceededMsg{harness: harness}
+		return spawnSucceededMsg{harness: label}
 	}
 }
 

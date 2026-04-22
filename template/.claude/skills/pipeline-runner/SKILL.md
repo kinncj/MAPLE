@@ -116,8 +116,10 @@ Artifact: <artifact path or description>
 Approve via the maple TUI ([P] pipeline → [a] approve) or reply "approved" / "continue".
 I will not advance to the next stage until approval is confirmed.
 ```
-5. Poll: `until [ ! -f .claude/state/approval-pending.txt ]; do sleep 2; done`
-   Also accept explicit "approved" / "continue" reply in chat.
+5. Poll: `timeout 540 bash -c 'until [ ! -f .claude/state/approval-pending.txt ]; do sleep 2; done'`
+   - On timeout (exit 124), re-run the same poll. The Bash tool caps at 10 min per call; re-polling across calls lets approval delays exceed that bound.
+   - Also accept an explicit "approved" / "continue" reply in chat.
+   - When the user approves via the maple TUI ([P] → [a]), the TUI deletes the pending file **and** sends a "continue" keystroke to the agent's pane via the active multiplexer (outer tmux/zellij, or a detached `tmux new-session` wrapper). Either signal is sufficient to resume.
 6. On resume: update to `RUNNING`, advance to next stage.
 
 ### Step 5: Completion

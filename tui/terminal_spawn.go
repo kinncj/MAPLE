@@ -12,6 +12,60 @@ import (
 // errNoNewTerminal is returned when no supported new-tab/window mechanism is available.
 var errNoNewTerminal = errors.New("no supported new-terminal mechanism found")
 
+// spawnWithPane launches args and returns a paneRef that identifies where the
+// agent is running so the TUI can later send "continue" keystrokes on approve.
+//
+// Resolution order:
+//   1. Outer tmux      → tmux new-window, capture pane id
+//   2. Outer zellij    → zellij new-tab --name maple-<harness>
+//   3. tmux installed  → wrap in detached tmux session "maple-<harness>",
+//                        then spawn a terminal that attaches to it
+//   4. no multiplexer  → plain spawn, pane ref kind=""
+//
+// The harness label is used to name inner tmux sessions and zellij tabs so
+// approvals can locate the correct target.
+func spawnWithPane(harness string, args []string) (paneRef, error) {
+	if len(args) == 0 {
+		return paneRef{}, errors.New("empty command")
+	}
+
+	if os.Getenv("TMUX") != "" {
+		c := exec.Command("tmux", append([]string{"new-window", "-PF", "#{pane_id}", "--"}, args...)...)
+		out, err := c.Output()
+		if err != nil {
+			return paneRef{}, err
+		}
+		return paneRef{Kind: "tmux", Target: strings.TrimSpace(string(out))}, nil
+	}
+
+	if os.Getenv("ZELLIJ") != "" {
+		tab := "maple-" + harness
+		if err := exec.Command("zellij", append([]string{"action", "new-tab", "--name", tab, "--"}, args...)...).Start(); err != nil {
+			return paneRef{}, err
+		}
+		return paneRef{Kind: "zellij", Target: tab}, nil
+	}
+
+	if _, err := exec.LookPath("tmux"); err == nil {
+		session := "maple-" + harness
+		_ = exec.Command("tmux", "kill-session", "-t", session).Run()
+		startArgs := append([]string{"new-session", "-d", "-s", session, "--"}, args...)
+		if err := exec.Command("tmux", startArgs...).Run(); err != nil {
+			return paneRef{}, err
+		}
+		if err := spawnInNewTerminal([]string{"tmux", "attach", "-t", session}); err != nil {
+			_ = exec.Command("tmux", "kill-session", "-t", session).Run()
+			return paneRef{}, err
+		}
+		return paneRef{Kind: "tmux", Target: session}, nil
+	}
+
+	if err := spawnInNewTerminal(args); err != nil {
+		return paneRef{}, err
+	}
+	return paneRef{}, nil
+}
+
 // spawnInNewTerminal opens args in a new terminal tab or window, keeping the
 // current terminal (and maple) alive. Detection order:
 //
