@@ -3,7 +3,7 @@
 [![CI](https://github.com/kinncj/MAPLE/actions/workflows/ci.yml/badge.svg)](https://github.com/kinncj/MAPLE/actions/workflows/ci.yml)
 [![Integration Validation](https://github.com/kinncj/MAPLE/actions/workflows/validate-integrations.yml/badge.svg)](https://github.com/kinncj/MAPLE/actions/workflows/validate-integrations.yml)
 
-**MAPLE** is the orchestration layer that connects Claude Code, OpenCode, and GitHub Copilot CLI into a unified, TDD-enforced development lifecycle.
+**MAPLE** is the orchestration layer that connects Claude Code, OpenCode, and GitHub Copilot CLI into a unified, TDD-enforced development lifecycle. One binary installs everything: agents, skills, hooks, and a live project dashboard.
 
 > Based on: [Building MAPLE: Orchestrated Multi-Agent Systems with Claude Code and OpenCode](./ARTICLE.md)
 
@@ -15,163 +15,216 @@
 
 ---
 
-## What is MAPLE?
+## Install
 
-**MAPLE** stands for **M**ulti-Agent · **A**rtifact-Driven · **P**hase-Gated · **L**ocal-First · **E**nforced.
+**macOS / Linux** — one line, no Go required:
 
-### M — Multi-Agent Orchestration
+```bash
+curl -fsSL https://raw.githubusercontent.com/kinncj/MAPLE/main/scripts/install.sh | bash
+```
 
-The core engine runs on a federated network of specialist agents, replacing monolithic prompting with targeted expertise.
+Installs `maple` and `rtk` to `~/.tools/maple/bin/`. Add to `PATH`:
 
-- **Specialist squads** — 27+ agents each with a defined role, restricted toolset, and specific scope. Extend with the Design & UX suite (`ux-researcher`, `visual-identity-designer`, `a11y-auditor`) for frontend-heavy projects.
-- **Superpowers (composability)** — agents and deterministic skills compose into named workflows. A single keystroke in the TUI can fire `new-ui-feature`, chaining Spec-Kit, wireframing, mockup, and component scaffolding seamlessly.
-- **Capability hierarchy** — Agents (reasoning) → Skills (deterministic mechanics) → MCPs (last resort). The orchestrator never writes code; it only delegates.
+```bash
+echo 'export PATH="$HOME/.tools/maple/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+```
 
-### A — Artifact-Driven Specification
+**Windows** (PowerShell):
 
-Before a single line of implementation code is written, the system demands clear, human-approved artifacts.
+```powershell
+irm https://raw.githubusercontent.com/kinncj/MAPLE/main/scripts/install.ps1 | iex
+```
 
-- **Spec-Kit layer** — enforces a linear progression of Problem → Spec → Plan → Tasks. The orchestrator refuses to enter implementation until these artifacts are materialized.
-- **Design & brand tokens** — UI-bearing stories (`ui: true`) trigger design intake gates. ASCII/SVG wireframes, W3C DTCG design tokens (`tokens.json`), and high-fidelity mockups are generated and stored canonically in `docs/design/`.
-- **Gherkin scenarios** — specifications are written as embedded Gherkin in Markdown story files, so product owners and automated QA agents speak the exact same language.
+**Build from source** (Go 1.22+):
 
-### P — Phase-Gated Pipeline
-
-The SDLC is a rigid, visible state machine. No phase can be skipped.
-
-**DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE**
-
-- **Automated sync** — bidirectional sync between local Markdown story files and GitHub Issues/Projects via the `story-issue-sync` skill. GitHub Project board is always the authoritative status source; local files own the narrative.
-- **Human-in-the-loop** — agents prepare PRs and artifacts, humans approve them. The pipeline halts at predefined gates (wireframe approval, ADRs) to preserve technological sovereignty and oversight.
-
-### L — Local-First Ecosystem
-
-The developer experience prioritizes terminal dominance and minimal reliance on external SaaS.
-
-- **`maple` TUI** — a 4-pane Go/BubbleTea dashboard (Stories · Agents · PRs · QA) inspired by lazydocker/lazygit. Boot check, animated maple leaf, live dashboard, skills marketplace (`F`), and a requirements wizard (`n`) — all in a self-contained binary with the template embedded.
-- **Preserved aesthetics** — Canada-red animated maple leaf at boot, compact block-char wordmark in the dashboard, truecolor themes mapped to your local environment (Omarchy, Tokyo Night, and more).
-- **Offline tolerance** — actions requiring network access degrade gracefully; local data (stories, agents, QA) always loads instantly.
-
-### E — Enforced Execution & Guardrails
-
-Rules, testing, and compliance are enforced, not just encouraged.
-
-- **TDD & BDD automation** — the `qa-cucumber` agent extracts Gherkin from stories at build time, generating step definitions and running tests. Merges are hard-blocked until scenarios are green.
-- **Strict Definitions of Done** — hook-enforced checks (`lefthook`) ensure DoD checklist items and WCAG 2.2 AA accessibility audits for UI components are verified before a push is allowed.
-- **Architectural guardrails** — introducing an MCP or making cross-boundary data changes automatically triggers an ADR requirement. The Appendix C checklist gates against vendor lock-in and uncontrolled scope creep.
+```bash
+git clone https://github.com/kinncj/MAPLE.git && cd MAPLE
+make build-tui        # → ./maple
+sudo mv maple /usr/local/bin/
+```
 
 ---
 
 ## Quick Start
 
-**Pre-built binaries** — if you don't have Go installed:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kinncj/MAPLE/main/scripts/install.sh | bash
-```
-Installs `maple` to `~/.tools/maple/bin/`. Add that to your `PATH`.
-
-**Build from source**
-```bash
-git clone https://github.com/kinncj/MAPLE.git maple-src
-cd maple-src
-make build-tui              # produces ./maple
-export PATH="$PWD:$PATH"   # or move to any directory on your PATH
-
 cd your-project
-maple init
-maple req                   # write requirements → Gherkin story
+maple init            # scaffold agents, skills, hooks, Makefile
+maple                 # open the dashboard
 ```
+
+Inside the dashboard press `n` to write requirements and generate a Gherkin story, then hand off to your harness:
+
+```
+/feature "user can reset password via email link"
+```
+
+---
+
+## What is MAPLE?
+
+**M**ulti-Agent · **A**rtifact-Driven · **P**hase-Gated · **L**ocal-First · **E**nforced.
+
+### M — Multi-Agent Orchestration
+
+27+ specialist agents, each with a defined role and restricted toolset. The orchestrator never writes code — it delegates to the right specialist every time.
+
+- **Superpowers** — named workflows that chain agents and skills. `new-ui-feature` fires Spec-Kit → wireframe → mockup → component scaffold in one command.
+- **Capability hierarchy** — Agents (reasoning) → Skills (deterministic) → MCPs (last resort).
+
+### A — Artifact-Driven Specification
+
+Implementation never starts until human-approved artifacts exist.
+
+- A Gherkin story file in `docs/stories/` is required before any code is written.
+- `ui: true` stories require approved wireframes and mockups.
+- Design tokens (`tokens.json`) and ADRs are generated and stored in `docs/design/` and `docs/adrs/`.
+
+### P — Phase-Gated Pipeline
+
+Eight phases, in order, no skipping:
+
+**DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE**
+
+Agents prepare; humans approve at defined gates. File-based handoffs between the TUI and agents via `.claude/state/`.
+
+### L — Local-First
+
+- Self-contained `maple` binary — template embedded, no runtime dependencies.
+- BubbleTea dashboard with live Stories, Agents, PRs, and QA panes.
+- RTK token optimizer wired as a `PreToolUse` hook — 60–90% fewer tokens on build/grep/test output, transparent to all commands.
+
+### E — Enforced
+
+- TDD: failing tests before implementation, always.
+- `lefthook` gates on pre-push: spec-kit, frontmatter, design-approved, a11y.
+- WCAG 2.2 AA audit required for all `ui: true` stories before merge.
 
 ---
 
 ## `maple` TUI
 
-The `maple` binary is a self-contained Go/BubbleTea TUI. Run it inside any project initialized with `maple init`.
+Run `maple` inside any project initialized with `maple init`. Recommended: run inside **tmux** or **zellij** so harnesses open in new tabs without closing the dashboard.
 
-```
-maple          # boot check → dashboard (if project.config.yaml exists)
-maple init     # scaffold agents, skills, hooks, docs into current directory
-maple req      # requirements wizard → Gherkin story file
-maple --help   # all flags
+```bash
+tmux new-session -s work   # then: maple
+# or
+zellij                      # then: maple
 ```
 
 ### Keybindings
 
 | Key | Action |
-|---|---|
+|-----|--------|
 | `Tab` / `Shift+Tab` | Cycle panes |
-| `j` / `k` | Move down / up |
+| `j` / `k` | Move cursor down / up |
 | `s` `a` `p` `Q` | Jump to Stories / Agents / PRs / QA pane |
-| `d` | Toggle Design artifacts pane (full-screen) |
-| `l` | Toggle Skill Logs pane (full-screen) |
-| `F` | Skills marketplace — browse, install, remove via skills.sh |
-| `S` | Run `ship-safe` audit — security/quality scan with colored findings |
-| `x` | Superpowers picker — browse and launch named agent/skill workflows |
-| `P` | Pipeline status — show active superpower progress from `.claude/state/maple.json` |
-| `o` | Open selected session in its agent (Agents pane: `claude --resume` or `opencode`) |
-| `n` | New story → Gherkin requirements wizard |
-| `u` | Update — re-sync template files (preserves your Makefile edits) |
-| `r` | Reload all pane data |
+| `Enter` | Open detail (story, session, PR, test file) |
+| `o` | Open selected session + auto-pin it (`claude --resume` or `opencode --session`) |
+| `p` | Pin selected session to `.claude/state/sessions.json` |
+| `L` | Launch overlay — pick harness, type optional command, open in new tab |
+| `x` | Superpowers picker — select a named workflow to launch |
+| `P` | Pipeline status — live view of active superpower from `.claude/state/maple.json`; `[a]` to approve a gate, `[c]` to clear stale state |
+| `R` | RTK harness selector — toggle which harnesses get `rtk init` wired |
+| `r` | Run selected test (QA pane) / reload all panes |
+| `d` | Design artifacts pane (full-screen toggle) |
+| `l` | Logs pane (full-screen toggle) |
+| `n` | Requirements wizard → new Gherkin story |
+| `u` | Update — re-sync template files |
+| `S` | `ship-safe` security audit |
+| `F` | Skills marketplace — browse, install, remove |
 | `/` | Search within active pane |
 | `:` | Command mode (`:theme <name>`, `:update`, `:req`, `:help`) |
 | `?` | Help overlay |
 | `q` / `Ctrl+C` | Quit |
 
-**Themes:** `tokyo-night` (default), `catppuccin-mocha`, `gruvbox`, `nord`, `everforest`. Switch with `:theme <name>` or auto-detected from `~/.config/omarchy/current/theme`.
+**Themes:** `tokyo-night` (default) · `catppuccin-mocha` · `gruvbox` · `nord` · `everforest`
+
+Switch with `:theme <name>` or auto-detected from `~/.config/omarchy/current/theme`.
+
+### CLI Commands
+
+```bash
+maple                          # boot check → dashboard
+maple init                     # scaffold MAPLE into current directory
+maple init --force             # overwrite existing files
+maple req                      # requirements wizard → Gherkin story
+maple resume-session           # resume pinned session (reads sessions.json)
+maple resume-session claude    # resume specifically the pinned Claude session
+maple labels                   # bootstrap GitHub label set
+maple project                  # create GitHub Project v2
+maple self-update              # upgrade maple to the latest release
+maple --version                # print version
+maple --no-animate             # skip animations (SSH / slow terminals)
+```
 
 ---
 
-## Commands (inside Claude Code or OpenCode)
+## Agent Commands (inside Claude Code or OpenCode)
 
 | Command | What it does |
-|---|---|
+|---------|-------------|
 | `/feature "description"` | Full 8-phase pipeline |
 | `/bugfix "description"` | Reproduce → fix → validate → CHANGELOG |
 | `/validate` | Run full test suite |
-| `/tdd "requirement"` | Single RED → GREEN → REFACTOR cycle |
-| `/ship-safe` | Run `npx ship-safe audit .` — security scan, reports blockers by severity |
+| `/tdd "requirement"` | RED → GREEN → REFACTOR cycle |
+| `/superpower-runner <name>` | Launch a named workflow |
+| `/ship-safe` | Security/quality scan, reports blockers by severity |
+
+---
+
+## Shared State Protocol
+
+The TUI and agents communicate through files in `.claude/state/`:
+
+| File | Owner | Purpose |
+|------|-------|---------|
+| `maple.json` | Skill writes pipeline fields; TUI writes `state`/`ts` | Superpower pipeline progress |
+| `approval-pending.txt` | Skill creates; TUI deletes on approve | Human-in-the-loop gate handoff |
+| `sessions.json` | TUI writes on `p`/`o`; skill reads for resume | Pinned harness session IDs |
+| `rtk-harnesses.json` | TUI writes after `R` overlay; skill reads | Which harnesses have rtk wired |
+
+Both sides **merge** rather than overwrite `maple.json` — the skill owns the superpower fields, the TUI owns `state` and `ts`.
 
 ---
 
 ## Skills Marketplace
 
-The `F` key in the TUI opens the skills.sh marketplace browser. Two tabs:
+`F` opens the skills.sh marketplace. Two tabs:
 
-- **Installed** — shows all project and global skills, `d` to remove
+- **Installed** — all project and global skills; `d` to remove
 - **Search** — type a query, `Enter` to search, `Enter` again to install
 
-Skills are installed via `npx skills add <pkg> --all -y` and work across Claude Code, Cursor, and other supported editors.
-
-MAPLE installs `obra/superpowers` automatically during `maple init` if `npx` is available.
+Skills install via `npx skills add <pkg> --all -y` and work across Claude Code, Cursor, and other editors.
 
 ---
 
 ## Documentation
 
 | Doc | Contents |
-|---|---|
-| [Quickstart — Claude Code](./docs/quickstart-claude-code.md) | Install, scaffold, run your first feature |
-| [Quickstart — Copilot CLI](./docs/quickstart-copilot-cli.md) | Install, enable Rubber Duck, run your first feature |
-| [Quickstart — OpenCode](./docs/quickstart-opencode.md) | Install, configure providers, run your first feature |
-| [The 8-Phase Pipeline](./docs/pipeline.md) | Phase details, TDD loop, Makefile contract, escalation policy |
-| [The Agents](./docs/agents.md) | Agent roster, skills, adding custom agents |
+|-----|---------|
+| [Quickstart — Claude Code](./docs/quickstart-claude-code.md) | Install, scaffold, first feature |
+| [Quickstart — Copilot CLI](./docs/quickstart-copilot-cli.md) | Install, enable Rubber Duck, first feature |
+| [Quickstart — OpenCode](./docs/quickstart-opencode.md) | Install, configure providers, first feature |
+| [The 8-Phase Pipeline](./docs/pipeline.md) | Phase details, TDD loop, Makefile contract |
+| [The Agents](./docs/agents.md) | Full agent roster, skills, adding custom agents |
 | [Customization Guide](./docs/customization.md) | Add agents, restrict permissions, extend skills |
-| [Architecture Article](./ARTICLE.md) | Design decisions, why specialist agents, CLI vs MCP |
-| [Examples](./template/docs/specs/examples/) | UI feature, API endpoint, spike walk-throughs |
+| [Architecture Article](./ARTICLE.md) | Design decisions, why specialist agents |
+| [Changelog](./CHANGELOG.md) | Full version history |
 
 ---
 
 ## Prerequisites
 
-| Tool | Purpose | Install |
-|---|---|---|
-| [Go 1.22+](https://go.dev) | Build `maple` from source | `brew install go` |
-| [Claude Code](https://claude.ai/claude-code) or [Copilot CLI](https://github.com/features/copilot/cli) or [OpenCode](https://opencode.ai) | Run the agents | see each link |
-| [GitHub CLI](https://cli.github.com) | Issue, PR, project management | `brew install gh` |
-| [Node.js](https://nodejs.org) | Playwright / Cucumber E2E tests + `npx skills` | `brew install node` |
-| [Docker](https://docker.com) | Test infrastructure | docker.com |
+| Tool | Purpose | Required |
+|------|---------|----------|
+| [Claude Code](https://claude.ai/claude-code), [Copilot CLI](https://github.com/features/copilot/cli), or [OpenCode](https://opencode.ai) | Run the agents | At least one |
+| [GitHub CLI `gh`](https://cli.github.com) | Issues, PRs, project management | Yes |
+| [Go 1.22+](https://go.dev) | Build `maple` from source | Only for source builds |
+| [Node.js](https://nodejs.org) | Cucumber E2E tests + `npx skills` | Optional |
+| [Docker](https://docker.com) | Test infrastructure | Optional |
 
-> Go is only needed to build `maple` from source. Use the one-liner installer for a pre-built binary.
+> Pre-built binaries for macOS/Linux/Windows are available on every [release](https://github.com/kinncj/MAPLE/releases). Go is only needed to build from source.
 
 ---
 
