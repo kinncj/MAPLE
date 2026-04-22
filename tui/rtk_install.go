@@ -21,27 +21,39 @@ const rtkRepo = "rtk-ai/rtk"
 // installRTK downloads and installs the rtk binary next to the maple binary.
 // Returns the path to the installed binary, or an error.
 // If rtk is already on PATH, returns the existing path immediately.
-// On linux/macos, falls back to the upstream install script when the release
-// tarball approach fails (https://github.com/rtk-ai/rtk#quick-install-linuxmacos).
+//
+// Fallback chain:
+//  1. GitHub release tarball (every platform)
+//  2. Upstream install.sh via curl|sh (linux/macos)
+//  3. cargo install --git (any platform where cargo is on PATH)
 func installRTK() (string, error) {
 	if p, err := exec.LookPath("rtk"); err == nil {
 		return p, nil
 	}
 
-	p, releaseErr := installRTKFromRelease()
-	if releaseErr == nil {
+	var errs []string
+
+	if p, err := installRTKFromRelease(); err == nil {
 		return p, nil
+	} else {
+		errs = append(errs, "release: "+err.Error())
 	}
 
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
-		return "", releaseErr
+	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+		if p, err := installRTKFromUpstreamScript(); err == nil {
+			return p, nil
+		} else {
+			errs = append(errs, "upstream-script: "+err.Error())
+		}
 	}
 
-	p, fallbackErr := installRTKFromUpstreamScript()
-	if fallbackErr == nil {
+	if p, err := installRTKFromCargo(); err == nil {
 		return p, nil
+	} else {
+		errs = append(errs, "cargo: "+err.Error())
 	}
-	return "", fmt.Errorf("release download failed (%v); upstream script fallback also failed (%v)", releaseErr, fallbackErr)
+
+	return "", fmt.Errorf("all rtk install paths failed — %s", strings.Join(errs, "; "))
 }
 
 // installRTKFromRelease downloads the platform tarball from rtk-ai's GitHub
@@ -113,23 +125,52 @@ func installRTKFromUpstreamScript() (string, error) {
 	return findInstalledRTK()
 }
 
+// installRTKFromCargo runs `cargo install --git https://github.com/rtk-ai/rtk`.
+// Works on any platform where cargo is on PATH — rtk-ai's officially documented
+// Windows install path, plus a universal fallback when binary release download
+// is blocked (proxies, corp firewalls, missing platform triple).
+func installRTKFromCargo() (string, error) {
+	cargo, err := exec.LookPath("cargo")
+	if err != nil {
+		return "", fmt.Errorf("cargo not found on PATH")
+	}
+	cmd := exec.Command(cargo, "install", "--git", "https://github.com/rtk-ai/rtk", "--quiet")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("cargo install failed: %w", err)
+	}
+	return findInstalledRTK()
+}
+
 // findInstalledRTK searches PATH and well-known install locations for the rtk binary.
 func findInstalledRTK() (string, error) {
 	if p, err := exec.LookPath("rtk"); err == nil {
 		return p, nil
 	}
-	home := os.Getenv("HOME")
-	candidates := []string{
-		filepath.Join(home, ".cargo", "bin", "rtk"),
-		filepath.Join(home, ".local", "bin", "rtk"),
-		"/usr/local/bin/rtk",
+	name := rtkBinaryName()
+	var candidates []string
+	if runtime.GOOS == "windows" {
+		if up := os.Getenv("USERPROFILE"); up != "" {
+			candidates = append(candidates,
+				filepath.Join(up, ".cargo", "bin", name),
+				filepath.Join(up, ".tools", "maple", "bin", name),
+			)
+		}
+	} else {
+		home := os.Getenv("HOME")
+		candidates = append(candidates,
+			filepath.Join(home, ".cargo", "bin", name),
+			filepath.Join(home, ".local", "bin", name),
+			"/usr/local/bin/"+name,
+		)
 	}
 	for _, c := range candidates {
 		if info, err := os.Stat(c); err == nil && !info.IsDir() {
 			return c, nil
 		}
 	}
-	return "", fmt.Errorf("rtk binary not found on PATH or in ~/.cargo/bin, ~/.local/bin, /usr/local/bin — you may need to start a new shell")
+	return "", fmt.Errorf("rtk binary not found on PATH or in well-known install locations — you may need to start a new shell")
 }
 
 // latestRTKVersion fetches the highest semver tag from the RTK releases API.

@@ -50,6 +50,7 @@ try {
             Write-Host "✓ rtk already installed"
         } else {
             Write-Host "Installing rtk token optimizer..."
+            $rtkInstalled = $false
             try {
                 $rtkReleases = Invoke-RestMethod "https://api.github.com/repos/$RtkRepo/releases?per_page=100"
                 $rtkVersion  = ($rtkReleases | Sort-Object { [version]($_.tag_name -replace '^v','') } | Select-Object -Last 1).tag_name
@@ -63,14 +64,34 @@ try {
 
                 # locate rtk.exe anywhere in the extracted tree (handles subdirectory layouts)
                 $rtkBin = Get-ChildItem -Path $rtkExtract -Filter "rtk.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-                if ($null -eq $rtkBin) {
-                    Write-Host "~ rtk: binary not found in archive — install manually: https://github.com/rtk-ai/rtk"
-                } else {
+                if ($null -ne $rtkBin) {
                     Copy-Item $rtkBin.FullName (Join-Path $InstallDir "rtk.exe") -Force
                     Write-Host "✓ Installed rtk $rtkVersion"
+                    $rtkInstalled = $true
                 }
             } catch {
-                Write-Host "~ rtk install skipped — download failed (install manually: https://github.com/rtk-ai/rtk)"
+                # fall through to cargo fallback
+            }
+
+            if (-not $rtkInstalled) {
+                if (Get-Command cargo -ErrorAction SilentlyContinue) {
+                    Write-Host "~ falling back to cargo install (rtk-ai/rtk)..."
+                    try {
+                        cargo install --git https://github.com/rtk-ai/rtk --quiet 2>&1 | Out-Host
+                        if (Get-Command rtk -ErrorAction SilentlyContinue) {
+                            Write-Host "✓ rtk installed via cargo"
+                            $rtkInstalled = $true
+                        }
+                    } catch {
+                        # fall through to manual instruction
+                    }
+                }
+            }
+
+            if (-not $rtkInstalled) {
+                Write-Host "~ rtk install failed — install manually:"
+                Write-Host "    https://github.com/rtk-ai/rtk (download rtk-x86_64-pc-windows-msvc.zip)"
+                Write-Host "    or use WSL and run: curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh"
             }
         }
         Write-Host ""
