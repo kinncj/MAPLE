@@ -590,10 +590,15 @@ func (m *dashboardModel) quickPromptView() string {
 		lipgloss.NewStyle().Foreground(t.Muted).Render("  — skill · agent · launch") +
 		"\n" + searchBar
 
-	// visible window: each item is 3 lines (name, desc, blank)
-	visibleItems := (m.height - 18) / 3
+	// visible window: each item is 3 lines (name, desc, blank).
+	// overhead = border(2) + padding(2) + title×2(2) + sep(1) + blanks(2) + hint(1) + scroll(1) = 11
+	visibleItems := (m.height - 17) / 3
 	if visibleItems < 3 {
 		visibleItems = 3
+	}
+	descWidth := m.popupInnerWidth() - 4 // room for "    " prefix
+	if descWidth < 10 {
+		descWidth = 10
 	}
 
 	var bodyLines []string
@@ -631,9 +636,13 @@ func (m *dashboardModel) quickPromptView() string {
 				badge = lipgloss.NewStyle().Foreground(t.Primary).Render("[agent]")
 			}
 
+			desc := item.description
+			if len(desc) > descWidth {
+				desc = desc[:descWidth-1] + "…"
+			}
 			bodyLines = append(bodyLines,
 				cursor+badge+"  "+nameStyle.Render(item.name),
-				"    "+descStyle.Render(item.description),
+				"    "+descStyle.Render(desc),
 				"",
 			)
 		}
@@ -726,6 +735,23 @@ func (m *dashboardModel) popupBox(title, body, hint string, borderColor lipgloss
 	}
 	innerW := popW - 6 // border(2) + padding sides(4)
 
+	availH := m.height - 6
+	if availH < 10 {
+		availH = 10
+	}
+	// Hard cap: box must not exceed available height.
+	// border(2) + padding(2) + title(2) + sep(1) + blanks(2) + hint(1) = 10 overhead lines.
+	maxBodyLines := availH - 10
+	if maxBodyLines < 2 {
+		maxBodyLines = 2
+	}
+	// Clip body to maxBodyLines so the box never overflows the terminal.
+	bodyLines := strings.Split(body, "\n")
+	if len(bodyLines) > maxBodyLines {
+		bodyLines = bodyLines[:maxBodyLines]
+	}
+	body = strings.Join(bodyLines, "\n")
+
 	titleBar := lipgloss.NewStyle().Foreground(borderColor).Bold(true).Render(title)
 	sep := lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("─", innerW))
 	hintBar := lipgloss.NewStyle().Foreground(t.Muted).Render(hint)
@@ -739,11 +765,19 @@ func (m *dashboardModel) popupBox(title, body, hint string, borderColor lipgloss
 		Padding(1, 2).
 		Render(inner)
 
-	availH := m.height - 6
-	if availH < 10 {
-		availH = 10
-	}
 	return lipgloss.Place(m.width, availH, lipgloss.Center, lipgloss.Center, box)
+}
+
+// popupInnerWidth returns the body width available inside a popupBox.
+func (m *dashboardModel) popupInnerWidth() int {
+	popW := (m.width * 3) / 4
+	if popW > 114 {
+		popW = 114
+	}
+	if popW < 52 {
+		popW = 52
+	}
+	return popW - 6 - 4 // minus border+padding sides, minus leading "    "
 }
 
 // pipelineStatusView shows the current superpower pipeline state from .claude/state/maple.json.

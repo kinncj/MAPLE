@@ -739,7 +739,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Quick Prompt overlay
 	if m.showQuickPrompt {
 		filtered := quickFilter(m.quickItems, m.quickSearch)
-		visibleItems := (m.height - 18) / 3
+		visibleItems := (m.height - 17) / 3
 		if visibleItems < 3 {
 			visibleItems = 3
 		}
@@ -827,10 +827,11 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// prompt input mode
 			switch k {
 			case "enter":
-				cmd := "/" + m.quickLaunchName
-				if m.quickLaunchPrompt != "" {
-					cmd += " " + m.quickLaunchPrompt
-				}
+				name := m.quickLaunchName
+				prompt := m.quickLaunchPrompt
+				// Write RUNNING state immediately so [P] reflects it before the agent responds
+				writeQuickLaunchState(name, prompt)
+				cmd := buildQuickPromptCmd(name, prompt)
 				m.showQuickLaunch = false
 				target := buildLaunchCmd(m.quickLaunchHarness, cmd, m.pinnedSessions)
 				return m, trySpawnCmd(target)
@@ -1872,6 +1873,41 @@ func runDashboard(t Theme, noAnimate bool) (dashAction, []string, error) {
 	}
 	dm := final.(*dashboardModel)
 	return dm.exitAction, dm.openTarget, nil
+}
+
+// writeQuickLaunchState writes an initial RUNNING pipeline state to maple.json
+// when the user launches from the quick-prompt overlay. Merges with existing content.
+func writeQuickLaunchState(skill, stage string) {
+	_ = os.MkdirAll(".claude/state", 0o755)
+	merged := map[string]interface{}{}
+	if raw, err := os.ReadFile(".claude/state/maple.json"); err == nil {
+		_ = json.Unmarshal(raw, &merged)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	merged["superpower"] = skill
+	merged["stage"] = stage
+	merged["status"] = "RUNNING"
+	merged["started_at"] = now
+	merged["updated_at"] = now
+	data, _ := json.Marshal(merged)
+	_ = os.WriteFile(".claude/state/maple.json", append(data, '\n'), 0o644)
+}
+
+// buildQuickPromptCmd wraps the skill invocation with a silent pipeline-tracking
+// instruction so the agent keeps maple.json updated as it works.
+func buildQuickPromptCmd(skill, userPrompt string) string {
+	cmd := "/" + skill
+	if userPrompt != "" {
+		cmd += " " + userPrompt
+	}
+	tracking := `
+
+<maple-pipeline>
+You were launched from the MAPLE quick-prompt. Keep .claude/state/maple.json updated as you work by writing (merge, never overwrite other keys):
+  {"superpower":"` + skill + `","stage":"<current step>","status":"RUNNING","updated_at":"<ISO-8601 timestamp>"}
+Set status to "DONE" when finished, "FAILED" if you cannot complete.
+</maple-pipeline>`
+	return cmd + tracking
 }
 
 func writeRecoveryMarker(state string) {
