@@ -51,16 +51,24 @@ try {
         } else {
             Write-Host "Installing rtk token optimizer..."
             try {
-                $rtkReleases = Invoke-RestMethod "https://api.github.com/repos/$RtkRepo/releases?per_page=1"
-                $rtkVersion  = $rtkReleases[0].tag_name
+                $rtkReleases = Invoke-RestMethod "https://api.github.com/repos/$RtkRepo/releases?per_page=100"
+                $rtkVersion  = ($rtkReleases | Sort-Object { [version]($_.tag_name -replace '^v','') } | Select-Object -Last 1).tag_name
                 $rtkArchive  = "rtk-x86_64-pc-windows-msvc.zip"
                 $rtkUrl      = "https://github.com/$RtkRepo/releases/download/$rtkVersion/$rtkArchive"
                 $rtkZip      = Join-Path $tmp $rtkArchive
+                $rtkExtract  = Join-Path $tmp "rtk-extract"
 
                 Invoke-WebRequest $rtkUrl -OutFile $rtkZip -UseBasicParsing
-                Expand-Archive $rtkZip -DestinationPath $tmp -Force
-                Copy-Item (Join-Path $tmp "rtk.exe") (Join-Path $InstallDir "rtk.exe") -Force
-                Write-Host "✓ Installed rtk $rtkVersion"
+                Expand-Archive $rtkZip -DestinationPath $rtkExtract -Force
+
+                # locate rtk.exe anywhere in the extracted tree (handles subdirectory layouts)
+                $rtkBin = Get-ChildItem -Path $rtkExtract -Filter "rtk.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($null -eq $rtkBin) {
+                    Write-Host "~ rtk: binary not found in archive — install manually: https://github.com/rtk-ai/rtk"
+                } else {
+                    Copy-Item $rtkBin.FullName (Join-Path $InstallDir "rtk.exe") -Force
+                    Write-Host "✓ Installed rtk $rtkVersion"
+                }
             } catch {
                 Write-Host "~ rtk install skipped — download failed (install manually: https://github.com/rtk-ai/rtk)"
             }

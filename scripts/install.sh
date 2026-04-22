@@ -84,38 +84,74 @@ echo ""
 # RTK intercepts Bash tool calls and compresses output 60-90% before it hits the
 # LLM context window. Single Rust binary, zero runtime dependencies.
 # Skip with: --skip-rtk or SKIP_RTK=1
-if [ -z "$SKIP_RTK" ]; then
+install_rtk() {
     if command -v rtk >/dev/null 2>&1; then
-        echo "✓ rtk already installed"
-    else
-        echo "Installing rtk token optimizer…"
-        RTK_VERSION=$(curl -fsSL "https://api.github.com/repos/$RTK_REPO/releases?per_page=1" \
-            | grep '"tag_name"' | head -1 | cut -d'"' -f4)
-        if [ -n "$RTK_VERSION" ]; then
-            case "${OS}-${ARCH}" in
-                darwin-arm64) RTK_TRIPLE="aarch64-apple-darwin" ;;
-                darwin-amd64) RTK_TRIPLE="x86_64-apple-darwin" ;;
-                linux-arm64)  RTK_TRIPLE="aarch64-unknown-linux-gnu" ;;
-                linux-amd64)  RTK_TRIPLE="x86_64-unknown-linux-gnu" ;;
-                *)            RTK_TRIPLE="" ;;
-            esac
-            if [ -n "$RTK_TRIPLE" ]; then
-                RTK_URL="https://github.com/${RTK_REPO}/releases/download/${RTK_VERSION}/rtk-${RTK_TRIPLE}.tar.gz"
-                if curl -fsSL "$RTK_URL" -o "$TMP/rtk.tar.gz" 2>/dev/null; then
-                    tar -xzf "$TMP/rtk.tar.gz" -C "$TMP"
-                    mv "$TMP/rtk" "$INSTALL_DIR/rtk"
-                    chmod +x "$INSTALL_DIR/rtk"
-                    echo "✓ Installed rtk ${RTK_VERSION}"
-                else
-                    echo "~ rtk download failed — install manually: https://github.com/rtk-ai/rtk"
-                fi
-            else
-                echo "~ rtk: unsupported platform ${OS}/${ARCH}"
-            fi
-        else
-            echo "~ rtk: could not resolve latest version"
-        fi
+        echo "✓ rtk already installed ($(rtk --version 2>/dev/null || echo unknown))"
+        return 0
     fi
+
+    echo "Installing rtk token optimizer…"
+
+    local rtk_version
+    rtk_version=$(curl -fsSL "https://api.github.com/repos/$RTK_REPO/releases?per_page=100" \
+        | grep '"tag_name"' \
+        | cut -d'"' -f4 \
+        | grep -E '^v?[0-9]+\.[0-9]+' \
+        | sort -V \
+        | tail -1)
+
+    if [ -z "$rtk_version" ]; then
+        echo "~ rtk: could not resolve latest version — install manually: https://github.com/rtk-ai/rtk"
+        return 0
+    fi
+
+    local rtk_triple
+    case "${OS}-${ARCH}" in
+        darwin-arm64) rtk_triple="aarch64-apple-darwin" ;;
+        darwin-amd64) rtk_triple="x86_64-apple-darwin" ;;
+        linux-arm64)  rtk_triple="aarch64-unknown-linux-gnu" ;;
+        linux-amd64)  rtk_triple="x86_64-unknown-linux-gnu" ;;
+        *)
+            echo "~ rtk: unsupported platform ${OS}/${ARCH} — install manually: https://github.com/rtk-ai/rtk"
+            return 0
+            ;;
+    esac
+
+    local rtk_url="https://github.com/${RTK_REPO}/releases/download/${rtk_version}/rtk-${rtk_triple}.tar.gz"
+    local rtk_tmp="$TMP/rtk-extract"
+    mkdir -p "$rtk_tmp"
+
+    if ! curl -fsSL "$rtk_url" -o "$TMP/rtk.tar.gz" 2>/dev/null; then
+        echo "~ rtk download failed — install manually: https://github.com/rtk-ai/rtk"
+        return 0
+    fi
+
+    if ! tar -xzf "$TMP/rtk.tar.gz" -C "$rtk_tmp" 2>/dev/null; then
+        echo "~ rtk: archive extraction failed — install manually: https://github.com/rtk-ai/rtk"
+        return 0
+    fi
+
+    # locate the rtk binary anywhere in the extracted tree (handles subdirectory layouts)
+    local rtk_bin
+    rtk_bin=$(find "$rtk_tmp" -maxdepth 4 -type f -name "rtk" ! -name "*.tar.gz" 2>/dev/null | head -1)
+
+    if [ -z "$rtk_bin" ]; then
+        # some releases ship the binary named after the triple
+        rtk_bin=$(find "$rtk_tmp" -maxdepth 4 -type f -name "rtk-*" ! -name "*.tar.gz" 2>/dev/null | head -1)
+    fi
+
+    if [ -z "$rtk_bin" ]; then
+        echo "~ rtk: binary not found in archive — install manually: https://github.com/rtk-ai/rtk"
+        return 0
+    fi
+
+    cp "$rtk_bin" "$INSTALL_DIR/rtk"
+    chmod +x "$INSTALL_DIR/rtk"
+    echo "✓ Installed rtk ${rtk_version}"
+}
+
+if [ -z "$SKIP_RTK" ]; then
+    install_rtk
     echo ""
 fi
 
