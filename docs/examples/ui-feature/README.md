@@ -1,6 +1,6 @@
 # Example: UI Feature — Password Reset
 
-This example traces a `ui: true` story through the full `new-ui-feature` superpower: Spec-Kit intake → design → 8-phase pipeline → a11y gate.
+This example traces a `ui: true` story through the `new-ui-feature` taffy workflow: Spec-Kit intake → design → 8-phase pipeline → a11y gate.
 
 ## Step 1 — Story File (written by Spec-Kit)
 

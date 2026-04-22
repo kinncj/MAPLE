@@ -47,7 +47,7 @@ bash tests/run_all.sh
 │   ├── .claude/agents/       # 34 Claude Code agent definitions
 │   ├── .claude/commands/     # slash commands
 │   ├── .claude/skills/       # 31 skill files
-│   ├── .claude/superpowers/  # composed named workflows
+│   ├── .claude/taffy/        # composed named workflows (taffy)
 │   ├── .opencode/agents/     # 34 OpenCode agent definitions (mirrored)
 │   ├── .opencode/commands/
 │   ├── .opencode/skills/

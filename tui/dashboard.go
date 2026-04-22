@@ -1884,7 +1884,7 @@ func writeQuickLaunchState(skill, stage string) {
 		_ = json.Unmarshal(raw, &merged)
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	merged["superpower"] = skill
+	merged["taffy"] = skill
 	merged["stage"] = stage
 	merged["status"] = "RUNNING"
 	merged["started_at"] = now
@@ -1904,7 +1904,7 @@ func buildQuickPromptCmd(skill, userPrompt string) string {
 
 <maple-pipeline>
 You were launched from the MAPLE quick-prompt. Keep .claude/state/maple.json updated as you work by writing (merge, never overwrite other keys):
-  {"superpower":"` + skill + `","stage":"<current step>","status":"RUNNING","updated_at":"<ISO-8601 timestamp>"}
+  {"taffy":"` + skill + `","stage":"<current step>","status":"RUNNING","updated_at":"<ISO-8601 timestamp>"}
 Set status to "DONE" when finished, "FAILED" if you cannot complete.
 </maple-pipeline>`
 	return cmd + tracking
@@ -1912,8 +1912,8 @@ Set status to "DONE" when finished, "FAILED" if you cannot complete.
 
 func writeRecoveryMarker(state string) {
 	_ = os.MkdirAll(".claude/state", 0o755)
-	// Merge with existing content so superpower pipeline fields written by the
-	// superpower-runner skill are not overwritten when the TUI starts or exits.
+	// Merge with existing content so taffy pipeline fields written by the
+	// pipeline-runner skill are not overwritten when the TUI starts or exits.
 	merged := map[string]interface{}{}
 	if raw, err := os.ReadFile(".claude/state/maple.json"); err == nil {
 		_ = json.Unmarshal(raw, &merged)

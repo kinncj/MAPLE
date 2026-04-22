@@ -434,49 +434,49 @@ else
   fail "orchestrator missing spec-kit reference"
 fi
 
-# ─── Phase V: Superpowers ─────────────────────────────────────────────────────
-# Superpowers are an optional feature; skip checks if the directory is absent.
+# ─── Phase V: Taffy Workflows ────────────────────────────────────────────────
+# Taffy workflows are an optional feature; skip checks if the directory is absent.
 
-if [[ -d "$TEMPLATE_DIR/.claude/superpowers" ]]; then
-  if [[ -f "$TEMPLATE_DIR/.claude/superpowers/schema.yaml" ]]; then
-    ok "superpowers schema.yaml present"
+if [[ -d "$TEMPLATE_DIR/.claude/taffy" ]]; then
+  if [[ -f "$TEMPLATE_DIR/.claude/taffy/schema.yaml" ]]; then
+    ok "taffy schema.yaml present"
   else
-    fail "superpowers schema.yaml missing"
+    fail "taffy schema.yaml missing"
   fi
 
   for sp in new-ui-feature api-endpoint bugfix design-refresh; do
-    if [[ -f "$TEMPLATE_DIR/.claude/superpowers/$sp.yaml" ]]; then
-      ok "superpower present: $sp"
+    if [[ -f "$TEMPLATE_DIR/.claude/taffy/$sp.yaml" ]]; then
+      ok "taffy workflow present: $sp"
     else
-      fail "superpower missing: $sp"
+      fail "taffy workflow missing: $sp"
     fi
   done
 
   for platform in claude opencode; do
-    if [[ -f "$TEMPLATE_DIR/.$platform/skills/superpower-runner/SKILL.md" ]]; then
-      ok "$platform superpower-runner skill present"
+    if [[ -f "$TEMPLATE_DIR/.$platform/skills/pipeline-runner/SKILL.md" ]]; then
+      ok "$platform pipeline-runner skill present"
     else
-      fail "$platform superpower-runner skill missing"
+      fail "$platform pipeline-runner skill missing"
     fi
   done
 
   for keyword in "stages" "when:" "gate:" "human-approval" "pipeline" "PAUSED" "maple.json"; do
-    if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/superpower-runner/SKILL.md" 2>/dev/null; then
-      ok "superpower-runner covers: $keyword"
+    if grep -q "$keyword" "$TEMPLATE_DIR/.claude/skills/pipeline-runner/SKILL.md" 2>/dev/null; then
+      ok "pipeline-runner covers: $keyword"
     else
-      fail "superpower-runner missing: $keyword"
+      fail "pipeline-runner missing: $keyword"
     fi
   done
 
   for keyword in "spec-kit" "wireframe" "ui-mockup-builder" "a11y-audit" "standard-8-phase"; do
-    if grep -q "$keyword" "$TEMPLATE_DIR/.claude/superpowers/new-ui-feature.yaml" 2>/dev/null; then
-      ok "new-ui-feature superpower references: $keyword"
+    if grep -q "$keyword" "$TEMPLATE_DIR/.claude/taffy/new-ui-feature.yaml" 2>/dev/null; then
+      ok "new-ui-feature taffy workflow references: $keyword"
     else
-      fail "new-ui-feature superpower missing: $keyword"
+      fail "new-ui-feature taffy workflow missing: $keyword"
     fi
   done
 else
-  echo "  (superpowers not present — skipping Phase V checks)"
+  echo "  (taffy workflows not present — skipping Phase V checks)"
 fi
 
 # ─── Phase VI: TUI ────────────────────────────────────────────────────────────

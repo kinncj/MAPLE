@@ -324,16 +324,8 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 		}
 	}
 
-	// Install obra/superpowers (the agentic skills framework)
-	if tools.NPX != "" {
-		if out, err := exec.Command(tools.NPX, "--yes", "skills", "add", "obra/superpowers", "--all", "-y").CombinedOutput(); err != nil {
-			log("~ superpowers: " + strings.TrimSpace(string(out)) + " (install manually: npx skills add obra/superpowers --all -y)")
-		} else {
-			log("✓ obra/superpowers installed via skills")
-		}
-	} else {
-		log("~ superpowers: npx not found — run later: npx skills add obra/superpowers --all -y")
-	}
+	// Taffy workflows ship inside the template — nothing to install separately.
+	log("✓ taffy workflows ready (.claude/taffy/, .opencode/taffy/)")
 
 	return logs, nil
 }

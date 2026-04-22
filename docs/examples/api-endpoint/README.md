@@ -1,6 +1,6 @@
 # Example: API Endpoint — Export CSV
 
-This example traces an API-only story (`ui: false`) through the `api-endpoint` superpower: Spec-Kit → Gherkin → contract → 8-phase pipeline.
+This example traces an API-only story (`ui: false`) through the `api-endpoint` taffy workflow: Spec-Kit → Gherkin → contract → 8-phase pipeline.
 
 ## Step 1 — Problem Statement
 

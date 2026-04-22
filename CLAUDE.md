@@ -23,8 +23,8 @@ This file is for agents and contributors working on the MAPLE codebase itself (t
 │   └── template/           # symlink → ../template (real copy required for go:embed)
 ├── template/               # Everything copied on `maple init`
 │   ├── .claude/agents/     # Agent definitions
-│   ├── .claude/skills/     # Skill definitions (including superpower-runner)
-│   ├── .claude/superpowers/# Named workflow YAML files
+│   ├── .claude/skills/     # Skill definitions (including pipeline-runner)
+│   ├── .claude/taffy/      # Named workflow YAML files
 │   ├── .opencode/          # Mirror of .claude/ for OpenCode harness
 │   ├── .github/            # Copilot instructions, workflows
 │   ├── docs/               # Story templates, pipeline, design specs
@@ -159,7 +159,7 @@ gh issue close N --comment "Fixed in vX.Y.Z"
 
 ### Harness launching never calls `tea.Quit`
 
-`o` (open session), `L` (launcher), and the superpower overlay all use `trySpawnCmd()` — an async `tea.Cmd`. If `spawnInNewTerminal` succeeds, a status bar message appears. If it fails, the `showManualLaunch` modal shows the pasteable command. The TUI never exits for a harness launch.
+`o` (open session), `L` (launcher), and the taffy overlay all use `trySpawnCmd()` — an async `tea.Cmd`. If `spawnInNewTerminal` succeeds, a status bar message appears. If it fails, the `showManualLaunch` modal shows the pasteable command. The TUI never exits for a harness launch.
 
 ```go
 // correct
@@ -207,7 +207,7 @@ All communication between the TUI and running agents goes through files in `.cla
 
 | File | Writer | Reader | Purpose |
 |------|--------|--------|---------|
-| `maple.json` | Skill (pipeline fields) + TUI (`state`/`ts`) | Both | Superpower pipeline progress |
+| `maple.json` | Skill (pipeline fields) + TUI (`state`/`ts`) | Both | Taffy pipeline progress |
 | `approval-pending.txt` | Skill | TUI | Human gate — TUI deletes to approve |
 | `sessions.json` | TUI (`p`/`o` keys) | Skill (resume logic) | Pinned session IDs per harness |
 | `rtk-harnesses.json` | TUI (`R` overlay) | — | Which harnesses have rtk wired |

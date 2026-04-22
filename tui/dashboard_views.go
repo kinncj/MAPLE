@@ -418,7 +418,7 @@ func (m *dashboardModel) helpView() string {
 		{"r", "reload all pane data"},
 		{"F", "Skills marketplace (skills.sh)"},
 		{"x", "Quick Prompt — pick a skill or agent and launch"},
-		{"P", "Pipeline status — show active superpower progress"},
+		{"P", "Pipeline status — show active taffy pipeline progress"},
 		{"/", "search within active pane"},
 		{"?", "this help overlay"},
 		{"q  /  Ctrl+C", "quit"},
@@ -780,7 +780,7 @@ func (m *dashboardModel) popupInnerWidth() int {
 	return popW - 6 - 4 // minus border+padding sides, minus leading "    "
 }
 
-// pipelineStatusView shows the current superpower pipeline state from .claude/state/maple.json.
+// pipelineStatusView shows the current taffy pipeline state from .claude/state/maple.json.
 func (m *dashboardModel) pipelineStatusView() string {
 	t := m.theme
 	ps := m.pipelineState
@@ -789,11 +789,11 @@ func (m *dashboardModel) pipelineStatusView() string {
 
 	var bodyLines []string
 
-	if !ps.isSuperpower() {
+	if !ps.isTaffy() {
 		bodyLines = append(bodyLines,
-			lipgloss.NewStyle().Foreground(t.Muted).Render("  No active superpower pipeline."),
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  No active taffy pipeline."),
 			"",
-			lipgloss.NewStyle().Foreground(t.Muted).Render("  Launch one with [x] and run /superpower-runner <name> in Claude Code."),
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  Launch one with [x] — select a taffy workflow or use /pipeline-runner <name>."),
 		)
 	} else {
 		stale := ps.isStale()
@@ -814,7 +814,7 @@ func (m *dashboardModel) pipelineStatusView() string {
 		}
 
 		bodyLines = append(bodyLines,
-			fmt.Sprintf("  Superpower:  %s", lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(ps.Superpower)),
+			fmt.Sprintf("  Workflow:    %s", lipgloss.NewStyle().Foreground(t.Foreground).Bold(true).Render(ps.Taffy)),
 			fmt.Sprintf("  Stage:       %s", lipgloss.NewStyle().Foreground(t.Foreground).Render(ps.Stage)),
 			fmt.Sprintf("  Status:      %s %s", iconStyle.Render(ps.statusIcon()), iconStyle.Render(displayStatus)),
 		)

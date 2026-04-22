@@ -69,7 +69,7 @@ Inside the dashboard press `n` to write requirements and generate a Gherkin stor
 
 27+ specialist agents, each with a defined role and restricted toolset. The orchestrator never writes code — it delegates to the right specialist every time.
 
-- **Superpowers** — named workflows that chain agents and skills. `new-ui-feature` fires Spec-Kit → wireframe → mockup → component scaffold in one command.
+- **TAFFY** — task-isolated, async, fault-tolerant, file-synced, YAML-driven workflow engine. `new-ui-feature` fires Spec-Kit → wireframe → mockup → component scaffold in one command. See [TAFFY](#taffy) below.
 - **Capability hierarchy** — Agents (reasoning) → Skills (deterministic) → MCPs (last resort).
 
 ### A — Artifact-Driven Specification
@@ -123,8 +123,8 @@ zellij                      # then: maple
 | `o` | Open selected session + auto-pin it (`claude --resume` or `opencode --session`) |
 | `p` | Pin selected session to `.claude/state/sessions.json` |
 | `L` | Launch overlay — pick harness, type optional command, open in new tab |
-| `x` | Superpowers picker — select a named workflow to launch |
-| `P` | Pipeline status — live view of active superpower from `.claude/state/maple.json`; `[a]` to approve a gate, `[c]` to clear stale state |
+| `x` | Taffy picker — select a named workflow to launch |
+| `P` | Pipeline status — live view of active taffy workflow from `.claude/state/maple.json`; `[a]` to approve a gate, `[c]` to clear stale state |
 | `R` | RTK harness selector — toggle which harnesses get `rtk init` wired |
 | `r` | Run selected test (QA pane) / reload all panes |
 | `d` | Design artifacts pane (full-screen toggle) |
@@ -168,8 +168,105 @@ maple --no-animate             # skip animations (SSH / slow terminals)
 | `/bugfix "description"` | Reproduce → fix → validate → CHANGELOG |
 | `/validate` | Run full test suite |
 | `/tdd "requirement"` | RED → GREEN → REFACTOR cycle |
-| `/superpower-runner <name>` | Launch a named workflow |
+| `/pipeline-runner <name>` | Launch a named taffy workflow |
 | `/ship-safe` | Security/quality scan, reports blockers by severity |
+
+---
+
+## TAFFY
+
+**T**ask-Isolated · **A**synchronous · **F**ault-Tolerant · **F**ile-Synced · **Y**AML-Driven
+
+MAPLE sets the rules. TAFFY runs the jobs.
+
+### T — Task-Isolated
+
+Each agent job runs in a dedicated subprocess. A 60-second generation loop from Claude Code or OpenCode never freezes the TUI — you keep reviewing PRs or reading specs in other panes while the agent works.
+
+### A — Asynchronous
+
+Fire-and-forget from the orchestrator's perspective. MAPLE hands off a job and moves on. TAFFY manages the waiting, polling, and completion signal so the rest of the pipeline stays non-blocking.
+
+### F — Fault-Tolerant
+
+LLMs hallucinate, APIs rate-limit, agents loop. TAFFY is the circuit breaker:
+
+- **Hard timeouts** — if an agent is stuck, TAFFY kills the process and flags the job `FAILED`.
+- **Rate-limit elasticity** — on a `429`, TAFFY pauses, sets state to `RATE_LIMITED`, and resumes when the window clears.
+- **3-strike escalation** — three consecutive failures on any stage → escalate to human.
+
+### F — File-Synced
+
+No Redis, no message broker. TAFFY broadcasts state by writing to `.claude/state/maple.json`. The TUI tails this file:
+
+- `RUNNING` → spinner animates
+- `PAUSED` → gate indicator, press `[a]` to approve
+- `BLOCKED` / `RATE_LIMITED` → flagged yellow
+- `DONE` / `FAILED` → final status
+
+### Y — YAML-Driven
+
+Workflows are stateless and deterministic. Each job is a YAML manifest — stage list, agent assignments, gates, guards, artifact expectations. No hidden state, no magic.
+
+---
+
+### Built-in workflows
+
+| Name | What it runs |
+|------|-------------|
+| `new-ui-feature` | Spec-Kit → wireframe → mockup → component scaffold → TDD → a11y audit |
+| `api-endpoint` | Spec-Kit → architect (ADR) → TDD → implement → contract test → docs |
+| `bugfix` | Reproduce → root-cause analysis → fix → regression test → CHANGELOG |
+| `design-refresh` | Visual identity → design tokens → component audit → mockup update |
+
+### Running a workflow
+
+**From the TUI** — press `x` to open the taffy picker, select a workflow, and it launches in your active harness.
+
+**From any harness** — `/pipeline-runner <name>` works across Claude Code, OpenCode, and Copilot CLI:
+```
+/pipeline-runner new-ui-feature
+/pipeline-runner api-endpoint
+```
+
+### Harness support
+
+Workflow files are mirrored across all harnesses — same YAML, same behavior:
+
+| Harness | Workflow dir | Skill |
+|---------|-------------|-------|
+| Claude Code | `.claude/taffy/` | `.claude/skills/pipeline-runner/` |
+| OpenCode | `.opencode/taffy/` | `.opencode/skills/pipeline-runner/` |
+| GitHub Copilot CLI | `.github/copilot-instructions.md` | Same `/pipeline-runner` command |
+
+### Human-approval gates
+
+Stages with `gate: human-approval` pause and write `PAUSED` to `maple.json`. The TUI shows the blocked stage in `[P]`. Press `a` to approve, or type "approved" in the harness chat.
+
+### Custom workflows
+
+Add a YAML file to `.claude/taffy/` (and mirror to `.opencode/taffy/`). Schema reference: `.claude/taffy/schema.yaml`.
+
+```yaml
+name: db-migration
+description: "Safe database migration: schema → backfill → validate → deploy"
+version: "1.0.0"
+tags: [infra, database]
+stages:
+  - name: spec
+    agent: spec-kit
+    gate: human-approval
+  - name: schema
+    agent: architect
+    depends_on: [spec]
+  - name: tests
+    agent: qa
+    depends_on: [schema]
+  - name: implement
+    pipeline: standard
+    depends_on: [tests]
+    gate: human-approval
+```
 
 ---
 
@@ -179,12 +276,12 @@ The TUI and agents communicate through files in `.claude/state/`:
 
 | File | Owner | Purpose |
 |------|-------|---------|
-| `maple.json` | Skill writes pipeline fields; TUI writes `state`/`ts` | Superpower pipeline progress |
+| `maple.json` | Skill writes pipeline fields; TUI writes `state`/`ts` | Taffy pipeline progress |
 | `approval-pending.txt` | Skill creates; TUI deletes on approve | Human-in-the-loop gate handoff |
 | `sessions.json` | TUI writes on `p`/`o`; skill reads for resume | Pinned harness session IDs |
 | `rtk-harnesses.json` | TUI writes after `R` overlay; skill reads | Which harnesses have rtk wired |
 
-Both sides **merge** rather than overwrite `maple.json` — the skill owns the superpower fields, the TUI owns `state` and `ts`.
+Both sides **merge** rather than overwrite `maple.json` — the skill owns the taffy fields, the TUI owns `state` and `ts`.
 
 ---
 

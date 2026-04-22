@@ -51,7 +51,7 @@ cd your-project-directory
 maple init
 ```
 
-`maple init` copies agents, skills, hooks, Makefile stubs, and docs structure into the current directory. It also installs `obra/superpowers` via `npx skills` if Node.js is available.
+`maple init` copies agents, skills, hooks, taffy workflows, Makefile stubs, and docs structure into the current directory. It also wires RTK via hooks if available.
 
 After init, `maple` launches the boot check and drops you into the dashboard.
 

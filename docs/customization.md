@@ -147,7 +147,7 @@ npx skills remove <name> --all -y
 npx skills ls
 ```
 
-MAPLE installs `obra/superpowers` automatically during `maple init`.
+MAPLE ships built-in taffy workflows in `.claude/taffy/` — no extra install needed.
 
 ---
 

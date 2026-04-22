@@ -9,10 +9,10 @@ import (
 
 const stalePipelineThreshold = 10 * time.Minute
 
-// pipelineState mirrors the state written by the superpower-runner skill
+// pipelineState mirrors the state written by the pipeline-runner skill
 // to .claude/state/maple.json
 type pipelineState struct {
-	Superpower      string `json:"superpower"`
+	Taffy           string `json:"taffy"`
 	Stage           string `json:"stage"`
 	Status          string `json:"status"` // RUNNING | PAUSED | DONE | FAILED
 	AwaitingApproval string `json:"awaiting_approval"`
@@ -23,8 +23,8 @@ type pipelineState struct {
 	TS    string `json:"ts"`
 }
 
-func (p pipelineState) isSuperpower() bool {
-	return p.Superpower != ""
+func (p pipelineState) isTaffy() bool {
+	return p.Taffy != ""
 }
 
 // isStale returns true if the pipeline claims RUNNING but hasn't been updated
@@ -59,7 +59,7 @@ func (p pipelineState) statusIcon() string {
 }
 
 // approvalPending returns the stage name from .claude/state/approval-pending.txt,
-// or "" if no approval is waiting. The superpower-runner skill writes this file at
+// or "" if no approval is waiting. The pipeline-runner skill writes this file at
 // human-approval gates; the TUI deletes it when the user presses [a].
 func approvalPending() string {
 	data, err := os.ReadFile(".claude/state/approval-pending.txt")
