@@ -705,7 +705,7 @@ func (m *dashboardModel) quickLaunchView() string {
 
 	if m.quickLaunchPickHarness {
 		// ── Harness picker ──────────────────────────────────────────────────────
-		bodyLines = append(bodyLines, mutedStyle.Render("No pinned session found — choose a harness:"), "")
+		bodyLines = append(bodyLines, mutedStyle.Render("Choose a harness:"), "")
 		for i, tool := range tools {
 			cursor := "  "
 			style := mutedStyle
@@ -713,9 +713,17 @@ func (m *dashboardModel) quickLaunchView() string {
 				cursor = "▶ "
 				style = selStyle
 			}
-			bodyLines = append(bodyLines, cursor+style.Render(tool))
+			line := cursor + style.Render(tool)
+			if sid := m.pinnedSessions[tool]; sid != "" {
+				short := sid
+				if len(short) > 8 {
+					short = short[:8] + "…"
+				}
+				line += "  " + pinnedStyle.Render("★ resumes "+short)
+			}
+			bodyLines = append(bodyLines, line)
 		}
-		hint = "j/k navigate · Enter select harness · Esc back"
+		hint = "j/k navigate · Enter select harness · Esc close"
 	} else {
 		// ── Prompt input ────────────────────────────────────────────────────────
 		harness := m.quickLaunchHarness

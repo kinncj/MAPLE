@@ -782,15 +782,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				m.quickLaunchPrompt = ""
 				m.quickLaunchHarnessCur = 0
-				tools := launcherTools()
 				m.quickLaunchHarness = ""
-				for _, t := range tools {
-					if m.pinnedSessions[t] != "" {
-						m.quickLaunchHarness = t
-						break
-					}
-				}
-				m.quickLaunchPickHarness = m.quickLaunchHarness == ""
+				m.quickLaunchPickHarness = true
 				m.showQuickLaunch = true
 			}
 		case "backspace":
@@ -853,23 +846,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				target := buildLaunchCmd(m.quickLaunchHarness, cmd, m.pinnedSessions)
 				return m, trySpawnCmd(target)
 			case "esc":
-				if m.quickLaunchPickHarness {
-					m.showQuickLaunch = false
-				} else {
-					// go back to harness picker if we arrived from it (no pinned session)
-					hadSession := false
-					for _, t := range tools {
-						if m.pinnedSessions[t] != "" {
-							hadSession = true
-							break
-						}
-					}
-					if !hadSession {
-						m.quickLaunchPickHarness = true
-					} else {
-						m.showQuickLaunch = false
-					}
-				}
+				m.quickLaunchPickHarness = true
 			case "ctrl+c":
 				m.showQuickLaunch = false
 			case "backspace":
