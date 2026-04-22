@@ -237,11 +237,13 @@ type dashboardModel struct {
 	shipSafeFailed  bool
 
 	// Quick Prompt overlay ([x] key)
-	showQuickPrompt  bool
-	quickItems       []quickItem
-	quickItemCur     int
-	quickItemScroll  int    // top of visible window
-	quickSearch      string // live filter string
+	showQuickPrompt bool
+	quickMode       string      // "taffy" or "items" (skills+agents)
+	taffyItems      []quickItem // loaded once on [x]
+	quickItems      []quickItem // skills + agents
+	quickItemCur    int
+	quickItemScroll int    // top of visible window
+	quickSearch     string // live filter string
 
 	// Pipeline status overlay
 	showPipeline    bool
@@ -738,12 +740,24 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Quick Prompt overlay
 	if m.showQuickPrompt {
-		filtered := quickFilter(m.quickItems, m.quickSearch)
+		activeItems := m.taffyItems
+		if m.quickMode == "items" {
+			activeItems = m.quickItems
+		}
+		filtered := quickFilter(activeItems, m.quickSearch)
 		visibleItems := (m.height - 17) / 3
 		if visibleItems < 3 {
 			visibleItems = 3
 		}
 		switch k {
+		case "t":
+			if m.quickMode == "taffy" {
+				m.quickMode = "items"
+			} else {
+				m.quickMode = "taffy"
+			}
+			m.quickItemCur = 0
+			m.quickItemScroll = 0
 		case "j", "down":
 			if m.quickItemCur < len(filtered)-1 {
 				m.quickItemCur++
@@ -763,6 +777,9 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				item := filtered[m.quickItemCur]
 				m.showQuickPrompt = false
 				m.quickLaunchName = item.name
+				if item.kind == "taffy" {
+					m.quickLaunchName = "pipeline-runner " + item.name
+				}
 				m.quickLaunchPrompt = ""
 				m.quickLaunchHarnessCur = 0
 				tools := launcherTools()
@@ -1161,7 +1178,9 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "S":
 		return m, m.runShipSafeCmd()
 	case "x":
+		m.taffyItems = loadTaffyItems()
 		m.quickItems = loadQuickItems()
+		m.quickMode = "taffy"
 		m.quickItemCur = 0
 		m.quickItemScroll = 0
 		m.quickSearch = ""

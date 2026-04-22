@@ -9,7 +9,9 @@ import (
 type quickItem struct {
 	name        string
 	description string
-	kind        string // "skill" or "agent"
+	kind        string // "skill", "agent", or "taffy"
+	stageCount  int    // taffy only
+	tags        []string
 }
 
 // loadQuickItems scans .claude/skills/ and .claude/agents/ for installed items.
@@ -37,6 +39,66 @@ func loadQuickItems() []quickItem {
 	}
 
 	return out
+}
+
+// loadTaffyItems scans .claude/taffy/*.yaml for workflow definitions.
+func loadTaffyItems() []quickItem {
+	var out []quickItem
+	files, _ := filepath.Glob(".claude/taffy/*.yaml")
+	for _, f := range files {
+		if filepath.Base(f) == "schema.yaml" {
+			continue
+		}
+		item := parseTaffyFile(f)
+		if item.name != "" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func parseTaffyFile(path string) quickItem {
+	name := strings.TrimSuffix(filepath.Base(path), ".yaml")
+	description := ""
+	var tags []string
+	stageCount := 0
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return quickItem{}
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "name:") {
+			v := strings.TrimSpace(strings.TrimPrefix(trimmed, "name:"))
+			v = strings.Trim(v, "\"'")
+			if v != "" {
+				name = v
+			}
+		}
+		if strings.HasPrefix(trimmed, "description:") {
+			v := strings.TrimSpace(strings.TrimPrefix(trimmed, "description:"))
+			v = strings.Trim(v, "\"'")
+			if v != "" {
+				description = v
+			}
+		}
+		if strings.HasPrefix(trimmed, "tags:") {
+			v := strings.TrimSpace(strings.TrimPrefix(trimmed, "tags:"))
+			v = strings.Trim(v, "[]")
+			for _, tag := range strings.Split(v, ",") {
+				tag = strings.TrimSpace(tag)
+				if tag != "" {
+					tags = append(tags, tag)
+				}
+			}
+		}
+		// count stages by "  - name:" lines
+		if strings.HasPrefix(line, "  - name:") {
+			stageCount++
+		}
+	}
+	return quickItem{name: name, description: description, kind: "taffy", stageCount: stageCount, tags: tags}
 }
 
 func parseSkillDir(dir string) quickItem {
@@ -85,7 +147,7 @@ func parseAgentFile(path string) quickItem {
 	return quickItem{name: name, description: description, kind: "agent"}
 }
 
-// quickFilter returns items whose name or description contains all words in query.
+// quickFilter returns items whose name, description, or tags contain all words in query.
 func quickFilter(items []quickItem, query string) []quickItem {
 	query = strings.TrimSpace(query)
 	if query == "" {
@@ -94,7 +156,7 @@ func quickFilter(items []quickItem, query string) []quickItem {
 	words := strings.Fields(strings.ToLower(query))
 	var out []quickItem
 	for _, item := range items {
-		haystack := strings.ToLower(item.name + " " + item.description + " " + item.kind)
+		haystack := strings.ToLower(item.name + " " + item.description + " " + item.kind + " " + strings.Join(item.tags, " "))
 		match := true
 		for _, w := range words {
 			if !strings.Contains(haystack, w) {

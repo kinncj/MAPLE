@@ -577,26 +577,38 @@ func min(a, b int) int {
 func (m *dashboardModel) quickPromptView() string {
 	t := m.theme
 
-	filtered := quickFilter(m.quickItems, m.quickSearch)
+	activeItems := m.taffyItems
+	if m.quickMode == "items" {
+		activeItems = m.quickItems
+	}
+	filtered := quickFilter(activeItems, m.quickSearch)
 
-	// search bar line shown in title area
+	// mode label and toggle hint in title
+	modeLabel := ""
+	toggleHint := ""
+	if m.quickMode == "taffy" {
+		modeLabel = lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("TAFFY")
+		toggleHint = lipgloss.NewStyle().Foreground(t.Muted).Render("  [t] skills/agents")
+	} else {
+		modeLabel = lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("skills · agents")
+		toggleHint = lipgloss.NewStyle().Foreground(t.Muted).Render("  [t] taffy")
+	}
+
 	searchBar := ""
 	if m.quickSearch != "" {
 		searchBar = "  " + lipgloss.NewStyle().Foreground(t.Warning).Render("/ "+m.quickSearch)
 	} else {
 		searchBar = "  " + lipgloss.NewStyle().Foreground(t.Muted).Render("/ type to filter…")
 	}
-	title := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("[x] Quick Prompt") +
-		lipgloss.NewStyle().Foreground(t.Muted).Render("  — skill · agent · launch") +
+	title := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("[x] Quick Launch") +
+		"  " + modeLabel + toggleHint +
 		"\n" + searchBar
 
-	// visible window: each item is 3 lines (name, desc, blank).
-	// overhead = border(2) + padding(2) + title×2(2) + sep(1) + blanks(2) + hint(1) + scroll(1) = 11
 	visibleItems := (m.height - 17) / 3
 	if visibleItems < 3 {
 		visibleItems = 3
 	}
-	descWidth := m.popupInnerWidth() - 4 // room for "    " prefix
+	descWidth := m.popupInnerWidth() - 4
 	if descWidth < 10 {
 		descWidth = 10
 	}
@@ -606,6 +618,10 @@ func (m *dashboardModel) quickPromptView() string {
 		if m.quickSearch != "" {
 			bodyLines = append(bodyLines,
 				lipgloss.NewStyle().Foreground(t.Muted).Render("  No matches for \""+m.quickSearch+"\"."),
+			)
+		} else if m.quickMode == "taffy" {
+			bodyLines = append(bodyLines,
+				lipgloss.NewStyle().Foreground(t.Muted).Render("  No taffy workflows found. Run maple init."),
 			)
 		} else {
 			bodyLines = append(bodyLines,
@@ -630,9 +646,16 @@ func (m *dashboardModel) quickPromptView() string {
 			}
 
 			var badge string
-			if item.kind == "skill" {
+			switch item.kind {
+			case "taffy":
+				stages := ""
+				if item.stageCount > 0 {
+					stages = fmt.Sprintf(" %d stages", item.stageCount)
+				}
+				badge = lipgloss.NewStyle().Foreground(t.Success).Render("[taffy" + stages + "]")
+			case "skill":
 				badge = lipgloss.NewStyle().Foreground(t.Accent).Render("[skill]")
-			} else {
+			default:
 				badge = lipgloss.NewStyle().Foreground(t.Primary).Render("[agent]")
 			}
 
@@ -647,7 +670,6 @@ func (m *dashboardModel) quickPromptView() string {
 			)
 		}
 
-		// scroll indicator
 		if len(filtered) > visibleItems {
 			pct := 0
 			if len(filtered)-visibleItems > 0 {
@@ -661,7 +683,7 @@ func (m *dashboardModel) quickPromptView() string {
 	}
 
 	body := strings.Join(bodyLines, "\n")
-	hint := "j/k scroll · Enter select · type to search · Esc close"
+	hint := "j/k scroll · Enter select · [t] toggle mode · type to search · Esc close"
 
 	return m.popupBox(title, body, hint, t.Accent)
 }
