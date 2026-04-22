@@ -1815,10 +1815,10 @@ func buildLaunchCmd(tool, cmd string, pinned map[string]string) []string {
 		if pinnedID != "" {
 			args = []string{"copilot", "--resume=" + pinnedID}
 			if cmd != "" {
-				args = append(args, cmd)
+				args = append(args, "-i", cmd)
 			}
 		} else if cmd != "" {
-			args = []string{"copilot", cmd}
+			args = []string{"copilot", "-i", cmd}
 		} else {
 			args = []string{"copilot"}
 		}
