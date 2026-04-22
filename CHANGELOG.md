@@ -7,6 +7,14 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.10.1] — 2026-04-22
+
+### Added
+- **Copilot sessions in the Agents pane**: `maple` now discovers GitHub Copilot CLI sessions from `~/.copilot/session-state/*`, filtering by matching `cwd` in each session's `workspace.yaml`. Shown with a `[gh]` badge alongside Claude (`[cc]`) and OpenCode (`[oc]`) rows. The session detail popup parses `events.jsonl` for user/assistant messages, tool calls, and model changes. `o` (open) and the `L` launcher resume Copilot sessions via `copilot --resume=<id>`. `maple resume-session copilot` works from the CLI.
+
+### Fixed
+- **`rtk` install fallback**: on linux/macos, if the GitHub release tarball approach fails (rate limit, unsupported arch, extraction error), both `scripts/install.sh` and `maple init` now fall back to piping the upstream install script — `curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh`. After the upstream script exits, the Go installer searches `$PATH`, `~/.cargo/bin`, `~/.local/bin`, and `/usr/local/bin` for the resulting binary.
+
 ## [4.9.0] — 2026-04-21
 
 ### Changed
