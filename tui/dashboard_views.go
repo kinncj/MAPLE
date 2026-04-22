@@ -582,29 +582,11 @@ func (m *dashboardModel) superpowersView() string {
 
 	var bodyLines []string
 	if len(m.superpowerDefs) == 0 {
-		if m.superInstalling {
-			bodyLines = append(bodyLines,
-				lipgloss.NewStyle().Foreground(t.Accent).Render("  Installing obra/superpowers…"),
-				"",
-				lipgloss.NewStyle().Foreground(t.Muted).Render("  Running: npx skills add obra/superpowers --all -y"),
-			)
-		} else if m.npxPath != "" {
-			bodyLines = append(bodyLines,
-				lipgloss.NewStyle().Foreground(t.Muted).Render("  No superpowers found."),
-				"",
-				lipgloss.NewStyle().Foreground(t.Foreground).Render("  Press [i] to install obra/superpowers — named agent workflows"),
-				lipgloss.NewStyle().Foreground(t.Muted).Render("  (npx skills add obra/superpowers --all -y)"),
-				"",
-				lipgloss.NewStyle().Foreground(t.Muted).Render("  Or run maple init to scaffold .claude/superpowers/ manually."),
-			)
-		} else {
-			bodyLines = append(bodyLines,
-				lipgloss.NewStyle().Foreground(t.Muted).Render("  No superpowers found."),
-				"",
-				lipgloss.NewStyle().Foreground(t.Muted).Render("  Run maple init to scaffold .claude/superpowers/."),
-				lipgloss.NewStyle().Foreground(t.Muted).Render("  (npx not found — install Node.js to enable auto-install)"),
-			)
-		}
+		bodyLines = append(bodyLines,
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  No superpowers found."),
+			"",
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  Run maple init to scaffold .claude/superpowers/."),
+		)
 	} else {
 		for i, sp := range m.superpowerDefs {
 			cursor := "  "
@@ -629,6 +611,21 @@ func (m *dashboardModel) superpowersView() string {
 				cursor+nameStr+"  "+stageStr+tagStr,
 				"    "+descStyle.Render(sp.description),
 				"",
+			)
+		}
+	}
+
+	// Always show obra/superpowers install option at the bottom when npx is available
+	if m.npxPath != "" {
+		sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 36))
+		bodyLines = append(bodyLines, sep)
+		if m.superInstalling {
+			bodyLines = append(bodyLines,
+				lipgloss.NewStyle().Foreground(t.Accent).Render("  ⟳ installing obra/superpowers…"),
+			)
+		} else {
+			bodyLines = append(bodyLines,
+				lipgloss.NewStyle().Foreground(t.Muted).Render("  [i] install obra/superpowers — more named workflows"),
 			)
 		}
 	}

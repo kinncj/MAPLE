@@ -776,7 +776,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.showSuperpowerLaunch = true
 			}
 		case "i":
-			if !m.superInstalling && len(m.superpowerDefs) == 0 && m.npxPath != "" {
+			if !m.superInstalling && m.npxPath != "" {
 				m.superInstalling = true
 				return m, m.runSuperInstallCmd()
 			}
@@ -1554,8 +1554,8 @@ func (m *dashboardModel) footer() string {
 	case m.showSuperpowers:
 		if m.superInstalling {
 			keys = "  installing obra/superpowers…"
-		} else if len(m.superpowerDefs) == 0 && m.npxPath != "" {
-			keys = "  [i] install obra/superpowers · [Esc] close"
+		} else if m.npxPath != "" {
+			keys = "  [j/k] navigate · [Enter] select · [i] install obra/superpowers · [Esc] close"
 		} else {
 			keys = "  [j/k] navigate · [Enter] select · [Esc] close"
 		}
