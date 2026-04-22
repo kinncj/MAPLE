@@ -322,6 +322,14 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 		} else {
 			log("✓ rtk initialized (token optimizer active)")
 		}
+		if out, err := exec.Command(rtkPath, "hook-audit").CombinedOutput(); err != nil {
+			log("~ rtk hook-audit: hooks may not be wired correctly — run: rtk hook-audit")
+			if s := strings.TrimSpace(string(out)); s != "" {
+				log("  " + s)
+			}
+		} else {
+			log("✓ rtk hook-audit passed (hooks verified)")
+		}
 	}
 
 	// Taffy workflows ship inside the template — nothing to install separately.

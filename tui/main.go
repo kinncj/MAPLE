@@ -89,6 +89,19 @@ func main() {
 			fatalf("resume-session: %v", err)
 		}
 
+	case "rtk-audit":
+		rtkPath, err := exec.LookPath("rtk")
+		if err != nil {
+			fatalf("rtk not found — install with: maple init")
+		}
+		cmd := exec.Command(rtkPath, "hook-audit")
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			os.Exit(1)
+		}
+
 	default:
 		fmt.Fprintf(os.Stderr, "maple: unknown command %q\n\n", args[0])
 		printHelpStatic()
@@ -222,6 +235,7 @@ Usage:
   maple self-update       Upgrade maple to the latest release
   maple resume-session    Resume the pinned session for the project
   maple resume-session claude   Resume specifically the pinned claude session
+  maple rtk-audit         Run rtk hook-audit (verify hook wiring + show savings)
 
   maple --no-animate      Skip logo animations (SSH / slow terminals)
   maple --version         Print version
@@ -406,6 +420,10 @@ func runResumeSession(harness string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if rtkPath, err := exec.LookPath("rtk"); err == nil && rtkPath != "" {
+		cmd.Env = append(cmd.Env, "RTK_HOOK_AUDIT=1")
+	}
 	return cmd.Run()
 }
 

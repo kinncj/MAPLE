@@ -1812,41 +1812,46 @@ func launcherTools() []string {
 
 // buildLaunchCmd constructs the exec command for launching a tool, resuming a pinned
 // session if one exists, otherwise starting fresh with the given command/prompt.
+// When rtk is on PATH, RTK_HOOK_AUDIT=1 is prepended so hook activity is logged.
 func buildLaunchCmd(tool, cmd string, pinned map[string]string) []string {
 	pinnedID := pinned[tool]
+	var args []string
 	switch tool {
 	case "claude":
 		if pinnedID != "" {
-			args := []string{"claude", "--resume", pinnedID}
+			args = []string{"claude", "--resume", pinnedID}
 			if cmd != "" {
 				args = append(args, cmd)
 			}
-			return args
+		} else if cmd != "" {
+			args = []string{"claude", cmd}
+		} else {
+			args = []string{"claude"}
 		}
-		if cmd != "" {
-			return []string{"claude", cmd}
-		}
-		return []string{"claude"}
 	case "opencode":
 		if cmd != "" {
-			return []string{"opencode", cmd}
+			args = []string{"opencode", cmd}
+		} else {
+			args = []string{"opencode"}
 		}
-		return []string{"opencode"}
 	case "copilot":
 		if pinnedID != "" {
-			args := []string{"copilot", "--resume=" + pinnedID}
+			args = []string{"copilot", "--resume=" + pinnedID}
 			if cmd != "" {
 				args = append(args, cmd)
 			}
-			return args
+		} else if cmd != "" {
+			args = []string{"copilot", cmd}
+		} else {
+			args = []string{"copilot"}
 		}
-		if cmd != "" {
-			return []string{"copilot", cmd}
-		}
-		return []string{"copilot"}
 	default:
-		return []string{tool}
+		args = []string{tool}
 	}
+	if rtkPath, err := exec.LookPath("rtk"); err == nil && rtkPath != "" {
+		args = append([]string{"env", "RTK_HOOK_AUDIT=1"}, args...)
+	}
+	return args
 }
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
