@@ -23,8 +23,8 @@ Thank you for contributing. This is an open-source project licensed under AGPLv3
 
 ```bash
 # 1. Fork and clone
-git clone https://github.com/YOUR_USERNAME/AI-Development-Squad-Template.git
-cd AI-Development-Squad-Template
+git clone https://github.com/YOUR_USERNAME/MAPLE.git
+cd MAPLE
 
 # 2. Install the CLI globally from your fork
 echo 'export PATH="'$(pwd)'/scripts:$PATH"' >> ~/.zshrc
