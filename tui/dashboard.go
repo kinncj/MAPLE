@@ -124,6 +124,7 @@ type rtkInitDoneMsg struct {
 
 type spawnSucceededMsg struct{ harness string }
 type spawnFailedMsg struct{ args []string }
+type superInstallDoneMsg struct{ err string }
 
 const dashTickInterval    = 5 * time.Second
 const dashNetTickInterval = 60 * time.Second
@@ -238,9 +239,10 @@ type dashboardModel struct {
 	shipSafeFailed  bool
 
 	// Superpowers overlay
-	showSuperpowers  bool
-	superpowerDefs   []superpowerDef
-	superpowerCur    int
+	showSuperpowers     bool
+	superpowerDefs      []superpowerDef
+	superpowerCur       int
+	superInstalling     bool // true while npx skills add obra/superpowers is running
 
 	// Pipeline status overlay
 	showPipeline    bool
@@ -435,6 +437,14 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showRTKHarness = false
 			return m, m.setStatus("✓ rtk wired for selected harnesses", false)
 		}
+
+	case superInstallDoneMsg:
+		m.superInstalling = false
+		if msg.err != "" {
+			return m, m.setStatus("✗ obra/superpowers install failed: "+msg.err, true)
+		}
+		m.superpowerDefs = loadSuperpowers()
+		return m, m.setStatus("✓ obra/superpowers installed — "+fmt.Sprintf("%d superpowers loaded", len(m.superpowerDefs)), false)
 
 	case spawnSucceededMsg:
 		return m, m.setStatus("✓ launched "+msg.harness+" in new terminal", false)
@@ -764,6 +774,11 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				m.superpowerLaunchPickHarness = m.superpowerLaunchHarness == ""
 				m.showSuperpowerLaunch = true
+			}
+		case "i":
+			if !m.superInstalling && len(m.superpowerDefs) == 0 && m.npxPath != "" {
+				m.superInstalling = true
+				return m, m.runSuperInstallCmd()
 			}
 		case "q", "esc", "ctrl+c":
 			m.showSuperpowers = false
@@ -1501,7 +1516,7 @@ func (m *dashboardModel) footer() string {
 		return "\n" + lipgloss.NewStyle().Foreground(col).Render("  "+m.status) + "\n"
 	}
 
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open+pin session · [p] pin · [L] launch · [R] rtk harnesses · [S] ship-safe · [x] superpowers · [P] pipeline · [F] skills · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open+pin session · [p] pin · [n] story · [L] launch · [R] rtk harnesses · [S] ship-safe · [x] superpowers · [P] pipeline · [F] skills · [?] help · [q] quit"
 	switch {
 	case m.showManualLaunch:
 		if m.manualLaunchCopied {
@@ -1537,7 +1552,13 @@ func (m *dashboardModel) footer() string {
 			keys = "  type context · [Enter] launch superpower · [Esc] back"
 		}
 	case m.showSuperpowers:
-		keys = "  [j/k] navigate · [Enter] select · [Esc] close"
+		if m.superInstalling {
+			keys = "  installing obra/superpowers…"
+		} else if len(m.superpowerDefs) == 0 && m.npxPath != "" {
+			keys = "  [i] install obra/superpowers · [Esc] close"
+		} else {
+			keys = "  [j/k] navigate · [Enter] select · [Esc] close"
+		}
 	case m.showSkills:
 		if !m.skillsTabSearch {
 			if m.installedLoading {
@@ -1690,6 +1711,19 @@ func (m *dashboardModel) runShipSafeCmd() tea.Cmd {
 			return shipSafeDoneMsg{lines: lines, failed: err != nil}
 		},
 	)
+}
+
+// runSuperInstallCmd installs obra/superpowers via npx skills add.
+func (m *dashboardModel) runSuperInstallCmd() tea.Cmd {
+	npx := m.npxPath
+	return func() tea.Msg {
+		cmd := exec.Command(npx, "--yes", "skills", "add", "obra/superpowers", "--all", "-y")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return superInstallDoneMsg{err: strings.TrimSpace(string(out))}
+		}
+		return superInstallDoneMsg{}
+	}
 }
 
 // agentOpenCmd returns the CLI command to resume a session in its native agent.
