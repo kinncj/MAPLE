@@ -321,14 +321,7 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 			log("~ rtk init: " + strings.TrimSpace(string(out)))
 		} else {
 			log("✓ rtk initialized (token optimizer active)")
-		}
-		if out, err := exec.Command(rtkPath, "hook-audit").CombinedOutput(); err != nil {
-			log("~ rtk hook-audit: hooks may not be wired correctly — run: rtk hook-audit")
-			if s := strings.TrimSpace(string(out)); s != "" {
-				log("  " + s)
-			}
-		} else {
-			log("✓ rtk hook-audit passed (hooks verified)")
+			log("  run 'maple rtk-audit' after a session to verify hook savings")
 		}
 	}
 
