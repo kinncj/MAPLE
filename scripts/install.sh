@@ -92,6 +92,33 @@ install_rtk() {
 
     echo "Installing rtk token optimizer…"
 
+    if _rtk_install_from_release; then
+        return 0
+    fi
+
+    case "$OS" in
+        linux|darwin) ;;
+        *)
+            echo "~ rtk: install failed — install manually: https://github.com/rtk-ai/rtk"
+            return 0
+            ;;
+    esac
+
+    echo "~ falling back to upstream rtk install script…"
+    if curl -fsSL "https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh" | sh; then
+        if command -v rtk >/dev/null 2>&1; then
+            echo "✓ rtk installed via upstream script"
+            return 0
+        fi
+        echo "~ rtk installed via upstream script but not on PATH — start a new shell, or see https://github.com/rtk-ai/rtk"
+        return 0
+    fi
+
+    echo "~ rtk: upstream install failed — install manually: https://github.com/rtk-ai/rtk"
+    return 0
+}
+
+_rtk_install_from_release() {
     local rtk_version
     rtk_version=$(curl -fsSL "https://api.github.com/repos/$RTK_REPO/releases?per_page=100" \
         | grep '"tag_name"' \
@@ -99,11 +126,7 @@ install_rtk() {
         | grep -E '^v?[0-9]+\.[0-9]+' \
         | sort -V \
         | tail -1)
-
-    if [ -z "$rtk_version" ]; then
-        echo "~ rtk: could not resolve latest version — install manually: https://github.com/rtk-ai/rtk"
-        return 0
-    fi
+    [ -z "$rtk_version" ] && return 1
 
     local rtk_triple
     case "${OS}-${ARCH}" in
@@ -111,43 +134,27 @@ install_rtk() {
         darwin-amd64) rtk_triple="x86_64-apple-darwin" ;;
         linux-arm64)  rtk_triple="aarch64-unknown-linux-gnu" ;;
         linux-amd64)  rtk_triple="x86_64-unknown-linux-gnu" ;;
-        *)
-            echo "~ rtk: unsupported platform ${OS}/${ARCH} — install manually: https://github.com/rtk-ai/rtk"
-            return 0
-            ;;
+        *) return 1 ;;
     esac
 
     local rtk_url="https://github.com/${RTK_REPO}/releases/download/${rtk_version}/rtk-${rtk_triple}.tar.gz"
     local rtk_tmp="$TMP/rtk-extract"
     mkdir -p "$rtk_tmp"
 
-    if ! curl -fsSL "$rtk_url" -o "$TMP/rtk.tar.gz" 2>/dev/null; then
-        echo "~ rtk download failed — install manually: https://github.com/rtk-ai/rtk"
-        return 0
-    fi
+    curl -fsSL "$rtk_url" -o "$TMP/rtk.tar.gz" 2>/dev/null || return 1
+    tar -xzf "$TMP/rtk.tar.gz" -C "$rtk_tmp" 2>/dev/null || return 1
 
-    if ! tar -xzf "$TMP/rtk.tar.gz" -C "$rtk_tmp" 2>/dev/null; then
-        echo "~ rtk: archive extraction failed — install manually: https://github.com/rtk-ai/rtk"
-        return 0
-    fi
-
-    # locate the rtk binary anywhere in the extracted tree (handles subdirectory layouts)
     local rtk_bin
     rtk_bin=$(find "$rtk_tmp" -maxdepth 4 -type f -name "rtk" ! -name "*.tar.gz" 2>/dev/null | head -1)
-
     if [ -z "$rtk_bin" ]; then
-        # some releases ship the binary named after the triple
         rtk_bin=$(find "$rtk_tmp" -maxdepth 4 -type f -name "rtk-*" ! -name "*.tar.gz" 2>/dev/null | head -1)
     fi
-
-    if [ -z "$rtk_bin" ]; then
-        echo "~ rtk: binary not found in archive — install manually: https://github.com/rtk-ai/rtk"
-        return 0
-    fi
+    [ -z "$rtk_bin" ] && return 1
 
     cp "$rtk_bin" "$INSTALL_DIR/rtk"
     chmod +x "$INSTALL_DIR/rtk"
     echo "✓ Installed rtk ${rtk_version}"
+    return 0
 }
 
 if [ -z "$SKIP_RTK" ]; then

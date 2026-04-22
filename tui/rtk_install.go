@@ -21,12 +21,32 @@ const rtkRepo = "rtk-ai/rtk"
 // installRTK downloads and installs the rtk binary next to the maple binary.
 // Returns the path to the installed binary, or an error.
 // If rtk is already on PATH, returns the existing path immediately.
+// On linux/macos, falls back to the upstream install script when the release
+// tarball approach fails (https://github.com/rtk-ai/rtk#quick-install-linuxmacos).
 func installRTK() (string, error) {
-	// already installed?
 	if p, err := exec.LookPath("rtk"); err == nil {
 		return p, nil
 	}
 
+	p, releaseErr := installRTKFromRelease()
+	if releaseErr == nil {
+		return p, nil
+	}
+
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		return "", releaseErr
+	}
+
+	p, fallbackErr := installRTKFromUpstreamScript()
+	if fallbackErr == nil {
+		return p, nil
+	}
+	return "", fmt.Errorf("release download failed (%v); upstream script fallback also failed (%v)", releaseErr, fallbackErr)
+}
+
+// installRTKFromRelease downloads the platform tarball from rtk-ai's GitHub
+// releases and copies the binary next to the maple binary.
+func installRTKFromRelease() (string, error) {
 	version, err := latestRTKVersion()
 	if err != nil {
 		return "", fmt.Errorf("could not resolve latest rtk version: %w", err)
@@ -40,7 +60,6 @@ func installRTK() (string, error) {
 	archiveName := fmt.Sprintf("rtk-%s.%s", triple, ext)
 	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", rtkRepo, version, archiveName)
 
-	// download to a temp file
 	tmp, err := os.CreateTemp("", "rtk-download-*")
 	if err != nil {
 		return "", err
@@ -60,13 +79,11 @@ func installRTK() (string, error) {
 	}
 	tmp.Close()
 
-	// extract
 	binData, err := extractRTKBinary(tmp.Name(), ext)
 	if err != nil {
 		return "", fmt.Errorf("extract failed: %w", err)
 	}
 
-	// install next to the maple binary
 	dest := rtkInstallPath()
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return "", err
@@ -74,8 +91,45 @@ func installRTK() (string, error) {
 	if err := os.WriteFile(dest, binData, 0o755); err != nil {
 		return "", fmt.Errorf("write failed: %w", err)
 	}
-
 	return dest, nil
+}
+
+// rtkUpstreamInstallURL is the canonical linux/macos install script from rtk-ai.
+const rtkUpstreamInstallURL = "https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh"
+
+// installRTKFromUpstreamScript pipes the rtk-ai upstream install.sh to sh.
+// After the script exits, searches PATH and common install locations for rtk.
+func installRTKFromUpstreamScript() (string, error) {
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
+		return "", fmt.Errorf("upstream install script is linux/macos only")
+	}
+
+	cmd := exec.Command("sh", "-c", "curl -fsSL "+rtkUpstreamInstallURL+" | sh")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("upstream install script failed: %w", err)
+	}
+	return findInstalledRTK()
+}
+
+// findInstalledRTK searches PATH and well-known install locations for the rtk binary.
+func findInstalledRTK() (string, error) {
+	if p, err := exec.LookPath("rtk"); err == nil {
+		return p, nil
+	}
+	home := os.Getenv("HOME")
+	candidates := []string{
+		filepath.Join(home, ".cargo", "bin", "rtk"),
+		filepath.Join(home, ".local", "bin", "rtk"),
+		"/usr/local/bin/rtk",
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && !info.IsDir() {
+			return c, nil
+		}
+	}
+	return "", fmt.Errorf("rtk binary not found on PATH or in ~/.cargo/bin, ~/.local/bin, /usr/local/bin — you may need to start a new shell")
 }
 
 // latestRTKVersion fetches the highest semver tag from the RTK releases API.
