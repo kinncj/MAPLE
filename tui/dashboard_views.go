@@ -417,7 +417,7 @@ func (m *dashboardModel) helpView() string {
 		{"u", "update — re-sync template files"},
 		{"r", "reload all pane data"},
 		{"F", "Skills marketplace (skills.sh)"},
-		{"x", "Superpowers — browse and launch named workflows"},
+		{"x", "Quick Prompt — pick a skill or agent and launch"},
 		{"P", "Pipeline status — show active superpower progress"},
 		{"/", "search within active pane"},
 		{"?", "this help overlay"},
@@ -573,59 +573,41 @@ func min(a, b int) int {
 	return b
 }
 
-// superpowersView renders the superpowers picker as a centered popup.
-func (m *dashboardModel) superpowersView() string {
+// quickPromptView renders the Quick Prompt picker as a centered popup.
+func (m *dashboardModel) quickPromptView() string {
 	t := m.theme
 
-	title := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("[x] Superpowers") +
-		lipgloss.NewStyle().Foreground(t.Muted).Render("  — named agent/skill workflows")
+	title := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("[x] Quick Prompt") +
+		lipgloss.NewStyle().Foreground(t.Muted).Render("  — pick a skill or agent, type a prompt, launch")
 
 	var bodyLines []string
-	if len(m.superpowerDefs) == 0 {
+	if len(m.quickItems) == 0 {
 		bodyLines = append(bodyLines,
-			lipgloss.NewStyle().Foreground(t.Muted).Render("  No superpowers found."),
-			"",
-			lipgloss.NewStyle().Foreground(t.Muted).Render("  Run maple init to scaffold .claude/superpowers/."),
+			lipgloss.NewStyle().Foreground(t.Muted).Render("  No skills or agents found. Run maple init."),
 		)
 	} else {
-		for i, sp := range m.superpowerDefs {
+		for i, item := range m.quickItems {
 			cursor := "  "
 			nameStyle := lipgloss.NewStyle().Foreground(t.Foreground)
 			descStyle := lipgloss.NewStyle().Foreground(t.Muted)
-			if i == m.superpowerCur {
+			if i == m.quickItemCur {
 				cursor = "▶ "
 				nameStyle = lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
 				descStyle = lipgloss.NewStyle().Foreground(t.Foreground)
 			}
 
-			nameStr := nameStyle.Render(sp.name)
-			stages := fmt.Sprintf("(%d stages)", sp.stageCount)
-			stageStr := lipgloss.NewStyle().Foreground(t.Muted).Render(stages)
-
-			var tagStr string
-			if len(sp.tags) > 0 {
-				tagStr = "  " + lipgloss.NewStyle().Foreground(t.Primary).Render("["+strings.Join(sp.tags, ", ")+"]")
+			var badge string
+			if item.kind == "skill" {
+				badge = lipgloss.NewStyle().Foreground(t.Accent).Render("[skill]")
+			} else {
+				badge = lipgloss.NewStyle().Foreground(t.Primary).Render("[agent]")
 			}
 
+			nameStr := nameStyle.Render(item.name)
 			bodyLines = append(bodyLines,
-				cursor+nameStr+"  "+stageStr+tagStr,
-				"    "+descStyle.Render(sp.description),
+				cursor+badge+"  "+nameStr,
+				"    "+descStyle.Render(item.description),
 				"",
-			)
-		}
-	}
-
-	// Always show obra/superpowers install option at the bottom when npx is available
-	if m.npxPath != "" {
-		sep := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + strings.Repeat("─", 36))
-		bodyLines = append(bodyLines, sep)
-		if m.superInstalling {
-			bodyLines = append(bodyLines,
-				lipgloss.NewStyle().Foreground(t.Accent).Render("  ⟳ installing obra/superpowers…"),
-			)
-		} else {
-			bodyLines = append(bodyLines,
-				lipgloss.NewStyle().Foreground(t.Muted).Render("  [i] install obra/superpowers — more named workflows"),
 			)
 		}
 	}
@@ -636,10 +618,10 @@ func (m *dashboardModel) superpowersView() string {
 	return m.popupBox(title, body, hint, t.Accent)
 }
 
-// superpowerLaunchView renders the superpower launch overlay.
-// Mode A (superpowerLaunchPickHarness==true): harness picker — no pinned session found.
+// quickLaunchView renders the quick launch overlay.
+// Mode A (quickLaunchPickHarness==true): harness picker — no pinned session found.
 // Mode B: prompt input — harness + optional pinned session known.
-func (m *dashboardModel) superpowerLaunchView() string {
+func (m *dashboardModel) quickLaunchView() string {
 	t := m.theme
 	tools := launcherTools()
 
@@ -647,17 +629,17 @@ func (m *dashboardModel) superpowerLaunchView() string {
 	mutedStyle := lipgloss.NewStyle().Foreground(t.Muted)
 	pinnedStyle := lipgloss.NewStyle().Foreground(t.Success)
 
-	titleText := fmt.Sprintf("Launch superpower: %s", lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render(m.superpowerLaunchName))
+	titleText := fmt.Sprintf("Quick Prompt: %s", lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("/"+m.quickLaunchName))
 	var bodyLines []string
 	var hint string
 
-	if m.superpowerLaunchPickHarness {
+	if m.quickLaunchPickHarness {
 		// ── Harness picker ──────────────────────────────────────────────────────
 		bodyLines = append(bodyLines, mutedStyle.Render("No pinned session found — choose a harness:"), "")
 		for i, tool := range tools {
 			cursor := "  "
 			style := mutedStyle
-			if i == m.superpowerLaunchHarnessCur {
+			if i == m.quickLaunchHarnessCur {
 				cursor = "▶ "
 				style = selStyle
 			}
@@ -666,7 +648,7 @@ func (m *dashboardModel) superpowerLaunchView() string {
 		hint = "j/k navigate · Enter select harness · Esc back"
 	} else {
 		// ── Prompt input ────────────────────────────────────────────────────────
-		harness := m.superpowerLaunchHarness
+		harness := m.quickLaunchHarness
 		sessionID := m.pinnedSessions[harness]
 
 		harnessLine := "  Harness:  " + selStyle.Render(harness)
@@ -678,12 +660,12 @@ func (m *dashboardModel) superpowerLaunchView() string {
 			harnessLine += "  " + pinnedStyle.Render("★ resuming session "+short)
 		}
 
-		cmd := "/superpower-runner " + m.superpowerLaunchName
+		cmd := "/" + m.quickLaunchName
 		bodyLines = append(bodyLines,
 			harnessLine,
 			"",
 			mutedStyle.Render("  Add context (optional — press Enter to launch now):"),
-			"  "+cmd+" "+m.superpowerLaunchPrompt+"█",
+			"  "+cmd+" "+m.quickLaunchPrompt+"█",
 		)
 		hint = "type context · Enter launch · Esc back"
 	}

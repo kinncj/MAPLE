@@ -176,11 +176,6 @@ func runDashboardLoop(t Theme, noAnimate bool, tools Tools, fsys fs.FS) {
 				tools = Detect()
 			}
 			// loop back in both cases — maple dashboard restarts
-		case dashActionSuperpower:
-			// superpowers now go through dashActionOpenAgent via the launch overlay;
-			// this path is kept for any external caller that still uses it
-			printSuperpowerLaunch(openTarget)
-			return
 		case dashActionReq:
 			if err := runReq(tools); err != nil {
 				fmt.Fprintf(os.Stderr, "req: %v\n", err)
@@ -347,17 +342,6 @@ func resolveTemplateFS() (fs.FS, string) {
 	}
 	sub, _ := fs.Sub(embeddedTemplate, "template")
 	return sub, "(embedded)"
-}
-
-func printSuperpowerLaunch(target []string) {
-	name := "unknown"
-	if len(target) > 0 {
-		name = target[0]
-	}
-	fmt.Printf("\n✓  Superpower selected: %s\n\n", name)
-	fmt.Printf("Run this inside Claude Code or OpenCode:\n\n")
-	fmt.Printf("  /superpower-runner %s\n\n", name)
-	fmt.Printf("The superpower-runner skill will guide you through each stage.\n\n")
 }
 
 // runResumeSession reads .claude/state/sessions.json and launches the pinned

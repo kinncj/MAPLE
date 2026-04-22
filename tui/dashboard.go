@@ -59,7 +59,6 @@ const (
 	dashActionLabels              // quit and run labels bootstrap
 	dashActionProject             // quit and run project creation
 	dashActionOpenAgent           // quit and exec a session in Claude/OpenCode
-	dashActionSuperpower          // quit and print superpower launch instructions
 	dashActionLaunch              // quit and launch tool with optional command
 )
 
@@ -124,7 +123,6 @@ type rtkInitDoneMsg struct {
 
 type spawnSucceededMsg struct{ harness string }
 type spawnFailedMsg struct{ args []string }
-type superInstallDoneMsg struct{ err string }
 
 const dashTickInterval    = 5 * time.Second
 const dashNetTickInterval = 60 * time.Second
@@ -238,11 +236,10 @@ type dashboardModel struct {
 	shipSafeRunning bool
 	shipSafeFailed  bool
 
-	// Superpowers overlay
-	showSuperpowers     bool
-	superpowerDefs      []superpowerDef
-	superpowerCur       int
-	superInstalling     bool // true while npx skills add obra/superpowers is running
+	// Quick Prompt overlay ([x] key)
+	showQuickPrompt  bool
+	quickItems       []quickItem
+	quickItemCur     int
 
 	// Pipeline status overlay
 	showPipeline    bool
@@ -258,13 +255,13 @@ type dashboardModel struct {
 	// Pinned sessions (tool → session ID), loaded from .claude/state/sessions.json
 	pinnedSessions map[string]string
 
-	// Superpower launch overlay (shown after picking a superpower with Enter)
-	showSuperpowerLaunch      bool
-	superpowerLaunchName      string // name of the selected superpower
-	superpowerLaunchPrompt    string // optional extra context typed by user
-	superpowerLaunchHarness   string // chosen harness (tool)
-	superpowerLaunchPickHarness bool // true = showing harness picker, false = prompt input
-	superpowerLaunchHarnessCur  int
+	// Quick launch overlay (shown after picking an item)
+	showQuickLaunch         bool
+	quickLaunchName         string
+	quickLaunchPrompt       string
+	quickLaunchHarness      string
+	quickLaunchPickHarness  bool
+	quickLaunchHarnessCur   int
 
 	// Manual launch modal — shown when spawnInNewTerminal fails
 	showManualLaunch    bool
@@ -437,14 +434,6 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showRTKHarness = false
 			return m, m.setStatus("✓ rtk wired for selected harnesses", false)
 		}
-
-	case superInstallDoneMsg:
-		m.superInstalling = false
-		if msg.err != "" {
-			return m, m.setStatus("✗ obra/superpowers install failed: "+msg.err, true)
-		}
-		m.superpowerDefs = loadSuperpowers()
-		return m, m.setStatus("✓ obra/superpowers installed — "+fmt.Sprintf("%d superpowers loaded", len(m.superpowerDefs)), false)
 
 	case spawnSucceededMsg:
 		return m, m.setStatus("✓ launched "+msg.harness+" in new terminal", false)
@@ -745,83 +734,77 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Superpowers picker overlay
-	if m.showSuperpowers {
+	// Quick Prompt overlay
+	if m.showQuickPrompt {
 		switch k {
 		case "j", "down":
-			if m.superpowerCur < len(m.superpowerDefs)-1 {
-				m.superpowerCur++
+			if m.quickItemCur < len(m.quickItems)-1 {
+				m.quickItemCur++
 			}
 		case "k", "up":
-			if m.superpowerCur > 0 {
-				m.superpowerCur--
+			if m.quickItemCur > 0 {
+				m.quickItemCur--
 			}
 		case "enter":
-			if m.superpowerCur < len(m.superpowerDefs) {
-				name := m.superpowerDefs[m.superpowerCur].name
-				m.showSuperpowers = false
-				m.superpowerLaunchName = name
-				m.superpowerLaunchPrompt = ""
-				m.superpowerLaunchHarnessCur = 0
-				// if we have a pinned session for any harness, skip the picker
+			if m.quickItemCur < len(m.quickItems) {
+				item := m.quickItems[m.quickItemCur]
+				m.showQuickPrompt = false
+				m.quickLaunchName = item.name
+				m.quickLaunchPrompt = ""
+				m.quickLaunchHarnessCur = 0
 				tools := launcherTools()
-				m.superpowerLaunchHarness = ""
+				m.quickLaunchHarness = ""
 				for _, t := range tools {
 					if m.pinnedSessions[t] != "" {
-						m.superpowerLaunchHarness = t
+						m.quickLaunchHarness = t
 						break
 					}
 				}
-				m.superpowerLaunchPickHarness = m.superpowerLaunchHarness == ""
-				m.showSuperpowerLaunch = true
-			}
-		case "i":
-			if !m.superInstalling && m.npxPath != "" {
-				m.superInstalling = true
-				return m, m.runSuperInstallCmd()
+				m.quickLaunchPickHarness = m.quickLaunchHarness == ""
+				m.showQuickLaunch = true
 			}
 		case "q", "esc", "ctrl+c":
-			m.showSuperpowers = false
+			m.showQuickPrompt = false
 		}
 		return m, nil
 	}
 
-	// Superpower launch overlay
-	if m.showSuperpowerLaunch {
+	// Quick launch overlay
+	if m.showQuickLaunch {
 		tools := launcherTools()
-		if m.superpowerLaunchPickHarness {
+		if m.quickLaunchPickHarness {
 			// harness picker mode
 			switch k {
 			case "j", "down":
-				if m.superpowerLaunchHarnessCur < len(tools)-1 {
-					m.superpowerLaunchHarnessCur++
+				if m.quickLaunchHarnessCur < len(tools)-1 {
+					m.quickLaunchHarnessCur++
 				}
 			case "k", "up":
-				if m.superpowerLaunchHarnessCur > 0 {
-					m.superpowerLaunchHarnessCur--
+				if m.quickLaunchHarnessCur > 0 {
+					m.quickLaunchHarnessCur--
 				}
 			case "enter":
-				if m.superpowerLaunchHarnessCur < len(tools) {
-					m.superpowerLaunchHarness = tools[m.superpowerLaunchHarnessCur]
-					m.superpowerLaunchPickHarness = false
+				if m.quickLaunchHarnessCur < len(tools) {
+					m.quickLaunchHarness = tools[m.quickLaunchHarnessCur]
+					m.quickLaunchPickHarness = false
 				}
 			case "q", "esc", "ctrl+c":
-				m.showSuperpowerLaunch = false
+				m.showQuickLaunch = false
 			}
 		} else {
 			// prompt input mode
 			switch k {
 			case "enter":
-				cmd := "/superpower-runner " + m.superpowerLaunchName
-				if m.superpowerLaunchPrompt != "" {
-					cmd += " " + m.superpowerLaunchPrompt
+				cmd := "/" + m.quickLaunchName
+				if m.quickLaunchPrompt != "" {
+					cmd += " " + m.quickLaunchPrompt
 				}
-				m.showSuperpowerLaunch = false
-				target := buildLaunchCmd(m.superpowerLaunchHarness, cmd, m.pinnedSessions)
+				m.showQuickLaunch = false
+				target := buildLaunchCmd(m.quickLaunchHarness, cmd, m.pinnedSessions)
 				return m, trySpawnCmd(target)
 			case "esc":
-				if m.superpowerLaunchPickHarness {
-					m.showSuperpowerLaunch = false
+				if m.quickLaunchPickHarness {
+					m.showQuickLaunch = false
 				} else {
 					// go back to harness picker if we arrived from it (no pinned session)
 					hadSession := false
@@ -832,21 +815,21 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						}
 					}
 					if !hadSession {
-						m.superpowerLaunchPickHarness = true
+						m.quickLaunchPickHarness = true
 					} else {
-						m.showSuperpowerLaunch = false
+						m.showQuickLaunch = false
 					}
 				}
 			case "ctrl+c":
-				m.showSuperpowerLaunch = false
+				m.showQuickLaunch = false
 			case "backspace":
-				if len(m.superpowerLaunchPrompt) > 0 {
-					_, size := utf8.DecodeLastRuneInString(m.superpowerLaunchPrompt)
-					m.superpowerLaunchPrompt = m.superpowerLaunchPrompt[:len(m.superpowerLaunchPrompt)-size]
+				if len(m.quickLaunchPrompt) > 0 {
+					_, size := utf8.DecodeLastRuneInString(m.quickLaunchPrompt)
+					m.quickLaunchPrompt = m.quickLaunchPrompt[:len(m.quickLaunchPrompt)-size]
 				}
 			default:
 				if len(k) == 1 {
-					m.superpowerLaunchPrompt += k
+					m.quickLaunchPrompt += k
 				}
 			}
 		}
@@ -1145,9 +1128,9 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "S":
 		return m, m.runShipSafeCmd()
 	case "x":
-		m.superpowerDefs = loadSuperpowers()
-		m.superpowerCur = 0
-		m.showSuperpowers = true
+		m.quickItems = loadQuickItems()
+		m.quickItemCur = 0
+		m.showQuickPrompt = true
 	case "P":
 		// pipelineState and approvalPending are kept fresh by reload() every tick
 		m.showPipeline = true
@@ -1472,11 +1455,11 @@ func (m *dashboardModel) View() string {
 	if m.showSkills {
 		return m.header() + m.skillsBrowserView() + m.footer()
 	}
-	if m.showSuperpowers {
-		return m.header() + m.superpowersView() + m.footer()
+	if m.showQuickPrompt {
+		return m.header() + m.quickPromptView() + m.footer()
 	}
-	if m.showSuperpowerLaunch {
-		return m.header() + m.superpowerLaunchView() + m.footer()
+	if m.showQuickLaunch {
+		return m.header() + m.quickLaunchView() + m.footer()
 	}
 	if m.showPipeline {
 		return m.header() + m.pipelineStatusView() + m.footer()
@@ -1516,7 +1499,7 @@ func (m *dashboardModel) footer() string {
 		return "\n" + lipgloss.NewStyle().Foreground(col).Render("  "+m.status) + "\n"
 	}
 
-	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open+pin session · [p] pin · [n] story · [L] launch · [R] rtk harnesses · [S] ship-safe · [x] superpowers · [P] pipeline · [F] skills · [?] help · [q] quit"
+	keys := "  [Tab] cycle · [s/a/p/Q] pane · [Enter] open · [o] open+pin session · [p] pin · [n] story · [L] launch · [R] rtk harnesses · [S] ship-safe · [x] quick prompt · [P] pipeline · [F] skills · [?] help · [q] quit"
 	switch {
 	case m.showManualLaunch:
 		if m.manualLaunchCopied {
@@ -1545,20 +1528,14 @@ func (m *dashboardModel) footer() string {
 		default:
 			keys = "  [c] clear state · any other key closes"
 		}
-	case m.showSuperpowerLaunch:
-		if m.superpowerLaunchPickHarness {
+	case m.showQuickLaunch:
+		if m.quickLaunchPickHarness {
 			keys = "  [j/k] navigate · [Enter] select harness · [Esc] back"
 		} else {
-			keys = "  type context · [Enter] launch superpower · [Esc] back"
+			keys = "  type context · [Enter] launch · [Esc] back"
 		}
-	case m.showSuperpowers:
-		if m.superInstalling {
-			keys = "  installing obra/superpowers…"
-		} else if m.npxPath != "" {
-			keys = "  [j/k] navigate · [Enter] select · [i] install obra/superpowers · [Esc] close"
-		} else {
-			keys = "  [j/k] navigate · [Enter] select · [Esc] close"
-		}
+	case m.showQuickPrompt:
+		keys = "  [j/k] navigate · [Enter] select · [Esc] close"
 	case m.showSkills:
 		if !m.skillsTabSearch {
 			if m.installedLoading {
@@ -1711,19 +1688,6 @@ func (m *dashboardModel) runShipSafeCmd() tea.Cmd {
 			return shipSafeDoneMsg{lines: lines, failed: err != nil}
 		},
 	)
-}
-
-// runSuperInstallCmd installs obra/superpowers via npx skills add.
-func (m *dashboardModel) runSuperInstallCmd() tea.Cmd {
-	npx := m.npxPath
-	return func() tea.Msg {
-		cmd := exec.Command(npx, "--yes", "skills", "add", "obra/superpowers", "--all", "-y")
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return superInstallDoneMsg{err: strings.TrimSpace(string(out))}
-		}
-		return superInstallDoneMsg{}
-	}
 }
 
 // agentOpenCmd returns the CLI command to resume a session in its native agent.
