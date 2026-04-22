@@ -94,13 +94,23 @@ func main() {
 		if err != nil {
 			fatalf("rtk not found — install with: maple init")
 		}
-		cmd := exec.Command(rtkPath, "hook-audit")
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			os.Exit(1)
-		}
+		// Show hook wiring status.
+		showCmd := exec.Command(rtkPath, "init", "--show")
+		showCmd.Stdout = os.Stdout
+		showCmd.Stderr = os.Stderr
+		_ = showCmd.Run()
+		fmt.Println()
+		// Show token savings (works without RTK_HOOK_AUDIT).
+		gainCmd := exec.Command(rtkPath, "gain")
+		gainCmd.Stdout = os.Stdout
+		gainCmd.Stderr = os.Stderr
+		_ = gainCmd.Run()
+		fmt.Println()
+		// Show audit log if it exists (requires RTK_HOOK_AUDIT=1 in a prior session).
+		auditCmd := exec.Command(rtkPath, "hook-audit")
+		auditCmd.Stdout = os.Stdout
+		auditCmd.Stderr = os.Stderr
+		_ = auditCmd.Run()
 
 	default:
 		fmt.Fprintf(os.Stderr, "maple: unknown command %q\n\n", args[0])
