@@ -7,6 +7,11 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.10.2] — 2026-04-22
+
+### Fixed
+- **Cross-platform `rtk` install fallback**: the v4.10.1 fallback only covered linux/macos. Both `scripts/install.ps1` and `maple init` now also try `cargo install --git https://github.com/rtk-ai/rtk` when cargo is on PATH — rtk-ai's officially documented Windows install method, and a universal escape hatch when binary downloads are blocked (proxies, corp firewalls). `findInstalledRTK` is now Windows-aware, searching `%USERPROFILE%\.cargo\bin` on Windows vs. `~/.cargo/bin`, `~/.local/bin`, `/usr/local/bin` on Unix.
+
 ## [4.10.1] — 2026-04-22
 
 ### Added
