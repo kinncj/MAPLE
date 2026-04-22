@@ -1707,6 +1707,11 @@ func agentOpenCmd(s sessionRow) []string {
 			return []string{"opencode", "--session", s.id}
 		}
 		return []string{"opencode"}
+	case "copilot":
+		if s.id != "" {
+			return []string{"copilot", "--resume=" + s.id}
+		}
+		return []string{"copilot"}
 	default:
 		return nil
 	}
@@ -1723,7 +1728,7 @@ func sessionUUID(s sessionRow) string {
 			base = base[idx+1:]
 		}
 		return strings.TrimSuffix(base, ".jsonl")
-	case "opencode":
+	case "opencode", "copilot":
 		return s.id
 	default:
 		return s.id
@@ -1771,6 +1776,13 @@ func buildLaunchCmd(tool, cmd string, pinned map[string]string) []string {
 		}
 		return []string{"opencode"}
 	case "copilot":
+		if pinnedID != "" {
+			args := []string{"copilot", "--resume=" + pinnedID}
+			if cmd != "" {
+				args = append(args, cmd)
+			}
+			return args
+		}
 		if cmd != "" {
 			return []string{"copilot", cmd}
 		}

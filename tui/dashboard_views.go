@@ -71,6 +71,8 @@ func agentSourceBadge(source string, t Theme) string {
 		return lipgloss.NewStyle().Foreground(t.Primary).Render("[cc]")
 	case "opencode":
 		return lipgloss.NewStyle().Foreground(t.Accent).Render("[oc]")
+	case "copilot":
+		return lipgloss.NewStyle().Foreground(t.Warning).Render("[gh]")
 	case "maple":
 		return lipgloss.NewStyle().Foreground(t.Success).Render("[ml]")
 	default:
@@ -553,6 +555,8 @@ func (m *dashboardModel) openSessionDetail(s sessionRow) {
 		m.sessionLines = loadClaudeSessionLines(s.id)
 	case "opencode":
 		m.sessionLines = loadOpenCodeSessionLines(s.id)
+	case "copilot":
+		m.sessionLines = loadCopilotSessionLines(s.id)
 	default:
 		m.sessionLines = []string{"(no detail available for source: " + s.source + ")"}
 	}
@@ -984,6 +988,8 @@ func (m *dashboardModel) sessionDetailView() string {
 	switch m.sessionSource {
 	case "opencode":
 		borderColor = t.Accent
+	case "copilot":
+		borderColor = t.Warning
 	case "maple":
 		borderColor = t.Success
 	}

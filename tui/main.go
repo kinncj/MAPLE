@@ -407,8 +407,10 @@ func runResumeSession(harness string) error {
 		args = []string{"claude", "--resume", id}
 	case "opencode":
 		args = []string{"opencode", "--session", id}
+	case "copilot":
+		args = []string{"copilot", "--resume=" + id}
 	default:
-		return fmt.Errorf("unknown harness %q — supported: claude, opencode", harness)
+		return fmt.Errorf("unknown harness %q — supported: claude, opencode, copilot", harness)
 	}
 
 	short := id
