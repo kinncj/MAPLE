@@ -166,12 +166,12 @@ else
   fail "root SKILL.md missing — skills.sh cannot index this repo"
 fi
 
-SKILLS_DIR="$REPO_ROOT/skills"
+SKILLS_DIR="$REPO_ROOT/template/.claude/skills"
 if [[ -d "$SKILLS_DIR" ]]; then
   COUNT=$(find "$SKILLS_DIR" -name "SKILL.md" | wc -l | tr -d ' ')
-  ok "skills/ dir present with $COUNT SKILL.md files"
+  ok "template/.claude/skills/ present with $COUNT SKILL.md files (canonical location)"
 else
-  fail "skills/ dir missing — individual skills not installable via npx skills add kinncj/maple@<skill>"
+  fail "template/.claude/skills/ missing"
 fi
 
 # ─── summary ──────────────────────────────────────────────────────────────────
