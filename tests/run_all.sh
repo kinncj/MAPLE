@@ -31,6 +31,7 @@ run_suite "CLI Tests"              "$REPO_ROOT/tests/cli/test_ai_squad.sh"
 run_suite "Template Structure"     "$REPO_ROOT/tests/template/test_structure.sh"
 run_suite "Agent Frontmatter"      "$REPO_ROOT/tests/template/test_agents.sh"
 run_suite "Skills"                 "$REPO_ROOT/tests/template/test_skills.sh"
+run_suite "Skills.sh Integration"  "$REPO_ROOT/tests/template/test_skills_sh.sh"
 run_suite "Commands"               "$REPO_ROOT/tests/template/test_commands.sh"
 
 # ─── summary ──────────────────────────────────────────────────────────────────

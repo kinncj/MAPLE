@@ -1,6 +1,6 @@
 ---
 name: pipeline-runner
-description: "Universal dispatcher: run a named taffy workflow (.opencode/taffy/<name>.yaml), a skill, or a sub-agent. Tracks all runs in .claude/state/maple.json so the maple TUI shows live progress."
+description: "Universal dispatcher: run a named taffy workflow (.opencode/taffy/<name>.yaml), a skill, or a sub-agent. Falls back to skills.sh registry when a skill is not found locally. Tracks all runs in .claude/state/maple.json so the maple TUI shows live progress."
 ---
 
 # SKILL: pipeline-runner
@@ -10,8 +10,9 @@ description: "Universal dispatcher: run a named taffy workflow (.opencode/taffy/
 Dispatches any named workflow, skill, or agent. Resolution order:
 
 1. **Taffy workflow** — look for `.opencode/taffy/<name>.yaml`; if found, execute each stage in order
-2. **Skill** — look for `.opencode/skills/<name>/`; if found, invoke the skill
+2. **Skill (local)** — look for `.opencode/skills/<name>/`; if found, invoke the skill
 3. **Agent** — look for `.opencode/agents/<name>.md`; if found, delegate to `@<name>`
+4. **Skill (registry)** — if not found locally, try to install from skills.sh, then retry step 2
 
 Pipeline state is written to `.claude/state/maple.json` at every transition.
 
@@ -36,10 +37,31 @@ ls .opencode/taffy/*.yaml | grep -v schema
 
 ## Execution Protocol
 
-### 1. Load the workflow
+### 1. Resolve the target
 
 ```bash
-cat .claude/taffy/<name>.yaml
+# Check taffy first
+[ -f ".opencode/taffy/<name>.yaml" ] && dispatch=taffy
+# Then local skill
+[ -d ".opencode/skills/<name>" ] && dispatch=skill
+# Then agent
+[ -f ".opencode/agents/<name>.md" ] && dispatch=agent
+# Fallback: fetch from skills.sh registry, then retry
+if [ -z "$dispatch" ] && command -v npx &>/dev/null; then
+  echo "pipeline-runner: '<name>' not found locally — checking skills.sh…"
+  npx --yes skills add kinncj/maple@<name> -a opencode -y 2>/dev/null \
+    || npx --yes skills add <name> -a opencode -y 2>/dev/null \
+    || true
+  [ -d ".opencode/skills/<name>" ] && dispatch=skill
+fi
+```
+
+If nothing matches: `pipeline-runner: no taffy workflow, skill, or agent named '<name>' (also checked skills.sh registry)`
+
+### 2. Load the workflow (taffy only)
+
+```bash
+cat .opencode/taffy/<name>.yaml
 ```
 
 Parse the `stages:` list. Resolve `depends_on` to execution order.
