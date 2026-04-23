@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/pre-bash.sh"
+            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -f \"$ROOT/.claude/hooks/pre-bash.sh\" ]; then cd \"$ROOT\" && bash .claude/hooks/pre-bash.sh; fi'"
           }
         ]
       }
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/post-write.sh"
+            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -f \"$ROOT/.claude/hooks/post-write.sh\" ]; then cd \"$ROOT\" && bash .claude/hooks/post-write.sh; fi'"
           }
         ]
       },
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/post-write.sh"
+            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -f \"$ROOT/.claude/hooks/post-write.sh\" ]; then cd \"$ROOT\" && bash .claude/hooks/post-write.sh; fi'"
           }
         ]
       },
@@ -63,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/post-bash.sh"
+            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -f \"$ROOT/.claude/hooks/post-bash.sh\" ]; then cd \"$ROOT\" && bash .claude/hooks/post-bash.sh; fi'"
           }
         ]
       }
