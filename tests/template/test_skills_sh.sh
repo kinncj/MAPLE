@@ -36,41 +36,17 @@ fi
 # ─── skills.sh output parsing (offline — uses local parseSkillsOutput logic) ──
 printf "\n\033[1m  Output parsing (Go unit tests)\033[0m\n\n"
 
-# The Go unit tests in tui/skills_test.go cover this exhaustively.
-# Here we just confirm the test binary compiles and passes.
-TMPBIN=$(mktemp /tmp/maple_test_XXXXXX)
-BUILD_OK=false
-
-# Suppress embed error: run test without embed by checking if tui/template is real dir
+# Go unit tests require the build dance (tui/template symlink → real copy).
+# Run them only when that dance has already been done; otherwise skip.
 if [ -d "$REPO_ROOT/tui/template" ] && [ ! -L "$REPO_ROOT/tui/template" ]; then
-  if (cd "$REPO_ROOT/tui" && go test -run "TestParse|TestStrip" -count=1 -timeout 30s ./... &>/dev/null); then
+  if (cd "$REPO_ROOT/tui" && go test -run "TestParse|TestStrip" -count=1 -timeout 30s ./... &>/dev/null 2>&1); then
     ok "Go unit tests: parseSkillsOutput, parseInstalledJSON, parseInstalledText, stripANSI"
-    BUILD_OK=true
   else
     fail "Go unit tests failed — run 'cd tui && go test -run TestParse -v' for details"
   fi
 else
-  # Build dance needed
-  DANCE_DIR=$(mktemp -d)
-  cp -rL "$REPO_ROOT/template" "$DANCE_DIR/template_copy"
-  (
-    cd "$REPO_ROOT/tui"
-    # swap symlink for real copy temporarily in a subshell working copy
-    if go test -run "TestParse|TestStrip" -count=1 -timeout 30s \
-        -overlay /dev/null ./... &>/dev/null 2>&1; then
-      exit 0
-    fi
-    exit 1
-  ) && {
-    ok "Go unit tests: parseSkillsOutput, parseInstalledJSON, parseInstalledText, stripANSI"
-    BUILD_OK=true
-  } || {
-    skip "Go unit tests: build dance required (run: make build-tui && cd tui && go test -run TestParse -v)"
-    BUILD_OK=true
-  }
-  rm -rf "$DANCE_DIR"
+  skip "Go unit tests: build dance required (run: make build-tui && cd tui && go test -run TestParse -v)"
 fi
-rm -f "$TMPBIN"
 
 # ─── network tests ────────────────────────────────────────────────────────────
 printf "\n\033[1m  skills.sh network integration\033[0m\n\n"
