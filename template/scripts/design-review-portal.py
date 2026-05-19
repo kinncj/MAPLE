@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 
 import argparse
+import cgi
 import html
 import json
 import os
 import pathlib
 import posixpath
+import re
+import secrets
 import urllib.parse
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -42,6 +45,7 @@ class PortalState:
     def __init__(self, root: pathlib.Path, token_file: pathlib.Path):
         self.root = root
         self.state_dir = root / ".claude" / "state"
+        self.review_input_dir = root / "docs" / "design" / "review-input"
         self.maple_json = self.state_dir / "maple.json"
         self.pending_file = self.state_dir / "approval-pending.txt"
         self.feedback_file = self.state_dir / "design-feedback.json"
@@ -49,7 +53,13 @@ class PortalState:
         self.token_file = token_file
 
     def token(self) -> str:
-        return read_text(self.token_file)
+        tok = read_text(self.token_file)
+        if tok:
+            return tok
+        tok = secrets.token_hex(24)
+        self.token_file.parent.mkdir(parents=True, exist_ok=True)
+        self.token_file.write_text(tok + "\n", encoding="utf-8")
+        return tok
 
     def pipeline(self) -> Dict:
         p = read_json(self.maple_json)
@@ -63,15 +73,32 @@ class PortalState:
             "updated_at": p.get("updated_at", ""),
             "approval_pending": pending,
             "feedback": feedback,
+            "uploads": self.list_uploads(),
         }
 
-    def request_changes(self, message: str) -> Dict:
+    def request_changes(self, message: str, attachments: Optional[List[str]] = None) -> Dict:
         stage = read_text(self.pending_file)
         payload = {
             "stage": stage,
             "message": message.strip(),
             "ts": now_iso(),
             "status": "requested_changes",
+            "attachments": attachments or [],
+        }
+        write_json(self.feedback_file, payload)
+        self.feedback_log.parent.mkdir(parents=True, exist_ok=True)
+        with self.feedback_log.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+        return payload
+
+    def reject(self, message: str, attachments: Optional[List[str]] = None) -> Dict:
+        stage = read_text(self.pending_file)
+        payload = {
+            "stage": stage,
+            "message": message.strip(),
+            "ts": now_iso(),
+            "status": "rejected",
+            "attachments": attachments or [],
         }
         write_json(self.feedback_file, payload)
         self.feedback_log.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +112,69 @@ class PortalState:
             self.pending_file.unlink()
         return {"approved": True, "stage": stage, "ts": now_iso()}
 
+    def list_uploads(self) -> List[Dict]:
+        out: List[Dict] = []
+        if not self.review_input_dir.exists():
+            return out
+        for p in self.review_input_dir.iterdir():
+            if not p.is_file():
+                continue
+            rel = p.relative_to(self.root).as_posix()
+            out.append(
+                {
+                    "path": rel,
+                    "name": p.name,
+                    "mtime": int(p.stat().st_mtime),
+                    "platform": infer_platform(rel),
+                }
+            )
+        out.sort(key=lambda x: x["mtime"], reverse=True)
+        return out[:200]
+
+    def save_upload(self, filename: str, content: bytes) -> Dict:
+        if len(content) == 0:
+            raise ValueError("empty file")
+        if len(content) > 10 * 1024 * 1024:
+            raise ValueError("file too large (max 10MB)")
+        safe = sanitize_filename(filename)
+        ext = pathlib.Path(safe).suffix.lower()
+        allowed = {
+            ".excalidraw",
+            ".json",
+            ".jpeg",
+            ".jpg",
+            ".png",
+            ".webp",
+            ".gif",
+            ".html",
+            ".htm",
+            ".txt",
+            ".md",
+            ".svg",
+            ".css",
+        }
+        if ext not in allowed:
+            raise ValueError("unsupported file type")
+        self.review_input_dir.mkdir(parents=True, exist_ok=True)
+        stamped = f"{now_iso().replace(':', '').replace('-', '')}-{safe}"
+        target = self.review_input_dir / stamped
+        target.write_bytes(content)
+        rel = target.relative_to(self.root).as_posix()
+        return {
+            "path": rel,
+            "name": target.name,
+            "platform": infer_platform(rel),
+            "size": len(content),
+        }
+
+
+def sanitize_filename(name: str) -> str:
+    base = pathlib.Path(name).name
+    base = re.sub(r"[^A-Za-z0-9._-]+", "-", base).strip("-")
+    if not base:
+        base = "upload"
+    return base[:120]
+
 
 def normalize_rel(path: str) -> str:
     norm = posixpath.normpath(path.replace("\\", "/"))
@@ -94,18 +184,58 @@ def normalize_rel(path: str) -> str:
 
 
 def is_allowed_rel(path: str) -> bool:
-    return path.startswith("docs/design/") or path.startswith("docs/stories/")
+    allowed_roots = (
+        "docs/design/",
+        "docs/stories/",
+        "app/",
+        "tests/",
+        "artifacts/",
+        "screenshots/",
+        "previews/",
+    )
+    return any(path.startswith(root) for root in allowed_roots)
+
+
+def infer_platform(rel: str) -> str:
+    p = rel.lower()
+    if any(x in p for x in ["mobile", "android", "ios", "react-native", "swiftui", "flutter"]):
+        return "mobile"
+    if any(x in p for x in ["desktop", "electron", "tauri", "macos", "windows", "linux"]):
+        return "desktop"
+    if any(x in p for x in ["tui", "terminal", "cli", "console", ".ansi", ".cast"]):
+        return "tui"
+    if any(x in p for x in ["web", ".html", ".htm", ".svg", ".tsx", ".jsx", ".css"]):
+        return "web"
+    return "general"
 
 
 def list_artifacts(root: pathlib.Path, stage: str) -> List[Dict]:
     stage = (stage or "").lower()
-    roots = ["docs/design", "docs/stories"]
+    roots = [
+        "docs/design",
+        "docs/stories",
+        "artifacts",
+        "screenshots",
+        "previews",
+        "app",
+        "tests",
+    ]
     if "wireframe" in stage:
-        roots = ["docs/design/wireframes", "docs/stories"]
+        roots = ["docs/design/wireframes", "docs/design", "docs/stories", "previews", "screenshots"]
     elif "visual-identity" in stage or "design-tokens" in stage:
-        roots = ["docs/design/identity", "docs/stories"]
+        roots = ["docs/design/identity", "docs/design", "docs/stories", "previews"]
     elif "mockup" in stage:
-        roots = ["docs/design/mockups", "docs/design/system/components", "docs/design/identity", "docs/stories"]
+        roots = [
+            "docs/design/mockups",
+            "docs/design/system/components",
+            "docs/design/identity",
+            "docs/stories",
+            "app",
+            "tests",
+            "artifacts",
+            "screenshots",
+            "previews",
+        ]
 
     items: List[Dict] = []
     for r in roots:
@@ -120,6 +250,8 @@ def list_artifacts(root: pathlib.Path, stage: str) -> List[Dict]:
             kind = "text"
             if ext in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
                 kind = "image"
+            elif ext in {".mp4", ".webm"}:
+                kind = "video"
             elif ext in {".html", ".htm", ".svg"}:
                 kind = "preview"
             elif ext in {".json", ".md", ".tsx", ".ts", ".css", ".html", ".yaml", ".yml"}:
@@ -130,6 +262,7 @@ def list_artifacts(root: pathlib.Path, stage: str) -> List[Dict]:
                 {
                     "path": rel,
                     "kind": kind,
+                    "platform": infer_platform(rel),
                     "mtime": int(p.stat().st_mtime),
                 }
             )
@@ -155,6 +288,10 @@ def content_type_for(path: pathlib.Path) -> str:
         return "image/gif"
     if ext == ".webp":
         return "image/webp"
+    if ext == ".mp4":
+        return "video/mp4"
+    if ext == ".webm":
+        return "video/webm"
     return "application/octet-stream"
 
 
@@ -191,21 +328,84 @@ def render_index(token: str) -> str:
     button {{ border:0; border-radius:10px; padding:10px 14px; color:#fff; font-weight:600; cursor:pointer; }}
     .approve {{ background:var(--ok); }}
     .changes {{ background:var(--warn); color:#111827; }}
+    .reject {{ background:var(--bad); }}
     .refresh {{ background:#374151; }}
+    .upload {{ background:#2563eb; }}
     textarea {{ width:100%; min-height:92px; margin-top:10px; background:#0b0d12; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px; }}
     .list {{ margin-top:12px; max-height:520px; overflow:auto; border:1px solid var(--line); border-radius:10px; }}
     .item {{ display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border-bottom:1px solid var(--line); }}
     .item:last-child {{ border-bottom:none; }}
     .item button {{ background:#1f2937; padding:5px 10px; border-radius:8px; font-size:12px; }}
+    .item .path-btn {{ background:none; border:0; color:var(--accent); cursor:pointer; text-align:left; padding:0; font-size:13px; }}
     .preview {{ margin-top:12px; border:1px solid var(--line); border-radius:10px; background:#0b0d12; min-height:260px; }}
     .preview-head {{ display:flex; justify-content:space-between; gap:8px; border-bottom:1px solid var(--line); padding:10px 12px; color:var(--muted); font-size:12px; }}
     .preview-body {{ padding:12px; max-height:520px; overflow:auto; }}
     .preview-body img {{ max-width:100%; border-radius:8px; }}
     .preview-body iframe {{ width:100%; height:520px; border:0; border-radius:8px; background:#fff; }}
+    .preview-body video {{ width:100%; max-height:520px; border-radius:8px; background:#000; }}
     .code {{ white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }}
+    .md {{ line-height:1.55; font-size:14px; }}
+    .md h1, .md h2, .md h3, .md h4 {{ margin: 16px 0 8px; line-height:1.25; }}
+    .md h1 {{ font-size: 22px; }}
+    .md h2 {{ font-size: 19px; }}
+    .md h3 {{ font-size: 16px; }}
+    .md p {{ margin: 8px 0; }}
+    .md ul, .md ol {{ margin: 8px 0 8px 22px; }}
+    .md li {{ margin: 4px 0; }}
+    .md pre {{ background:#0b0d12; border:1px solid var(--line); border-radius:8px; padding:10px; overflow:auto; }}
+    .md code {{ background:#0b0d12; border:1px solid var(--line); border-radius:6px; padding:1px 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }}
+    .md blockquote {{ margin:10px 0; padding:8px 12px; border-left:3px solid var(--line); color:var(--muted); }}
     a {{ color:var(--accent); text-decoration:none; }}
     .chip {{ font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px; }}
     .status {{ font-weight:700; }}
+    .upload-input {{
+      width: 100%;
+      margin-top: 10px;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      color: var(--muted);
+      background: #0b0d12;
+    }}
+    .uploads {{ margin-top: 10px; max-height: 180px; overflow: auto; border:1px solid var(--line); border-radius:10px; }}
+    .upload-item {{ display:flex; justify-content:space-between; gap:10px; padding:8px 10px; border-bottom:1px solid var(--line); font-size:12px; }}
+    .upload-item:last-child {{ border-bottom:none; }}
+    .upload-left {{ display:flex; align-items:center; gap:8px; min-width:0; }}
+    .upload-left label {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:330px; }}
+    .upload-actions button {{ background:#1f2937; padding:4px 8px; border-radius:7px; font-size:11px; }}
+    .modal {{
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 24px;
+    }}
+    .modal.open {{ display: flex; }}
+    .modal-card {{
+      width: min(1200px, 96vw);
+      max-height: 92vh;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }}
+    .modal-head {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .modal-close {{ background: #374151; }}
+    .modal-body {{ padding: 14px; overflow: auto; min-height: 200px; }}
   </style>
 </head>
 <body>
@@ -219,12 +419,17 @@ def render_index(token: str) -> str:
         <div class="label" style="margin-top:10px">Status</div><div id="status" class="value status">-</div>
         <div class="label" style="margin-top:10px">Pending approval</div><div id="pending" class="value">-</div>
         <div class="label" style="margin-top:10px">Updated</div><div id="updated" class="value">-</div>
-        <textarea id="feedback" placeholder="Request changes (optional notes for agent/human)..."></textarea>
+        <textarea id="feedback" placeholder="Feedback for the agent (required for reject/change)..."></textarea>
+        <input id="uploadInput" class="upload-input" type="file" multiple accept=".excalidraw,.json,.jpg,.jpeg,.png,.webp,.gif,.html,.htm,.txt,.md,.svg,.css" />
         <div class="btns">
           <button class="approve" onclick="approveStage()">Approve stage</button>
+          <button class="reject" onclick="rejectStage()">Reject</button>
           <button class="changes" onclick="requestChanges()">Request changes</button>
+          <button class="upload" onclick="uploadFiles()">Upload files</button>
           <button class="refresh" onclick="refreshAll()">Refresh</button>
         </div>
+        <div class="label" style="margin-top:10px">Uploaded review files</div>
+        <div id="uploads" class="uploads"></div>
         <div id="msg" class="sub" style="margin-top:10px"></div>
       </div>
       <div class="card">
@@ -240,8 +445,18 @@ def render_index(token: str) -> str:
       </div>
     </div>
   </div>
+  <div id="artifactModal" class="modal" onclick="onModalBackdrop(event)">
+    <div class="modal-card">
+      <div class="modal-head">
+        <span id="modalPath">Artifact preview</span>
+        <button class="modal-close" onclick="closeArtifactModal()">Close</button>
+      </div>
+      <div id="modalBody" class="modal-body">No artifact selected.</div>
+    </div>
+  </div>
   <script>
-    const TOKEN = {token_js};
+    let TOKEN = {token_js};
+    const selectedUploads = new Set();
 
     function esc(s) {{
       return String(s || "")
@@ -251,14 +466,109 @@ def render_index(token: str) -> str:
         .replace(/"/g, "&quot;");
     }}
 
+    function renderInlineMarkdown(text) {{
+      let out = esc(text || "");
+      out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+      out = out.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+      out = out.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+      out = out.replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g, '<a href="$2" target="_blank" rel="noreferrer noopener">$1</a>');
+      return out;
+    }}
+
+    function renderMarkdown(md) {{
+      const lines = String(md || "").replace(/\r\n/g, "\n").split("\n");
+      let htmlOut = '<div class="md">';
+      let inCode = false;
+      let codeLines = [];
+      let inUl = false;
+      let inOl = false;
+
+      const flushLists = () => {{
+        if (inUl) {{ htmlOut += "</ul>"; inUl = false; }}
+        if (inOl) {{ htmlOut += "</ol>"; inOl = false; }}
+      }};
+
+      const flushCode = () => {{
+        if (!inCode) return;
+        htmlOut += `<pre><code>${{esc(codeLines.join("\\n"))}}</code></pre>`;
+        inCode = false;
+        codeLines = [];
+      }};
+
+      for (const rawLine of lines) {{
+        const line = rawLine || "";
+        const trimmed = line.trim();
+        if (trimmed.startsWith("```")) {{
+          if (inCode) {{
+            flushCode();
+          }} else {{
+            flushLists();
+            inCode = true;
+            codeLines = [];
+          }}
+          continue;
+        }}
+        if (inCode) {{
+          codeLines.push(line);
+          continue;
+        }}
+        if (!trimmed) {{
+          flushLists();
+          htmlOut += "<p></p>";
+          continue;
+        }}
+        if (/^#{1,4}\\s+/.test(trimmed)) {{
+          flushLists();
+          const level = (trimmed.match(/^#+/) || ["#"])[0].length;
+          const content = trimmed.replace(/^#{1,4}\\s+/, "");
+          htmlOut += `<h${{level}}>${{renderInlineMarkdown(content)}}</h${{level}}>`;
+          continue;
+        }}
+        if (/^>\\s?/.test(trimmed)) {{
+          flushLists();
+          htmlOut += `<blockquote>${{renderInlineMarkdown(trimmed.replace(/^>\\s?/, ""))}}</blockquote>`;
+          continue;
+        }}
+        if (/^[-*]\\s+/.test(trimmed)) {{
+          if (!inUl) {{ flushLists(); htmlOut += "<ul>"; inUl = true; }}
+          htmlOut += `<li>${{renderInlineMarkdown(trimmed.replace(/^[-*]\\s+/, ""))}}</li>`;
+          continue;
+        }}
+        if (/^\\d+\\.\\s+/.test(trimmed)) {{
+          if (!inOl) {{ flushLists(); htmlOut += "<ol>"; inOl = true; }}
+          htmlOut += `<li>${{renderInlineMarkdown(trimmed.replace(/^\\d+\\.\\s+/, ""))}}</li>`;
+          continue;
+        }}
+        flushLists();
+        htmlOut += `<p>${{renderInlineMarkdown(trimmed)}}</p>`;
+      }}
+      flushCode();
+      flushLists();
+      htmlOut += "</div>";
+      return htmlOut;
+    }}
+
     async function api(path, options={{}}) {{
       const headers = options.headers || {{}};
       headers["X-Maple-Token"] = TOKEN;
       if (!headers["Content-Type"] && options.body) headers["Content-Type"] = "application/json";
-      const res = await fetch(path, {{...options, headers}});
-      const txt = await res.text();
+      let res = await fetch(path, {{...options, headers}});
+      let txt = await res.text();
       let data = {{}};
       try {{ data = JSON.parse(txt || "{{}}"); }} catch (e) {{ data = {{ raw: txt }}; }}
+      if (res.status === 403 && String(data.error || "").toLowerCase() === "invalid token") {{
+        const tokenRes = await fetch("/api/token");
+        if (tokenRes.ok) {{
+          const tokenPayload = await tokenRes.json();
+          if (tokenPayload && tokenPayload.token) {{
+            TOKEN = String(tokenPayload.token);
+            headers["X-Maple-Token"] = TOKEN;
+            res = await fetch(path, {{...options, headers}});
+            txt = await res.text();
+            try {{ data = JSON.parse(txt || "{{}}"); }} catch (e) {{ data = {{ raw: txt }}; }}
+          }}
+        }}
+      }}
       if (!res.ok) throw new Error(data.error || `HTTP ${{res.status}}`);
       return data;
     }}
@@ -273,6 +583,10 @@ def render_index(token: str) -> str:
       if (s.feedback && s.feedback.message) {{
         document.getElementById("feedback").value = s.feedback.message;
       }}
+      if (s.feedback && Array.isArray(s.feedback.attachments)) {{
+        selectedUploads.clear();
+        for (const p of s.feedback.attachments) selectedUploads.add(String(p));
+      }}
 
       const a = await api("/api/artifacts");
       const box = document.getElementById("artifacts");
@@ -286,11 +600,14 @@ def render_index(token: str) -> str:
       for (const item of a.items) {{
         const row = document.createElement("div");
         row.className = "item";
-        const href = "/artifact/" + encodeURIComponent(item.path);
         const left = document.createElement("span");
-        left.innerHTML = `<a target="_blank" href="${{href}}">${{esc(item.path)}}</a>`;
+        const pathBtn = document.createElement("button");
+        pathBtn.className = "path-btn";
+        pathBtn.textContent = item.path;
+        pathBtn.addEventListener("click", () => openArtifactModal(item));
+        left.appendChild(pathBtn);
         const right = document.createElement("span");
-        right.innerHTML = `<span class="chip">${{esc(item.kind)}}</span>`;
+        right.innerHTML = `<span class="chip">${{esc(item.platform || "general")}}</span> <span class="chip">${{esc(item.kind)}}</span>`;
         const btn = document.createElement("button");
         btn.textContent = "preview";
         btn.addEventListener("click", () => setPreview(item));
@@ -304,13 +621,15 @@ def render_index(token: str) -> str:
         }}
       }}
       setPreview(selected);
+      const up = await api("/api/uploads");
+      renderUploads(up.items || []);
     }}
 
     function isPreviewable(item) {{
       if (!item) return false;
-      if (item.kind === "image" || item.kind === "preview") return true;
+      if (item.kind === "image" || item.kind === "preview" || item.kind === "video") return true;
       const p = String(item.path || "").toLowerCase();
-      return p.endsWith(".md") || p.endsWith(".tsx") || p.endsWith(".ts") || p.endsWith(".css") || p.endsWith(".json");
+      return p.endsWith(".md") || p.endsWith(".tsx") || p.endsWith(".ts") || p.endsWith(".css") || p.endsWith(".json") || p.endsWith(".excalidraw");
     }}
 
     async function setPreview(item) {{
@@ -329,6 +648,10 @@ def render_index(token: str) -> str:
         body.innerHTML = `<img src="${{href}}" alt="${{esc(path)}}"/>`;
         return;
       }}
+      if (item.kind === "video" || lower.endsWith(".mp4") || lower.endsWith(".webm")) {{
+        body.innerHTML = `<video controls src="${{href}}"></video>`;
+        return;
+      }}
       if (item.kind === "preview" || lower.endsWith(".html") || lower.endsWith(".htm") || lower.endsWith(".svg")) {{
         body.innerHTML = `<iframe src="${{href}}" title="${{esc(path)}}"></iframe>`;
         return;
@@ -336,16 +659,172 @@ def render_index(token: str) -> str:
       try {{
         const res = await fetch(href);
         const txt = await res.text();
+        if (lower.endsWith(".md")) {{
+          body.innerHTML = renderMarkdown(txt.slice(0, 200000));
+          return;
+        }}
+        if (lower.endsWith(".excalidraw")) {{
+          let parsed = null;
+          try {{ parsed = JSON.parse(txt); }} catch (_e) {{ parsed = null; }}
+          if (parsed) {{
+            const count = Array.isArray(parsed.elements) ? parsed.elements.length : 0;
+            body.innerHTML = `<div class="code">Excalidraw file detected.\nElements: ${{count}}\n\n${{esc(txt.slice(0, 120000))}}</div>`;
+            return;
+          }}
+        }}
         body.innerHTML = `<div class="code">${{esc(txt.slice(0, 120000))}}</div>`;
       }} catch (e) {{
         body.textContent = "Failed to load preview content.";
       }}
     }}
 
+    async function openArtifactModal(item) {{
+      const modal = document.getElementById("artifactModal");
+      const modalPath = document.getElementById("modalPath");
+      const modalBody = document.getElementById("modalBody");
+      const path = String(item?.path || "");
+      const lower = path.toLowerCase();
+      const href = "/artifact/" + encodeURIComponent(path);
+      modalPath.textContent = path || "Artifact preview";
+      modal.classList.add("open");
+      document.body.style.overflow = "hidden";
+
+      if (!item) {{
+        modalBody.textContent = "No artifact selected.";
+        return;
+      }}
+      if (item.kind === "image") {{
+        modalBody.innerHTML = `<img src="${{href}}" alt="${{esc(path)}}" style="max-width:100%;border-radius:8px;"/>`;
+        return;
+      }}
+      if (item.kind === "video" || lower.endsWith(".mp4") || lower.endsWith(".webm")) {{
+        modalBody.innerHTML = `<video controls src="${{href}}" style="width:100%;max-height:80vh;border-radius:8px;background:#000;"></video>`;
+        return;
+      }}
+      if (item.kind === "preview" || lower.endsWith(".html") || lower.endsWith(".htm") || lower.endsWith(".svg")) {{
+        modalBody.innerHTML = `<iframe src="${{href}}" title="${{esc(path)}}" style="width:100%;height:78vh;border:0;border-radius:8px;background:#fff;"></iframe>`;
+        return;
+      }}
+      try {{
+        const res = await fetch(href);
+        const txt = await res.text();
+        if (lower.endsWith(".md")) {{
+          modalBody.innerHTML = renderMarkdown(txt.slice(0, 240000));
+          return;
+        }}
+        if (lower.endsWith(".excalidraw")) {{
+          let parsed = null;
+          try {{ parsed = JSON.parse(txt); }} catch (_e) {{ parsed = null; }}
+          if (parsed) {{
+            const count = Array.isArray(parsed.elements) ? parsed.elements.length : 0;
+            modalBody.innerHTML = `<div class="code">Excalidraw file detected.\nElements: ${{count}}\n\n${{esc(txt.slice(0, 180000))}}</div>`;
+            return;
+          }}
+        }}
+        modalBody.innerHTML = `<div class="code">${{esc(txt.slice(0, 180000))}}</div>`;
+      }} catch (e) {{
+        modalBody.textContent = "Failed to load artifact content.";
+      }}
+    }}
+
+    function renderUploads(items) {{
+      const box = document.getElementById("uploads");
+      box.innerHTML = "";
+      if (!items || items.length === 0) {{
+        box.innerHTML = '<div class="upload-item"><span class="sub">No uploaded review files yet.</span></div>';
+        return;
+      }}
+      for (const item of items) {{
+        const row = document.createElement("div");
+        row.className = "upload-item";
+        const left = document.createElement("div");
+        left.className = "upload-left";
+        const chk = document.createElement("input");
+        chk.type = "checkbox";
+        chk.checked = selectedUploads.has(item.path);
+        chk.addEventListener("change", () => {{
+          if (chk.checked) selectedUploads.add(item.path);
+          else selectedUploads.delete(item.path);
+        }});
+        const lbl = document.createElement("label");
+        lbl.textContent = item.path;
+        left.appendChild(chk);
+        left.appendChild(lbl);
+        const right = document.createElement("div");
+        right.className = "upload-actions";
+        right.innerHTML = `<span class="chip">${{esc(item.platform || "general")}}</span> `;
+        const pbtn = document.createElement("button");
+        pbtn.textContent = "preview";
+        pbtn.addEventListener("click", () => openArtifactModal({{ path: item.path, kind: "file" }}));
+        right.appendChild(pbtn);
+        row.appendChild(left);
+        row.appendChild(right);
+        box.appendChild(row);
+      }}
+    }}
+
+    function closeArtifactModal() {{
+      const modal = document.getElementById("artifactModal");
+      modal.classList.remove("open");
+      document.body.style.overflow = "";
+    }}
+
+    function onModalBackdrop(event) {{
+      if (event.target && event.target.id === "artifactModal") {{
+        closeArtifactModal();
+      }}
+    }}
+
+    window.addEventListener("keydown", (event) => {{
+      if (event.key === "Escape") {{
+        closeArtifactModal();
+      }}
+    }});
+
     async function approveStage() {{
       try {{
         const r = await api("/api/approve", {{ method: "POST" }});
         document.getElementById("msg").textContent = `Approved: ${{r.stage || "stage"}}`;
+        await refreshAll();
+      }} catch (e) {{
+        document.getElementById("msg").textContent = e.message;
+      }}
+    }}
+
+    async function uploadFiles() {{
+      const input = document.getElementById("uploadInput");
+      const files = input.files ? Array.from(input.files) : [];
+      if (!files.length) {{
+        document.getElementById("msg").textContent = "Choose at least one file to upload.";
+        return;
+      }}
+      const fd = new FormData();
+      for (const f of files) fd.append("files", f, f.name);
+      try {{
+        const r = await api("/api/upload", {{ method: "POST", body: fd, headers: {{}} }});
+        if (Array.isArray(r.items)) {{
+          for (const it of r.items) selectedUploads.add(it.path);
+          document.getElementById("msg").textContent = `Uploaded ${r.items.length} file(s).`;
+        }}
+        input.value = "";
+        await refreshAll();
+      }} catch (e) {{
+        document.getElementById("msg").textContent = e.message;
+      }}
+    }}
+
+    async function rejectStage() {{
+      const message = document.getElementById("feedback").value.trim();
+      if (!message) {{
+        document.getElementById("msg").textContent = "Add feedback before rejecting.";
+        return;
+      }}
+      try {{
+        const r = await api("/api/reject", {{
+          method: "POST",
+          body: JSON.stringify({{ message, attachments: Array.from(selectedUploads) }})
+        }});
+        document.getElementById("msg").textContent = `Rejected: ${{r.stage || "stage"}}`;
         await refreshAll();
       }} catch (e) {{
         document.getElementById("msg").textContent = e.message;
@@ -361,7 +840,7 @@ def render_index(token: str) -> str:
       try {{
         const r = await api("/api/request-changes", {{
           method: "POST",
-          body: JSON.stringify({{ message }})
+          body: JSON.stringify({{ message, attachments: Array.from(selectedUploads) }})
         }});
         document.getElementById("msg").textContent = `Changes requested for: ${{r.stage || "stage"}}`;
         await refreshAll();
@@ -420,6 +899,23 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return {}
 
+    def _read_upload_files(self) -> List[Dict]:
+        env = {
+            "REQUEST_METHOD": "POST",
+            "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+        }
+        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=env, keep_blank_values=True)
+        fields = form.list or []
+        uploaded: List[Dict] = []
+        for field in fields:
+            if not getattr(field, "filename", ""):
+                continue
+            filename = str(field.filename)
+            data = field.file.read() if field.file else b""
+            item = self._state().save_upload(filename, data)
+            uploaded.append(item)
+        return uploaded
+
     def do_GET(self) -> None:
         if self.path == "/health":
             self._json({"ok": True})
@@ -432,10 +928,16 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/api/state"):
             self._json(self._state().pipeline())
             return
+        if self.path.startswith("/api/token"):
+            self._json({"token": self._state().token()})
+            return
         if self.path.startswith("/api/artifacts"):
             stage = self._state().pipeline().get("approval_pending") or self._state().pipeline().get("stage", "")
             items = list_artifacts(self._state().root, stage)
             self._json({"items": items, "stage": stage})
+            return
+        if self.path.startswith("/api/uploads"):
+            self._json({"items": self._state().list_uploads()})
             return
         if self.path.startswith("/artifact/"):
             rel = urllib.parse.unquote(self.path[len("/artifact/"):])
@@ -471,10 +973,50 @@ class Handler(BaseHTTPRequestHandler):
                 return
             body = self._read_json_body()
             message = str(body.get("message", "")).strip()
+            attachments = body.get("attachments", [])
+            if not isinstance(attachments, list):
+                attachments = []
             if not message:
                 self._json({"error": "message required"}, 400)
                 return
-            self._json(self._state().request_changes(message))
+            self._json(self._state().request_changes(message, [str(x) for x in attachments]))
+            return
+        if self.path == "/api/reject":
+            err = self._check_token()
+            if err:
+                self._json({"error": err}, 403)
+                return
+            body = self._read_json_body()
+            message = str(body.get("message", "")).strip()
+            attachments = body.get("attachments", [])
+            if not isinstance(attachments, list):
+                attachments = []
+            if not message:
+                self._json({"error": "message required"}, 400)
+                return
+            self._json(self._state().reject(message, [str(x) for x in attachments]))
+            return
+        if self.path == "/api/upload":
+            err = self._check_token()
+            if err:
+                self._json({"error": err}, 403)
+                return
+            ctype = self.headers.get("Content-Type", "")
+            if "multipart/form-data" not in ctype:
+                self._json({"error": "multipart/form-data required"}, 400)
+                return
+            try:
+                items = self._read_upload_files()
+            except ValueError as e:
+                self._json({"error": str(e)}, 400)
+                return
+            except Exception:
+                self._json({"error": "failed to parse upload"}, 400)
+                return
+            if not items:
+                self._json({"error": "no files uploaded"}, 400)
+                return
+            self._json({"items": items})
             return
         self._json({"error": "not found"}, 404)
 

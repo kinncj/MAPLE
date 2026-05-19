@@ -200,6 +200,10 @@ until [ ! -f .claude/state/approval-pending.txt ]; do sleep 2; done
 ```
    Also accept an explicit "approved" or "continue" reply in chat as an alternative.
 6. On resume: update `maple.json` to `RUNNING`, advance to next stage.
+7. While paused, monitor `.claude/state/design-feedback.json`:
+   - `status: requested_changes` or `status: rejected` means apply the requested updates before advancing.
+   - Treat `attachments` as required review inputs (uploaded files such as `.excalidraw`, images, HTML, text), typically under `docs/design/review-input/`.
+   - Summarize how each feedback item and attachment was addressed before continuing.
 
 ### Session context
 

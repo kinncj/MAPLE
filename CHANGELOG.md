@@ -7,6 +7,16 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.12.9] — 2026-05-19
+
+### Added
+- **Design review uploads + decisions**: portal now supports review-file uploads (including `.excalidraw`, images, HTML/SVG, and text), explicit **Approve / Reject / Request changes** actions, and attachment propagation to `.claude/state/design-feedback.json`.
+- **Approval feedback handoff**: pipeline-runner templates (Claude/OpenCode/Cursor) now require processing `design-feedback.json` attachment inputs during paused human-approval stages before advancing.
+
+### Fixed
+- **Portal token resilience**: design review portal now recovers from stale/missing token state by minting a token when absent and retrying client requests after token refresh.
+- **In-portal preview UX**: artifact links now open in a modal (not a new tab), with richer platform-aware previews including markdown rendering, video previews, and Excalidraw-aware handling.
+
 ## [4.12.8] — 2026-05-19
 
 ### Fixed

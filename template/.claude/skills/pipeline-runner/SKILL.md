@@ -190,6 +190,10 @@ I will not advance to the next stage until approval is confirmed.
    - Also accept an explicit "approved" / "continue" reply in chat.
    - When the user approves via the maple TUI ([P] → [a]), the TUI deletes the pending file **and** sends a "continue" keystroke to the agent's pane via the active multiplexer (outer tmux/zellij, or a detached `tmux new-session` wrapper). Either signal is sufficient to resume.
 6. On resume: update to `RUNNING`, advance to next stage.
+7. While paused, monitor `.claude/state/design-feedback.json`:
+   - `status: requested_changes` or `status: rejected` means apply the requested updates before advancing.
+   - Treat `attachments` as required review inputs (uploaded files such as `.excalidraw`, images, HTML, text), typically under `docs/design/review-input/`.
+   - Summarize how each feedback item and attachment was addressed before continuing.
 
 ### Step 5: Completion
 
