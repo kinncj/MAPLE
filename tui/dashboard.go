@@ -1860,6 +1860,11 @@ func launcherTools() []string {
 	if p, _ := exec.LookPath("copilot"); p != "" {
 		tools = append(tools, "copilot")
 	}
+	if p, _ := exec.LookPath("cursor-agent"); p != "" {
+		tools = append(tools, "cursor")
+	} else if p, _ := exec.LookPath("cursor"); p != "" {
+		tools = append(tools, "cursor")
+	}
 	if len(tools) == 0 {
 		tools = append(tools, "claude") // show as option even if not detected
 	}
@@ -1900,6 +1905,16 @@ func buildLaunchCmd(tool, cmd string, pinned map[string]string) []string {
 			args = []string{"copilot", "-i", cmd}
 		} else {
 			args = []string{"copilot"}
+		}
+	case "cursor":
+		cursorBin := "cursor-agent"
+		if p, _ := exec.LookPath("cursor-agent"); p == "" {
+			cursorBin = "cursor"
+		}
+		if cmd != "" {
+			args = []string{cursorBin, cmd}
+		} else {
+			args = []string{cursorBin}
 		}
 	default:
 		args = []string{tool}

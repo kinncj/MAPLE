@@ -64,16 +64,17 @@ func runReq(tools Tools) error {
 type reqStep int
 
 const (
-	reqStepPickAI   reqStep = iota // shown only when >1 AI tool available
-	reqStepEdit                    // textarea for requirements
-	reqStepSending                 // waiting for AI
-	reqStepStories                 // list of converted stories
-	reqStepViewStory               // full content of one story
+	reqStepPickAI    reqStep = iota // shown only when >1 AI tool available
+	reqStepEdit                     // textarea for requirements
+	reqStepSending                  // waiting for AI
+	reqStepStories                  // list of converted stories
+	reqStepViewStory                // full content of one story
 )
 
 type gherkinStory struct {
 	title   string
 	gherkin string
+	ui      bool
 	savedTo string
 }
 
@@ -618,7 +619,10 @@ Rules:
 - Use Feature, Background (if needed), Scenario, Given/When/Then/And/But
 - Plain language that non-technical stakeholders can understand
 - Separate scenarios for happy path and key edge cases
+- Preserve concrete technical requirements from the input (frameworks, storage, APIs, design systems, visual style) as explicit, testable behavior in Background or Scenario steps
+- If requirements describe a UI, SPA, frontend, design/look-and-feel, set assumptions and scenarios that clearly indicate a visual feature
 - Output ONLY the === STORY: === blocks — no explanation, no prose
+- Do not output markdown fences, token usage, change summaries, request stats, or any telemetry
 
 Requirements:
 %s`
@@ -644,7 +648,7 @@ func invokeAI(ai aiOption, prompt string) ([]byte, error) {
 		// --no-session-persistence avoids writing session files.
 		cmd = exec.Command(ai.path, "-p", "--output-format", "text", "--no-session-persistence", prompt)
 	case "copilot":
-		cmd = exec.Command(ai.path, "--prompt", prompt)
+		cmd = exec.Command(ai.path, "-i", prompt)
 	case "opencode":
 		cmd = exec.Command(ai.path, "run")
 		cmd.Stdin = strings.NewReader(prompt)
@@ -683,7 +687,8 @@ func (m *reqModel) convert(requirements string) tea.Cmd {
 		}
 		stories := parseStories(gherkin)
 		for i := range stories {
-			savedTo, saveErr := saveStory(stories[i].title, stories[i].gherkin, i+1)
+			stories[i].ui = inferUIStory(requirements, stories[i].title, stories[i].gherkin)
+			savedTo, saveErr := saveStory(stories[i].title, stories[i].gherkin, stories[i].ui, i+1)
 			if saveErr == nil {
 				stories[i].savedTo = savedTo
 			}
@@ -695,15 +700,18 @@ func (m *reqModel) convert(requirements string) tea.Cmd {
 // ─── Story parsing ────────────────────────────────────────────────────────────
 
 var storyHeaderRe = regexp.MustCompile(`(?m)^=== STORY: (.+?) ===$`)
+var telemetryLineRe = regexp.MustCompile(`^(Changes|Requests|Tokens)\b`)
 
 // parseStories splits AI output into individual gherkinStory values.
 // If no === STORY: === delimiters are found the whole output is treated as one story.
 func parseStories(output string) []gherkinStory {
+	output = sanitizeModelOutput(output)
 	matches := storyHeaderRe.FindAllStringIndex(output, -1)
 	if len(matches) == 0 {
+		cleaned := cleanGherkin(output)
 		return []gherkinStory{{
-			title:   extractFeatureTitle(output),
-			gherkin: stripFences(strings.TrimSpace(output)),
+			title:   extractFeatureTitle(cleaned),
+			gherkin: cleaned,
 		}}
 	}
 
@@ -722,12 +730,29 @@ func parseStories(output string) []gherkinStory {
 		} else {
 			content = output[start:]
 		}
+		cleaned := cleanGherkin(content)
 		stories = append(stories, gherkinStory{
 			title:   title,
-			gherkin: stripFences(strings.TrimSpace(content)),
+			gherkin: cleaned,
 		})
 	}
 	return stories
+}
+
+func sanitizeModelOutput(s string) string {
+	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
+	var out []string
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "```" || trimmed == "```gherkin" {
+			continue
+		}
+		if telemetryLineRe.MatchString(trimmed) {
+			continue
+		}
+		out = append(out, l)
+	}
+	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
 // extractFeatureTitle pulls the Feature: name from gherkin text, or returns "Untitled".
@@ -749,15 +774,50 @@ func stripFences(s string) string {
 	var out []string
 	for i, l := range lines {
 		trimmed := strings.TrimSpace(l)
-		if i == 0 && (trimmed == "```gherkin" || trimmed == "```") {
+		if (i == 0 && (trimmed == "```gherkin" || trimmed == "```")) || trimmed == "```" || trimmed == "```gherkin" {
 			continue
 		}
-		if i == len(lines)-1 && trimmed == "```" {
+		if telemetryLineRe.MatchString(trimmed) {
 			continue
 		}
 		out = append(out, l)
 	}
 	return strings.Join(out, "\n")
+}
+
+func cleanGherkin(s string) string {
+	trimmed := strings.TrimSpace(stripFences(s))
+	lines := strings.Split(trimmed, "\n")
+	var out []string
+	for _, l := range lines {
+		t := strings.TrimSpace(l)
+		if telemetryLineRe.MatchString(t) {
+			continue
+		}
+		if strings.HasPrefix(t, "```") {
+			continue
+		}
+		out = append(out, l)
+	}
+	cleaned := strings.TrimSpace(strings.Join(out, "\n"))
+	if idx := strings.Index(cleaned, "Feature:"); idx > 0 {
+		cleaned = strings.TrimSpace(cleaned[idx:])
+	}
+	return cleaned
+}
+
+func inferUIStory(requirements, title, gherkin string) bool {
+	corpus := strings.ToLower(requirements + "\n" + title + "\n" + gherkin)
+	for _, k := range []string{
+		" ui ", "spa", "frontend", "front-end", "react", "vue", "angular",
+		"screen", "button", "form", "layout", "look and feel", "design",
+		"visual", "glass", "apple", "theme", "css", "tailwind",
+	} {
+		if strings.Contains(corpus, k) {
+			return true
+		}
+	}
+	return false
 }
 
 // ─── Story file writer ────────────────────────────────────────────────────────
@@ -769,7 +829,7 @@ func stripFences(s string) string {
 //	  cucumber/
 //	    <slug>.feature          ← pure Gherkin (extracted, for test runners)
 //	    <slug>_steps.py         ← behave step stubs (generated once, never overwritten)
-func saveStory(title, gherkin string, idx int) (string, error) {
+func saveStory(title, gherkin string, ui bool, idx int) (string, error) {
 	slug := slugify(title)
 	ts := time.Now().Format("20060102150405")
 	storyDir := filepath.Clean(fmt.Sprintf("docs/stories/%s-%s-%04d", slug, ts, idx))
@@ -790,7 +850,7 @@ id: "%s-%04d"
 title: "%s"
 epic: "%s"
 priority: "medium"
-ui: false
+ui: %t
 adr_required: false
 milestone: null
 labels:
@@ -819,7 +879,7 @@ created_at: "%s"
 
 (populated by adr-author agent)
 `,
-		slug, idx, displayTitle, slug, time.Now().Format(time.RFC3339),
+		slug, idx, displayTitle, slug, ui, time.Now().Format(time.RFC3339),
 		displayTitle, gherkin,
 	)
 
