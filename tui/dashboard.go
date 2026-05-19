@@ -877,7 +877,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				// Write RUNNING state immediately so [P] reflects it before the agent responds
 				writeQuickLaunchState(name, prompt)
-				cmd := buildQuickPromptCmd(name, prompt, m.quickLaunchKind)
+				cmd := buildQuickPromptCmd(name, prompt, m.quickLaunchKind, m.quickLaunchHarness)
 				m.showQuickLaunch = false
 				target := buildLaunchCmd(m.quickLaunchHarness, cmd, m.pinnedSessions)
 				return m, trySpawnCmdForHarness(m.quickLaunchHarness, target)
@@ -2037,7 +2037,7 @@ func writeQuickLaunchState(skill, stage string) {
 
 // buildQuickPromptCmd wraps the skill invocation with silent control instructions
 // so the launched harness keeps maple.json updated and honors user-supplied context.
-func buildQuickPromptCmd(skill, userPrompt, kind string) string {
+func buildQuickPromptCmd(skill, userPrompt, kind, harness string) string {
 	cmd := "/" + skill
 	if userPrompt != "" {
 		cmd += " " + userPrompt
@@ -2060,7 +2060,22 @@ You were launched from the MAPLE quick-prompt. Keep .claude/state/maple.json upd
   {"taffy":"` + skill + `","stage":"<current step>","status":"RUNNING","updated_at":"<ISO-8601 timestamp>"}
 Set status to "DONE" when finished, "FAILED" if you cannot complete.
 </maple-pipeline>`
-	return cmd + taffyContext + tracking
+	progress := ""
+	if kind == "taffy" {
+		progress = `
+
+<maple-progress>
+While this TAFFY run is active, never go silent:
+- Post a concise progress heartbeat to chat every 60-120 seconds while work is ongoing.
+- On each heartbeat, also refresh .claude/state/maple.json updated_at and current stage.
+- If blocked or waiting on external work, explicitly say what is pending and the next expected update window.
+</maple-progress>`
+	}
+	governance := ""
+	if kind == "taffy" {
+		governance = governanceBootstrapBlock(harness)
+	}
+	return cmd + governance + taffyContext + tracking + progress
 }
 
 func writeRecoveryMarker(state string) {

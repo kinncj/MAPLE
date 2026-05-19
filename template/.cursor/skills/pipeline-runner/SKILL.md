@@ -80,6 +80,27 @@ Write to `.claude/state/maple.json` (merge — do not overwrite unowned fields):
 }
 ```
 
+### Step 2b: Runtime policy enforcement (mandatory)
+
+Before any stage execution, read and enforce:
+
+- Harness-specific root markdown:
+  - Claude harness → `CLAUDE.md`
+  - OpenCode harness → `OPENCODE.md`
+  - Cursor harness → `CURSOR.md`
+- `AGENTS.md`
+- `.github/copilot-instructions.md`
+- `.github/instructions/stories.instructions.md` (when touching story files)
+
+When the launch prompt contains a `<maple-gherkin-handoff>` block:
+
+1. Treat it as hard scope: implement only listed story paths / IDs.
+2. Do not run Spec-Kit or regenerate stories.
+3. Preserve the repository's current Cucumber stack:
+   - If generated stories include `cucumber/*_steps.py`, use Python behave-style steps.
+   - Do **not** introduce TypeScript `@cucumber/cucumber` unless the repository already uses it as the active standard.
+4. Keep BusinessRepo structure and phase gates exactly as defined by instruction files.
+
 ### Step 3a: Taffy workflow execution
 
 Load `.claude/taffy/<name>.yaml`, parse `stages:`, resolve `depends_on` order.
@@ -99,6 +120,11 @@ For each stage:
 - `pipeline: standard` → run the full 8-phase orchestrator pipeline
 
 After each stage: update `maple.json` with current stage + `RUNNING`.
+
+**Progress heartbeats (mandatory):**
+- While a taffy run is active, send a concise progress update at least every 60-120 seconds.
+- On each heartbeat, refresh `maple.json` `updated_at` and current `stage`.
+- If blocked/waiting, report what is pending and the next expected update time.
 
 ### Step 3b: Skill invocation
 

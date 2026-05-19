@@ -744,7 +744,7 @@ func writeReqImplementationHandoff(stories []gherkinStory) error {
 	return os.WriteFile(".claude/state/gherkin-handoff.json", append(data, '\n'), 0o644)
 }
 
-func (m *reqModel) buildImplementationPrompt() string {
+func (m *reqModel) buildImplementationPrompt(harness string) string {
 	var paths []string
 	for _, s := range m.stories {
 		if strings.TrimSpace(s.savedTo) != "" {
@@ -753,6 +753,7 @@ func (m *reqModel) buildImplementationPrompt() string {
 	}
 	var sb strings.Builder
 	sb.WriteString("/pipeline-runner implement-stories")
+	sb.WriteString(governanceBootstrapBlock(harness))
 	sb.WriteString("\n\n<maple-gherkin-handoff>\n")
 	sb.WriteString("These stories were generated and approved via `maple req`.\n")
 	sb.WriteString("Implement and test only these story directories:\n")
@@ -764,13 +765,28 @@ func (m *reqModel) buildImplementationPrompt() string {
 	sb.WriteString("Run orchestrator + delegation to execute implementation and tests for these stories.\n")
 	sb.WriteString("Enforce the full 8-phase pipeline and Karpathy gate.\n")
 	sb.WriteString("</maple-gherkin-handoff>\n")
+	sb.WriteString("\n<maple-governance>\n")
+	sb.WriteString("Hard requirements:\n")
+	sb.WriteString("- Strictly follow repository instruction files: `CLAUDE.md`, `.github/copilot-instructions.md`, and `.github/instructions/stories.instructions.md`.\n")
+	sb.WriteString("- Preserve the BusinessRepo model and required repository layout defined by those files.\n")
+	sb.WriteString("- Respect the existing Cucumber stack already present in the generated stories.\n")
+	sb.WriteString("- If a story has `cucumber/*_steps.py`, continue with Python behave-style steps and do NOT switch to TypeScript `@cucumber/cucumber`.\n")
+	sb.WriteString("- Do not invent alternative test frameworks when story artifacts already define one.\n")
+	sb.WriteString("</maple-governance>\n")
 	sb.WriteString(`
 <maple-pipeline>
 You were launched from MAPLE req.
 Keep .claude/state/maple.json updated as you work by writing (merge, never overwrite other keys):
   {"taffy":"pipeline-runner implement-stories","stage":"<current step>","status":"RUNNING","updated_at":"<ISO-8601 timestamp>"}
 Set status to "DONE" when finished, "FAILED" if you cannot complete.
-</maple-pipeline>`)
+</maple-pipeline>
+
+<maple-progress>
+Never go silent during this TAFFY implementation run:
+- Post a concise progress heartbeat every 60-120 seconds while actively running stages.
+- On each heartbeat, refresh .claude/state/maple.json updated_at and current stage.
+- If blocked/waiting, state exactly what is pending and when the next update will be posted.
+</maple-progress>`)
 	return sb.String()
 }
 
@@ -786,7 +802,7 @@ func (m *reqModel) launchImplementationCmd(ai aiOption) tea.Cmd {
 			return reqDoneMsg{err: fmt.Errorf("failed to write gherkin handoff: %w", err)}
 		}
 		writeQuickLaunchState("pipeline-runner implement-stories", "starting")
-		cmd := m.buildImplementationPrompt()
+		cmd := m.buildImplementationPrompt(ai.kind)
 		args := buildLaunchCmd(ai.kind, cmd, loadPinnedSessions())
 		msg := trySpawnCmdForHarness(ai.kind, args)
 		return msg()

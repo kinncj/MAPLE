@@ -6,7 +6,7 @@ tags: [implementation, orchestrator, gherkin]
 stages:
   - name: standard-8-phase
     pipeline: standard
-    description: "Run the full 8-phase SDLC pipeline (DISCOVER → FINAL GATE) over existing stories"
+    description: "Run the full 8-phase SDLC pipeline (DISCOVER → FINAL GATE) over existing stories, enforcing repo instruction markdowns and existing test-stack conventions"
     gate: auto
     when: always
 
