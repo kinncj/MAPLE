@@ -203,6 +203,7 @@ func (m *initModel) platformList() string {
 	if m.tools.GHCopilot {
 		items = append(items, "  • .github/copilot-instructions.md")
 	}
+	items = append(items, "  • .cursor/ agents + skills (Cursor IDE)")
 	items = append(items, "  • docs/ story templates, specs, design structure")
 	items = append(items, "  • Makefile, lefthook.yml, scripts/sdlc/")
 	if m.tools.Lefthook != "" {
@@ -249,6 +250,7 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 		{"lefthook.yml", "lefthook.yml"},
 		{".github", ".github"},
 		{".gitignore", ".gitignore"},
+		{".cursor", ".cursor"},
 	}
 
 	// Platform-specific copies. In CI copy everything so the smoke test can
@@ -342,7 +344,7 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 	}
 
 	// Taffy workflows ship inside the template — nothing to install separately.
-	log("✓ taffy workflows ready (.claude/taffy/, .opencode/taffy/)")
+	log("✓ taffy workflows ready (.claude/taffy/, .opencode/taffy/, .cursor/taffy/)")
 
 	return logs, nil
 }

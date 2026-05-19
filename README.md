@@ -3,7 +3,7 @@
 [![CI](https://github.com/kinncj/MAPLE/actions/workflows/ci.yml/badge.svg)](https://github.com/kinncj/MAPLE/actions/workflows/ci.yml)
 [![Integration Validation](https://github.com/kinncj/MAPLE/actions/workflows/validate-integrations.yml/badge.svg)](https://github.com/kinncj/MAPLE/actions/workflows/validate-integrations.yml)
 
-**MAPLE** is the orchestration layer that connects Claude Code, OpenCode, and GitHub Copilot CLI into a unified, TDD-enforced development lifecycle. One binary installs everything: agents, skills, hooks, and a live project dashboard.
+**MAPLE** is the orchestration layer that connects Claude Code, OpenCode, Cursor, and GitHub Copilot CLI into a unified, TDD-enforced development lifecycle. One binary installs everything: agents, skills, hooks, and a live project dashboard.
 
 > Based on: [Building MAPLE: Orchestrated Multi-Agent Systems with Claude Code and OpenCode](./ARTICLE.md)
 
@@ -77,12 +77,13 @@ Inside the dashboard press `n` to capture requirements and generate a Gherkin st
 
 ## Harness Support
 
-MAPLE works across all three AI coding harnesses. Agents, skills, and TAFFY workflows are mirrored across each.
+MAPLE works across all four AI coding harnesses. Agents, skills, and TAFFY workflows are mirrored across each.
 
 | Harness | Config dir | TAFFY workflows | Skill entry point |
 |---------|-----------|----------------|-------------------|
 | Claude Code | `.claude/` | `.claude/taffy/` | `.claude/skills/pipeline-runner/` |
 | OpenCode | `.opencode/` | `.opencode/taffy/` | `.opencode/skills/pipeline-runner/` |
+| Cursor | `.cursor/` | `.cursor/taffy/` | `.cursor/skills/` |
 | GitHub Copilot CLI | `.github/` | shared via instructions | `/pipeline-runner` in chat |
 
 ---
@@ -239,7 +240,7 @@ Skills install via `npx skills add <pkg> --all -y` and work across Claude Code, 
 
 | Tool | Purpose | Required |
 |------|---------|----------|
-| [Claude Code](https://claude.ai/claude-code), [OpenCode](https://opencode.ai), or [Copilot CLI](https://github.com/features/copilot/cli) | Run the agents | At least one |
+| [Claude Code](https://claude.ai/claude-code), [OpenCode](https://opencode.ai), [Cursor](https://cursor.com), or [Copilot CLI](https://github.com/features/copilot/cli) | Run the agents | At least one |
 | [GitHub CLI `gh`](https://cli.github.com) | Issues, PRs, project management | Yes |
 | [Go 1.22+](https://go.dev) | Build from source | Source builds only |
 | [Node.js](https://nodejs.org) | Cucumber E2E tests + `npx skills` | Optional |
@@ -255,6 +256,7 @@ Skills install via `npx skills add <pkg> --all -y` and work across Claude Code, 
 |-----|---------|
 | [Quickstart — Claude Code](./docs/quickstart-claude-code.md) | Install, scaffold, first feature |
 | [Quickstart — OpenCode](./docs/quickstart-opencode.md) | Install, configure providers, first feature |
+| [Quickstart — Cursor](./docs/quickstart-cursor.md) | Install, enable Cursor skills, first feature |
 | [Quickstart — Copilot CLI](./docs/quickstart-copilot-cli.md) | Install, enable Rubber Duck, first feature |
 | [The 8-Phase Pipeline](./docs/pipeline.md) | Phase details, TDD loop, Makefile contract |
 | [The Agents](./docs/agents.md) | Full agent roster, skills, adding custom agents |
