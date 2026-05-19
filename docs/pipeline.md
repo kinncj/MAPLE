@@ -85,7 +85,83 @@ The QA agent writes the failing test **first**. A test that passes at the RED st
 
 ---
 
-## Makefile Contract
+## Karpathy Principles: Code Quality Gate (Phase 5 → Phase 6)
+
+MAPLE enforces Andrej Karpathy's 4 principles for reducing LLM coding mistakes at the **Phase 5 → Phase 6 transition**.
+
+### The 4 Principles
+
+| Principle | What it enforces |
+|-----------|-----------------|
+| **Think Before Coding** | Assumptions stated explicitly. Ambiguities surfaced before implementation. No silent interpretations. |
+| **Simplicity First** | Minimum viable code. No speculative features, abstractions, or over-engineering. If 200 lines could be 50, rewrite. |
+| **Surgical Changes** | Only changes requested in the spec are made. No unrelated refactoring, cleanup, or style improvements. |
+| **Goal-Driven Execution** | Tests written first. Success criteria explicit and verifiable. Every line of code traces to a requirement. |
+
+### How the Gate Works
+
+**After Phase 5 IMPLEMENT is complete:**
+
+1. Orchestrator **auto-calls** `@karpathy-audit`
+2. Audit analyzes the PR diff against:
+   - Original spec (`docs/stories/{story}/Story.md`)
+   - Actual code changes made
+   - 4 principles above
+3. Generates compliance report: `.claude/state/karpathy-report.json`
+
+### Scoring & Gate Decision
+
+| Overall Score | Decision | Action |
+|---|---|---|
+| ≥90 | 🟢 **PASS** | Auto-advance to Phase 6 VALIDATE |
+| 70-89 | 🟡 **PASS_WITH_APPROVAL** | Pause. Display report. Require human approval (`[a]` key) to advance. |
+| <70 | 🔴 **FAIL** | **BLOCK advancement.** Orchestrator HALTS. Require remediation + re-audit. |
+
+### Violations Detected
+
+- **Out-of-scope edits** — Files touched outside the story boundary
+- **Scope creep** — Features added beyond what spec requires
+- **Over-engineering** — Code complexity exceeds necessity
+- **Unrelated refactoring** — Cleanup/improvements orthogonal to the spec
+- **Hidden assumptions** — Requirements not surfaced or asked about
+
+### Manual Invocation
+
+Can be called at any phase (not just Phase 5→6):
+
+```
+/karpathy-audit
+@karpathy-audit
+```
+
+### Orchestrator Hard Rule
+
+```
+NEVER proceed from Phase 5 to Phase 6 if Karpathy score < 70.
+NEVER bypass the karpathy-audit gate.
+If gate is genuinely wrong, escalate to human to modify the rule — do not silently bypass.
+```
+
+### Remediation Workflow
+
+If audit fails (score <70):
+
+1. Specialist re-assesses work against the violation
+2. Removes out-of-scope code
+3. Simplifies over-engineered logic
+4. Surfaces hidden assumptions
+5. Manually re-runs: `/karpathy-audit`
+6. Once all 4 principles ≥70, human approves advancement
+
+### Dashboard Integration
+
+The TUI (`maple` dashboard) displays:
+- Karpathy score badge in Phase 5 detail view
+- Per-principle breakdown in `[P]` (Pipeline pane)
+- Red blocking indicator if score <70 (prevents manual phase skip)
+- Approval gate prompt if 70-89 (awaiting `[a]` key)
+
+---
 
 Every phase uses the same `make` targets. Agents, CI, and humans share one interface.
 

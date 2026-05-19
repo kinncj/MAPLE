@@ -69,7 +69,7 @@ Inside the dashboard press `n` to capture requirements and generate a Gherkin st
 |---|---|
 | **M — Multi-Agent** | 27+ specialist agents, each with a defined role. The orchestrator never writes code — it delegates to the right specialist every time. TAFFY chains them into named workflows. |
 | **A — Artifact-Driven** | A Gherkin story in `docs/stories/` is required before any code is written. `ui: true` stories require approved wireframes and mockups. No artifact, no implementation. |
-| **P — Phase-Gated** | Eight phases in order: DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE. Humans approve at defined gates. No skipping. |
+| **P — Phase-Gated** | Eight phases in order: DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → **[Karpathy Audit Gate]** → VALIDATE → DOCUMENT → FINAL GATE. Humans approve at defined gates. No skipping. Karpathy audit (Phase 5→6) scores code against 4 principles; score <70 blocks advancement. |
 | **L — Local-First** | Self-contained binary — template embedded, no runtime dependencies. RTK wired as a `PreToolUse` hook reduces token usage 60–90% on build/grep/test output. |
 | **E — Enforced** | TDD always. `lefthook` gates on pre-push: spec-kit, frontmatter, design-approved, a11y. WCAG 2.2 AA required for all `ui: true` stories before merge. **Karpathy audit at Phase 5→6 gate:** code scored against 4 principles (Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution). Score <70 blocks advancement. |
 
@@ -252,9 +252,18 @@ Manual invocation:
 
 Audit report written to `.claude/state/karpathy-report.json` (shared across all harnesses).
 
+### When Karpathy is Applied
+
+| Phase | Karpathy Integration | How it's used |
+|-------|---------------------|---------------|
+| 1-4 | — | (available for manual audit if desired) |
+| 5 (IMPLEMENT) | ✅ **AUTO-CALLED** after completion | Scores all 4 principles; gates advancement to Phase 6 |
+| 5→6 Gate | ✅ **ENFORCEMENT POINT** | Score ≥90 auto-advance, 70-89 require approval, <70 block |
+| 6+ | — | (available for manual audit if desired) |
+
 ---
 
-`F` opens the skills.sh marketplace browser. Two tabs:
+## Skills Marketplace
 
 - **Installed** — all project and global skills; `d` to remove
 - **Search** — type a query, `Enter` to find and install
