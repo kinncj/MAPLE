@@ -2067,8 +2067,19 @@ func writeQuickLaunchState(skill, stage string) {
 	merged["status"] = "RUNNING"
 	merged["started_at"] = now
 	merged["updated_at"] = now
+	if isQuickLaunchForceUI(skill) {
+		merged["force_ui"] = true
+		merged["launch_source"] = "maple-x"
+	} else {
+		delete(merged, "force_ui")
+		delete(merged, "launch_source")
+	}
 	data, _ := json.Marshal(merged)
 	_ = os.WriteFile(".claude/state/maple.json", append(data, '\n'), 0o644)
+}
+
+func isQuickLaunchForceUI(skill string) bool {
+	return strings.TrimSpace(skill) == "pipeline-runner new-ui-feature"
 }
 
 // buildQuickPromptCmd wraps the skill invocation with silent control instructions
@@ -2085,9 +2096,22 @@ func buildQuickPromptCmd(skill, userPrompt, kind, harness string) string {
 <maple-taffy-context>
 Treat the text after /` + skill + ` as the feature requirements for this workflow.
 Do not replace it with canned or default prompts. For new-ui-feature, pass these
-requirements into spec-kit so the generated story contains concrete Gherkin
+requirements into MAPLE internal spec-kit (Specification Knowledge & Integration Toolkit)
+so the generated story contains concrete Gherkin
 scenarios for this request.
 </maple-taffy-context>`
+	}
+	uiOverride := ""
+	if kind == "taffy" && isQuickLaunchForceUI(skill) {
+		uiOverride = `
+
+<maple-ui-override>
+This run was launched from MAPLE [x] quick prompt for new-ui-feature.
+Treat UI-gated stages as required for this run:
+- do not skip "when: ui:true" stages,
+- set .claude/state/maple.json force_ui=true and launch_source=maple-x,
+- continue producing reviewable UI artifacts for every design approval gate.
+</maple-ui-override>`
 	}
 	tracking := `
 
@@ -2118,6 +2142,7 @@ While this TAFFY run is active, never go silent:
 - If the stage requires writing artifacts and write access/tools are unavailable, set status FAILED with a clear error and stop.
 - If blocked or waiting on external work, explicitly say what is pending and keep posting heartbeats.
 - For design-review stages, continuously produce previewable artifacts (.excalidraw/.html/.svg/.png/.jpg/.md) and keep .claude/state/design-artifacts.json updated so the review portal reflects progress live.
+- For wireframe/ui-mockup/design-refresh stages, include at least one .excalidraw artifact every cycle.
 - Runtime code and tests must not import from docs/, .github/, or .claude/ paths.
 - Copying/adapting artifact content into app/test source is allowed; direct path imports/references to those docs are not.
 - If generated code imports instruction/design docs by path, treat that as a contract failure and set status FAILED.
@@ -2127,7 +2152,7 @@ While this TAFFY run is active, never go silent:
 	if kind == "taffy" {
 		governance = governanceBootstrapBlock(harness)
 	}
-	return cmd + governance + taffyContext + tracking + progress
+	return cmd + governance + taffyContext + uiOverride + tracking + progress
 }
 
 func writeRecoveryMarker(state string) {

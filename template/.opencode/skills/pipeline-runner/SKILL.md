@@ -121,9 +121,10 @@ If the workflow defines an `orchestrator-kickoff` stage, execute it first before
 For each stage in order:
 
 **Check `when:` guard:**
-- `when: ui:true` — read the current story's `ui:` frontmatter field. Skip stage if `ui: false`.
+- `when: ui:true` — read the current story's `ui:` frontmatter field. Skip stage if `ui: false`, **unless** `.claude/state/maple.json` has `force_ui: true` with `launch_source: maple-x` (MAPLE `[x]` quick-launch override).
 - `when: ui:false` — skip if `ui: true`.
 - `when: always` — always run.
+- UI-related scope includes web, mobile, desktop, and TUI stories. Any such run must include design-review human-approval stages before implementation phases.
 
 **Check `depends_on`:** All listed stages must have status `DONE` before this stage starts.
 
@@ -175,6 +176,7 @@ When a stage has `gate: human-approval`:
 1. Complete the stage work (produce the artifact).
    - For design review stages (`wireframe`, `visual-identity`, `design-tokens`, `ui-mockup-builder`, `design-refresh`), artifact production is mandatory:
      - create at least one previewable artifact (`.excalidraw`, `.html`, `.svg`, `.png`, `.jpg`, `.jpeg`, `.webp`, or `.md`) under docs/design (or approved artifact dirs), and
+     - for `wireframe`, `ui-mockup-builder`, and `design-refresh`, include at least one `.excalidraw` artifact (required), and
      - update `.claude/state/design-artifacts.json` with current stage artifact paths so the review portal can update live.
    - If no reviewable artifact exists for a design gate, set `maple.json` to `FAILED` and stop.
 2. Write PAUSED state to `maple.json`:
@@ -271,7 +273,7 @@ Written by the skill at every stage transition. The TUI reads it to display pipe
 | `taffy` | skill | workflow name |
 | `stage` | skill | current stage name |
 | `status` | skill | `RUNNING`, `PAUSED`, `DONE`, `FAILED` |
-| `awaiting_approval` | skill | stage name blocked on human approval, or `null` |
+| `awaiting_approval` | skill | local MAPLE stage name blocked on human approval (e.g., `spec-kit` = Specification Knowledge & Integration Toolkit), or `null` — not an external package reference |
 | `pipeline` | skill | `standard` if running 8-phase |
 | `started_at` | skill | ISO 8601 |
 | `updated_at` | skill | ISO 8601 |
@@ -296,4 +298,4 @@ Read by the skill: use pinned session IDs when resuming within an existing sessi
 ## Skip Conditions
 
 - `spike/*` and `chore/*` branches: skip Spec-Kit stages but run implementation stages.
-- Stage `when: ui:true` on a `ui: false` story: skip silently, log `[taffy] SKIP stage=<name> reason=ui:false`.
+- Stage `when: ui:true` on a `ui: false` story: skip silently, log `[taffy] SKIP stage=<name> reason=ui:false` unless quick-launch override is active (`force_ui=true`, `launch_source=maple-x`).

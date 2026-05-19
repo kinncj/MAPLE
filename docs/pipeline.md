@@ -2,6 +2,8 @@
 
 MAPLE runs every feature through a fixed, phase-gated pipeline. No phase can be skipped. Three consecutive failures on any task escalate to a human.
 
+Terminology: `spec-kit` in this repo means MAPLE's internal **Specification Knowledge & Integration Toolkit** stage/agent name. When state shows `awaiting_approval: "spec-kit"`, it refers to that local stage, not `github/spec-kit`.
+
 ```mermaid
 flowchart LR
     P1["**Phase 1**\nDISCOVER\n@product-owner"]

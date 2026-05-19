@@ -116,7 +116,7 @@ Or run any Cursor command with MAPLE agents:
 ```
 @architect /help          # ask for architecture guidance
 @qa /validate             # run full test suite
-@spec-kit /spec           # generate Gherkin from requirements
+@spec-kit /spec           # MAPLE internal spec-kit (Specification Knowledge & Integration Toolkit): generate Gherkin from requirements
 ```
 
 The orchestrator follows the same 8-phase pipeline as Claude Code and OpenCode.

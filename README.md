@@ -194,6 +194,8 @@ MAPLE sets the rules. TAFFY runs the jobs.
 | `bugfix` | Reproduce → root-cause analysis → fix → regression test → CHANGELOG |
 | `design-refresh` | Visual identity → design tokens → component audit → mockup update |
 
+**Terminology note:** `spec-kit` in MAPLE means **Specification Knowledge & Integration Toolkit**, the internal MAPLE stage/agent name used in TAFFY and state files (for example, `awaiting_approval: "spec-kit"`). It is not `github/spec-kit`.
+
 ### Running a workflow
 
 **From the dashboard** — press `x` to open the TAFFY picker, select a workflow, and it launches in your active harness.
@@ -232,6 +234,8 @@ stages:
     depends_on: [tests]
     gate: human-approval
 ```
+
+In stage definitions and state values, `spec-kit` refers to MAPLE's internal Specification Knowledge & Integration Toolkit stage/agent naming, not an external dependency.
 
 ---
 

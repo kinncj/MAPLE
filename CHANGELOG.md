@@ -7,6 +7,17 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.12.13] — 2026-05-19
+
+### Fixed
+- **Design Review Portal artifact completeness**: declared design artifacts now resolve absolute paths to repo-relative entries and are prioritized in merge output so required approval files (for example nested `docs/design/**/wireframes.html`) reliably appear in the portal.
+- **Design review feedback UX**: Request Changes / Reject / Approve now clear feedback and upload inputs after submit, and feedback auto-hydration is limited to active pending-approval states to avoid stale text repopulation.
+- **Modal rendering parity**: artifact modal rendering now consistently handles Excalidraw scene previews, markdown, HTML/SVG previews, and uploaded image formats (`.jpg/.jpeg/.png/.gif/.webp`).
+
+### Changed
+- **UI-gate policy behavior**: `new-ui-feature` design stages are `when: ui:true` by default across Claude/OpenCode/Cursor, with MAPLE `[x]` quick-launch override via `force_ui=true` and `launch_source=maple-x`.
+- **Terminology clarification**: `spec-kit` now explicitly means MAPLE internal **Specification Knowledge & Integration Toolkit** in workflows, pipeline-runner docs, TUI prompt context, and user-facing docs.
+
 ## [4.12.12] — 2026-05-19
 
 ### Fixed

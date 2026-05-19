@@ -1,6 +1,7 @@
 # Example: UI Feature — Password Reset
 
 This example traces a `ui: true` story through the `new-ui-feature` taffy workflow: Spec-Kit intake → design → 8-phase pipeline → a11y gate.
+Here, `Spec-Kit` / `spec-kit` means MAPLE's internal **Specification Knowledge & Integration Toolkit** stage/agent name, not `github/spec-kit`.
 
 ## Step 1 — Story File (written by Spec-Kit)
 

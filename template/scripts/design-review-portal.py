@@ -92,6 +92,8 @@ class PortalState:
         self.feedback_log.parent.mkdir(parents=True, exist_ok=True)
         with self.feedback_log.open("a", encoding="utf-8") as f:
             f.write(json.dumps(payload) + "\n")
+        if self.pending_file.exists():
+            self.pending_file.unlink()
         return payload
 
     def reject(self, message: str, attachments: Optional[List[str]] = None) -> Dict:
@@ -107,6 +109,8 @@ class PortalState:
         self.feedback_log.parent.mkdir(parents=True, exist_ok=True)
         with self.feedback_log.open("a", encoding="utf-8") as f:
             f.write(json.dumps(payload) + "\n")
+        if self.pending_file.exists():
+            self.pending_file.unlink()
         return payload
 
     def approve(self) -> Dict:
@@ -179,24 +183,32 @@ class PortalState:
         stage_l = (stage or "").lower()
         for item in items:
             if isinstance(item, str):
-                rel = normalize_rel(item)
+                rel = to_repo_rel(self.root, item)
                 if rel and is_allowed_rel(rel):
-                    out.append({"path": rel, "kind": "file", "platform": infer_platform(rel), "mtime": 0, "source": "manifest"})
+                    mtime = 0
+                    target = self.root / rel
+                    if target.exists() and target.is_file():
+                        mtime = int(target.stat().st_mtime)
+                    out.append({"path": rel, "kind": "file", "platform": infer_platform(rel), "mtime": mtime, "source": "manifest"})
                 continue
             if not isinstance(item, dict):
                 continue
-            rel = normalize_rel(str(item.get("path", "")))
+            rel = to_repo_rel(self.root, str(item.get("path", "")))
             if not rel or not is_allowed_rel(rel):
                 continue
             declared_stage = str(item.get("stage", "")).strip().lower()
             if declared_stage and stage_l and declared_stage != stage_l:
                 continue
+            mtime = int(item.get("mtime", 0) or 0)
+            target = self.root / rel
+            if target.exists() and target.is_file():
+                mtime = int(target.stat().st_mtime)
             out.append(
                 {
                     "path": rel,
                     "kind": str(item.get("kind", "file")),
                     "platform": str(item.get("platform", infer_platform(rel))),
-                    "mtime": int(item.get("mtime", 0) or 0),
+                    "mtime": mtime,
                     "source": "manifest",
                 }
             )
@@ -216,6 +228,19 @@ def normalize_rel(path: str) -> str:
     if norm.startswith("../") or norm == "..":
         return ""
     return norm.lstrip("/")
+
+
+def to_repo_rel(root: pathlib.Path, path: str) -> str:
+    raw = str(path or "").strip()
+    if not raw:
+        return ""
+    p = pathlib.Path(raw)
+    if p.is_absolute():
+        try:
+            return p.resolve().relative_to(root.resolve()).as_posix()
+        except Exception:
+            return ""
+    return normalize_rel(raw)
 
 
 def is_allowed_rel(path: str) -> bool:
@@ -308,13 +333,20 @@ def list_artifacts(root: pathlib.Path, stage: str) -> List[Dict]:
 def merge_artifacts(scanned: List[Dict], declared: List[Dict]) -> List[Dict]:
     merged: List[Dict] = []
     seen: Dict[str, bool] = {}
-    for item in declared + scanned:
+    declared_sorted = sorted(declared, key=lambda x: int(x.get("mtime", 0) or 0), reverse=True)
+    for item in declared_sorted:
         path = str(item.get("path", "")).strip()
         if not path or seen.get(path):
             continue
         seen[path] = True
         merged.append(item)
-    merged.sort(key=lambda x: int(x.get("mtime", 0) or 0), reverse=True)
+    scanned_sorted = sorted(scanned, key=lambda x: int(x.get("mtime", 0) or 0), reverse=True)
+    for item in scanned_sorted:
+        path = str(item.get("path", "")).strip()
+        if not path or seen.get(path):
+            continue
+        seen[path] = True
+        merged.append(item)
     return merged[:300]
 
 
@@ -519,7 +551,7 @@ def render_index(token: str) -> str:
       out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
       out = out.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
       out = out.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
-      out = out.replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g, '<a href="$2" target="_blank" rel="noreferrer noopener">$1</a>');
+      out = out.replace(/\\[([^\\]]+)\\]\\(([^\\s)]+)\\)/g, '<a href="$2" class="md-link" rel="noreferrer noopener">$1</a>');
       return out;
     }}
 
@@ -599,7 +631,8 @@ def render_index(token: str) -> str:
     async function api(path, options={{}}) {{
       const headers = options.headers || {{}};
       headers["X-Maple-Token"] = TOKEN;
-      if (!headers["Content-Type"] && options.body) headers["Content-Type"] = "application/json";
+      const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+      if (!headers["Content-Type"] && options.body && !isFormData) headers["Content-Type"] = "application/json";
       let res = await fetch(path, {{...options, headers}});
       let txt = await res.text();
       let data = {{}};
@@ -628,10 +661,10 @@ def render_index(token: str) -> str:
       document.getElementById("status").textContent = s.status || "-";
       document.getElementById("pending").textContent = s.approval_pending || "-";
       document.getElementById("updated").textContent = s.updated_at || "-";
-      if (s.feedback && s.feedback.message) {{
+      if (s.approval_pending && s.feedback && s.feedback.message) {{
         document.getElementById("feedback").value = s.feedback.message;
       }}
-      if (s.feedback && Array.isArray(s.feedback.attachments)) {{
+      if (s.approval_pending && s.feedback && Array.isArray(s.feedback.attachments)) {{
         selectedUploads.clear();
         for (const p of s.feedback.attachments) selectedUploads.add(String(p));
       }}
@@ -678,7 +711,80 @@ def render_index(token: str) -> str:
       if (!item) return false;
       if (item.kind === "image" || item.kind === "preview" || item.kind === "video") return true;
       const p = String(item.path || "").toLowerCase();
-      return p.endsWith(".md") || p.endsWith(".tsx") || p.endsWith(".ts") || p.endsWith(".css") || p.endsWith(".json") || p.endsWith(".excalidraw");
+      return p.endsWith(".md") || p.endsWith(".tsx") || p.endsWith(".ts") || p.endsWith(".css") || p.endsWith(".json") || p.endsWith(".excalidraw") || isImagePath(p);
+    }}
+
+    function isImagePath(lowerPath) {{
+      const p = String(lowerPath || "");
+      return p.endsWith(".png") || p.endsWith(".jpg") || p.endsWith(".jpeg") || p.endsWith(".gif") || p.endsWith(".webp");
+    }}
+
+    function renderExcalidrawSvg(rawText, maxChars) {{
+      let parsed = null;
+      try {{ parsed = JSON.parse(String(rawText || "")); }} catch (_e) {{ parsed = null; }}
+      if (!parsed || !Array.isArray(parsed.elements)) {{
+        return `<div class="code">${{esc(String(rawText || "").slice(0, maxChars))}}</div>`;
+      }}
+      const elems = parsed.elements.filter(e => e && !e.isDeleted);
+      if (!elems.length) {{
+        return '<div class="code">Empty Excalidraw scene.</div>';
+      }}
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const e of elems) {{
+        const x = Number(e.x || 0);
+        const y = Number(e.y || 0);
+        const w = Math.abs(Number(e.width || 0));
+        const h = Math.abs(Number(e.height || 0));
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x + w);
+        maxY = Math.max(maxY, y + h);
+      }}
+      if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {{
+        minX = 0; minY = 0; maxX = 1200; maxY = 800;
+      }}
+      const pad = 24;
+      const vbX = minX - pad;
+      const vbY = minY - pad;
+      const vbW = Math.max(200, (maxX - minX) + pad * 2);
+      const vbH = Math.max(120, (maxY - minY) + pad * 2);
+      const stroke = (e) => esc(e.strokeColor || "#1f2937");
+      const fill = (e) => esc(e.backgroundColor && e.backgroundColor !== "transparent" ? e.backgroundColor : "none");
+      const sw = (e) => Math.max(1, Number(e.strokeWidth || 1));
+      const pieces = [];
+      for (const e of elems.slice(0, 600)) {{
+        const t = String(e.type || "");
+        const x = Number(e.x || 0);
+        const y = Number(e.y || 0);
+        const w = Math.abs(Number(e.width || 0));
+        const h = Math.abs(Number(e.height || 0));
+        if (t === "rectangle") {{
+          pieces.push(`<rect x="${{x}}" y="${{y}}" width="${{w}}" height="${{h}}" rx="6" ry="6" fill="${{fill(e)}}" stroke="${{stroke(e)}}" stroke-width="${{sw(e)}}"></rect>`);
+          continue;
+        }}
+        if (t === "ellipse") {{
+          pieces.push(`<ellipse cx="${{x + w / 2}}" cy="${{y + h / 2}}" rx="${{Math.max(1, w / 2)}}" ry="${{Math.max(1, h / 2)}}" fill="${{fill(e)}}" stroke="${{stroke(e)}}" stroke-width="${{sw(e)}}"></ellipse>`);
+          continue;
+        }}
+        if (t === "diamond") {{
+          const p = `${{x + w / 2}},${{y}} ${{x + w}},${{y + h / 2}} ${{x + w / 2}},${{y + h}} ${{x}},${{y + h / 2}}`;
+          pieces.push(`<polygon points="${{p}}" fill="${{fill(e)}}" stroke="${{stroke(e)}}" stroke-width="${{sw(e)}}"></polygon>`);
+          continue;
+        }}
+        if (t === "text") {{
+          const fontSize = Math.max(12, Number(e.fontSize || 16));
+          const text = esc(String(e.text || ""));
+          pieces.push(`<text x="${{x}}" y="${{y + fontSize}}" font-size="${{fontSize}}" fill="${{stroke(e)}}" font-family="Inter, system-ui, sans-serif">${{text}}</text>`);
+          continue;
+        }}
+        if (Array.isArray(e.points) && e.points.length > 0) {{
+          const pts = e.points.map(p => `${{x + Number(p[0] || 0)}},${{y + Number(p[1] || 0)}}`).join(" ");
+          pieces.push(`<polyline points="${{pts}}" fill="none" stroke="${{stroke(e)}}" stroke-width="${{sw(e)}}" stroke-linecap="round" stroke-linejoin="round"></polyline>`);
+          continue;
+        }}
+        pieces.push(`<rect x="${{x}}" y="${{y}}" width="${{Math.max(12, w)}}" height="${{Math.max(12, h)}}" fill="${{fill(e)}}" stroke="${{stroke(e)}}" stroke-width="${{sw(e)}}"></rect>`);
+      }}
+      return `<div style="overflow:auto;max-height:78vh"><svg xmlns="http://www.w3.org/2000/svg" viewBox="${{vbX}} ${{vbY}} ${{vbW}} ${{vbH}}" style="width:100%;height:auto;background:#fff;border-radius:8px;border:1px solid #d9e2ec">${{pieces.join("")}}</svg></div>`;
     }}
 
     async function setPreview(item) {{
@@ -693,7 +799,7 @@ def render_index(token: str) -> str:
       const lower = path.toLowerCase();
       const href = "/artifact/" + encodeURIComponent(path);
       pathEl.textContent = path;
-      if (item.kind === "image") {{
+      if (item.kind === "image" || isImagePath(lower)) {{
         body.innerHTML = `<img src="${{href}}" alt="${{esc(path)}}"/>`;
         return;
       }}
@@ -713,18 +819,64 @@ def render_index(token: str) -> str:
           return;
         }}
         if (lower.endsWith(".excalidraw")) {{
-          let parsed = null;
-          try {{ parsed = JSON.parse(txt); }} catch (_e) {{ parsed = null; }}
-          if (parsed) {{
-            const count = Array.isArray(parsed.elements) ? parsed.elements.length : 0;
-            body.innerHTML = `<div class="code">Excalidraw file detected.\nElements: ${{count}}\n\n${{esc(txt.slice(0, 120000))}}</div>`;
-            return;
-          }}
+          body.innerHTML = renderExcalidrawSvg(txt, 120000);
+          return;
         }}
         body.innerHTML = `<div class="code">${{esc(txt.slice(0, 120000))}}</div>`;
       }} catch (e) {{
         body.textContent = "Failed to load preview content.";
       }}
+    }}
+
+    function resetReviewInputs() {{
+      document.getElementById("feedback").value = "";
+      document.getElementById("uploadInput").value = "";
+      selectedUploads.clear();
+    }}
+
+    function artifactPathFromHref(href) {{
+      const raw = String(href || "").trim();
+      if (!raw) return "";
+      if (raw.startsWith("/artifact/")) {{
+        return decodeURIComponent(raw.slice("/artifact/".length));
+      }}
+      try {{
+        const u = new URL(raw, window.location.origin);
+        if (u.origin !== window.location.origin) return "";
+        if (!u.pathname.startsWith("/artifact/")) return "";
+        return decodeURIComponent(u.pathname.slice("/artifact/".length));
+      }} catch (_e) {{
+        return "";
+      }}
+    }}
+
+    function openExternalInModal(url) {{
+      const modal = document.getElementById("artifactModal");
+      const modalPath = document.getElementById("modalPath");
+      const modalBody = document.getElementById("modalBody");
+      const safe = String(url || "");
+      modalPath.textContent = safe || "Link preview";
+      modal.classList.add("open");
+      document.body.style.overflow = "hidden";
+      modalBody.innerHTML = `<iframe src="${{esc(safe)}}" title="${{esc(safe)}}" style="width:100%;height:78vh;border:0;border-radius:8px;background:#fff;"></iframe>`;
+    }}
+
+    function bindMarkdownLinks(containerId) {{
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.addEventListener("click", async (event) => {{
+        const el = event.target;
+        const link = el && el.closest ? el.closest("a.md-link") : null;
+        if (!link) return;
+        event.preventDefault();
+        const href = String(link.getAttribute("href") || "");
+        const artifactPath = artifactPathFromHref(href);
+        if (artifactPath) {{
+          await openArtifactModal({{ path: artifactPath, kind: "file" }});
+          return;
+        }}
+        openExternalInModal(href);
+      }});
     }}
 
     async function openArtifactModal(item) {{
@@ -742,7 +894,7 @@ def render_index(token: str) -> str:
         modalBody.textContent = "No artifact selected.";
         return;
       }}
-      if (item.kind === "image") {{
+      if (item.kind === "image" || isImagePath(lower)) {{
         modalBody.innerHTML = `<img src="${{href}}" alt="${{esc(path)}}" style="max-width:100%;border-radius:8px;"/>`;
         return;
       }}
@@ -762,13 +914,8 @@ def render_index(token: str) -> str:
           return;
         }}
         if (lower.endsWith(".excalidraw")) {{
-          let parsed = null;
-          try {{ parsed = JSON.parse(txt); }} catch (_e) {{ parsed = null; }}
-          if (parsed) {{
-            const count = Array.isArray(parsed.elements) ? parsed.elements.length : 0;
-            modalBody.innerHTML = `<div class="code">Excalidraw file detected.\nElements: ${{count}}\n\n${{esc(txt.slice(0, 180000))}}</div>`;
-            return;
-          }}
+          modalBody.innerHTML = renderExcalidrawSvg(txt, 180000);
+          return;
         }}
         modalBody.innerHTML = `<div class="code">${{esc(txt.slice(0, 180000))}}</div>`;
       }} catch (e) {{
@@ -834,28 +981,34 @@ def render_index(token: str) -> str:
       try {{
         const r = await api("/api/approve", {{ method: "POST" }});
         document.getElementById("msg").textContent = `Approved: ${{r.stage || "stage"}}`;
+        resetReviewInputs();
         await refreshAll();
       }} catch (e) {{
         document.getElementById("msg").textContent = e.message;
       }}
     }}
 
-    async function uploadFiles() {{
+    async function uploadSelectedInputFiles() {{
       const input = document.getElementById("uploadInput");
       const files = input.files ? Array.from(input.files) : [];
-      if (!files.length) {{
-        document.getElementById("msg").textContent = "Choose at least one file to upload.";
-        return;
-      }}
+      if (!files.length) return [];
       const fd = new FormData();
       for (const f of files) fd.append("files", f, f.name);
+      const r = await api("/api/upload", {{ method: "POST", body: fd, headers: {{}} }});
+      const uploaded = Array.isArray(r.items) ? r.items : [];
+      for (const it of uploaded) selectedUploads.add(it.path);
+      input.value = "";
+      return uploaded.map(x => x.path);
+    }}
+
+    async function uploadFiles() {{
       try {{
-        const r = await api("/api/upload", {{ method: "POST", body: fd, headers: {{}} }});
-        if (Array.isArray(r.items)) {{
-          for (const it of r.items) selectedUploads.add(it.path);
-          document.getElementById("msg").textContent = `Uploaded ${r.items.length} file(s).`;
+        const uploaded = await uploadSelectedInputFiles();
+        if (!uploaded.length) {{
+          document.getElementById("msg").textContent = "Choose at least one file to upload.";
+          return;
         }}
-        input.value = "";
+        document.getElementById("msg").textContent = `Uploaded ${uploaded.length} file(s).`;
         await refreshAll();
       }} catch (e) {{
         document.getElementById("msg").textContent = e.message;
@@ -869,11 +1022,14 @@ def render_index(token: str) -> str:
         return;
       }}
       try {{
+        const uploaded = await uploadSelectedInputFiles();
+        const attachments = Array.from(new Set([...(Array.from(selectedUploads)), ...uploaded]));
         const r = await api("/api/reject", {{
           method: "POST",
-          body: JSON.stringify({{ message, attachments: Array.from(selectedUploads) }})
+          body: JSON.stringify({{ message, attachments }})
         }});
         document.getElementById("msg").textContent = `Rejected: ${{r.stage || "stage"}}`;
+        resetReviewInputs();
         await refreshAll();
       }} catch (e) {{
         document.getElementById("msg").textContent = e.message;
@@ -887,11 +1043,14 @@ def render_index(token: str) -> str:
         return;
       }}
       try {{
+        const uploaded = await uploadSelectedInputFiles();
+        const attachments = Array.from(new Set([...(Array.from(selectedUploads)), ...uploaded]));
         const r = await api("/api/request-changes", {{
           method: "POST",
-          body: JSON.stringify({{ message, attachments: Array.from(selectedUploads) }})
+          body: JSON.stringify({{ message, attachments }})
         }});
         document.getElementById("msg").textContent = `Changes requested for: ${{r.stage || "stage"}}`;
+        resetReviewInputs();
         await refreshAll();
       }} catch (e) {{
         document.getElementById("msg").textContent = e.message;
@@ -901,6 +1060,8 @@ def render_index(token: str) -> str:
     refreshAll().catch(err => {{
       document.getElementById("msg").textContent = err.message;
     }});
+    bindMarkdownLinks("previewBody");
+    bindMarkdownLinks("modalBody");
     setInterval(() => refreshAll().catch(() => {{}}), 4000);
   </script>
 </body>
