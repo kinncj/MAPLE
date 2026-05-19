@@ -181,11 +181,17 @@ return m, tea.Quit
 
 ### `spawnInNewTerminal` detection order
 
-`$ZELLIJ` → `$TMUX` → `$STY` (screen) → `$WEZTERM_PANE` → `$KITTY_PID` → Ghostty (`TERM_PROGRAM=ghostty`/`GHOSTTY_RESOURCES_DIR`) → Alacritty (`TERM=alacritty`/`ALACRITTY_SOCKET`) → macOS iTerm2/Terminal.app via osascript → Linux GNOME Terminal (`--tab`) / Konsole (`--new-tab`) / generic list → Windows Terminal → `errNoNewTerminal`
+Goal: always open the **same terminal the user is running MAPLE in**. If the terminal cannot be identified or its launcher is unreachable, return `errNoNewTerminal` immediately — never fall through to a different terminal.
 
-Ghostty and Alacritty are checked before the OS switch so they work on both macOS and Linux. On macOS, if the binary isn't on PATH (app-bundle install), `open -na AppName --args` is tried as fallback.
+1. **Multiplexers** (cross-platform, tab support): `$ZELLIJ` → `$TMUX` → `$STY` (screen)
+2. **IPC terminals**: `$WEZTERM_PANE` → `$KITTY_PID`/`$KITTY_WINDOW_ID`
+3. **`$TERM_PROGRAM`** (canonical per-terminal value): `ghostty` · `iTerm.app` · `Apple_Terminal` · `WarpTerminal` · `Hyper`
+4. **Secondary per-session env vars**: `ITERM_SESSION_ID` → `TERM=alacritty`/`ALACRITTY_SOCKET` → `GNOME_TERMINAL_SCREEN`/`_SERVICE` → `KONSOLE_VERSION`/`KONSOLE_DBUS_*` → `TILIX_ID` → `TERMINATOR_UUID` → `WT_SESSION`
+5. → `errNoNewTerminal` (no generic OS fallback)
 
-The launch script always embeds the resolved full binary path so minimal-PATH shells (e.g. `/bin/sh` on macOS opened via `Terminal.app do script`) can find Homebrew/npm-installed tools.
+When a terminal is identified but the binary is unreachable, return `errNoNewTerminal` rather than opening a different app. On macOS, app-bundle installs (not on PATH) are reached via `open -na AppName --args -e script`.
+
+The launch script always embeds the resolved full binary path so minimal-PATH shells (e.g. `/bin/sh` on macOS opened via Terminal.app `do script`) can find Homebrew/npm-installed tools.
 
 When `errNoNewTerminal` is returned, `trySpawnCmd` sends `spawnFailedMsg` and the manual-launch modal appears. Never swallow the error silently.
 

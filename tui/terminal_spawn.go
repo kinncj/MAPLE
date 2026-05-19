@@ -67,30 +67,32 @@ func spawnWithPane(harness string, args []string) (paneRef, error) {
 }
 
 // spawnInNewTerminal opens args in a new terminal tab or window, keeping the
-// current terminal (and maple) alive. Detection order:
+// current terminal (and maple) alive.
 //
-//  1. zellij     — action new-tab (ZELLIJ env var)
-//  2. tmux       — new-window (TMUX env var)
-//  3. GNU screen — new window via STY
-//  4. WezTerm    — cli spawn (WEZTERM_PANE env var)
-//  5. Kitty      — @launch --type=tab (KITTY_PID / KITTY_WINDOW_ID env var)
-//  6. Ghostty    — new window via -- (TERM_PROGRAM=ghostty / GHOSTTY_RESOURCES_DIR env var)
-//  7. Alacritty  — new window via -e (TERM=alacritty / ALACRITTY_SOCKET env var)
-//  8. macOS      — iTerm2 new tab → Terminal.app via osascript
-//     Linux      — GNOME Terminal (--tab) → Konsole (--new-tab) → generic list
-//     Windows    — Windows Terminal (wt new-tab) → cmd start
+// Detection order — strictly "same terminal the user is running in":
 //
-// Returns errNoNewTerminal if nothing works; caller should fall back to
-// suspend-and-resume in the same terminal.
+//  1. Multiplexers: ZELLIJ → TMUX → STY (screen) — tabs, cross-platform
+//  2. GPU terminals with IPC: WEZTERM_PANE → KITTY_PID/KITTY_WINDOW_ID
+//  3. TERM_PROGRAM (canonical per-terminal env var set by most modern terminals):
+//     ghostty · iTerm.app · Apple_Terminal · WarpTerminal · Hyper
+//  4. Secondary per-session signals (terminals that don't set TERM_PROGRAM):
+//     ITERM_SESSION_ID → iTerm2
+//     TERM=alacritty / ALACRITTY_SOCKET → Alacritty
+//     GNOME_TERMINAL_SCREEN / _SERVICE → GNOME Terminal (tab)
+//     KONSOLE_VERSION / KONSOLE_DBUS_* → Konsole (new tab)
+//     TILIX_ID → Tilix
+//     TERMINATOR_UUID → Terminator
+//     WT_SESSION → Windows Terminal (new tab)
 //
-// Tip: running maple inside tmux or zellij gives the best experience —
-// harnesses open in a new tab automatically without any configuration.
+// Returns errNoNewTerminal when the running terminal is unidentified or its
+// launcher is unreachable. The caller shows a manual-launch modal.
+// No generic OS fallback — opening the wrong terminal is worse than the modal.
 func spawnInNewTerminal(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("empty command")
 	}
 
-	// ── multiplexers (reliable on any OS, no display needed) ─────────────────
+	// ── 1. multiplexers — tab support, no display needed ─────────────────────
 
 	if os.Getenv("ZELLIJ") != "" {
 		return exec.Command("zellij", append([]string{"action", "new-tab", "--"}, args...)...).Start()
@@ -99,11 +101,13 @@ func spawnInNewTerminal(args []string) error {
 		return exec.Command("tmux", append([]string{"new-window", "--"}, args...)...).Start()
 	}
 	if sty := os.Getenv("STY"); sty != "" {
-		title := args[0]
-		c := exec.Command("screen", "-S", sty, "-X", "screen", "-t", title)
+		c := exec.Command("screen", "-S", sty, "-X", "screen", "-t", args[0])
 		c.Args = append(c.Args, args...)
 		return c.Start()
 	}
+
+	// ── 2. GPU terminals with native IPC ─────────────────────────────────────
+
 	if os.Getenv("WEZTERM_PANE") != "" {
 		return exec.Command("wezterm", append([]string{"cli", "spawn", "--"}, args...)...).Start()
 	}
@@ -111,91 +115,110 @@ func spawnInNewTerminal(args []string) error {
 		return exec.Command("kitty", append([]string{"@", "launch", "--type=tab", "--"}, args...)...).Start()
 	}
 
-	// ── GUI terminal emulators — write a launcher script ─────────────────────
-
+	// Remaining mechanisms need a launcher script.
 	script, err := writeLaunchScript(args)
 	if err != nil {
 		return errNoNewTerminal
 	}
 
-	// ── cross-platform GUI terminals — detected via env vars set by the terminal itself ──
-	// Checking env vars first ensures we open the same terminal the user is running in,
-	// regardless of what other terminals are installed on the system.
+	// ── 3. TERM_PROGRAM — canonical terminal identity ─────────────────────────
+	// Most modern terminals set this to a unique value. Checked first so we
+	// open exactly the terminal the user is in, not one that happens to be
+	// installed on the machine. If a match is found but the launcher fails,
+	// return errNoNewTerminal rather than silently opening a different terminal.
 
-	// Ghostty sets TERM_PROGRAM=ghostty and GHOSTTY_RESOURCES_DIR in every session.
-	if os.Getenv("TERM_PROGRAM") == "ghostty" || os.Getenv("GHOSTTY_RESOURCES_DIR") != "" {
-		if p, lerr := exec.LookPath("ghostty"); lerr == nil {
-			return exec.Command(p, "--", script).Start()
+	switch os.Getenv("TERM_PROGRAM") {
+	case "ghostty":
+		return spawnGhostty(script)
+	case "iTerm.app":
+		return spawnITerm2(script)
+	case "Apple_Terminal":
+		return spawnTerminalApp(script)
+	case "WarpTerminal":
+		// Warp has no stable CLI for opening new windows from an external process.
+		return errNoNewTerminal
+	case "Hyper":
+		if p, lerr := exec.LookPath("hyper"); lerr == nil {
+			return exec.Command(p, script).Start()
 		}
-		// App bundle installed but not linked onto PATH (common on macOS).
-		if runtime.GOOS == "darwin" {
-			if err := exec.Command("open", "-na", "Ghostty", "--args", "--", script).Start(); err == nil {
-				return nil
-			}
-		}
+		return errNoNewTerminal
 	}
 
-	// Alacritty sets TERM=alacritty; ALACRITTY_SOCKET is an additional signal.
+	// ── 4. Secondary per-session env vars ────────────────────────────────────
+	// For terminals that don't set TERM_PROGRAM; each is unique to that app.
+
+	if os.Getenv("ITERM_SESSION_ID") != "" {
+		return spawnITerm2(script)
+	}
 	if os.Getenv("TERM") == "alacritty" || os.Getenv("ALACRITTY_SOCKET") != "" {
-		if p, lerr := exec.LookPath("alacritty"); lerr == nil {
+		return spawnAlacritty(script)
+	}
+	if os.Getenv("GNOME_TERMINAL_SCREEN") != "" || os.Getenv("GNOME_TERMINAL_SERVICE") != "" {
+		if p, lerr := exec.LookPath("gnome-terminal"); lerr == nil {
+			return exec.Command(p, "--tab", "--", script).Start()
+		}
+		return errNoNewTerminal
+	}
+	if os.Getenv("KONSOLE_VERSION") != "" ||
+		os.Getenv("KONSOLE_DBUS_SESSION") != "" ||
+		os.Getenv("KONSOLE_DBUS_WINDOW") != "" {
+		if p, lerr := exec.LookPath("konsole"); lerr == nil {
+			return exec.Command(p, "--new-tab", "-e", script).Start()
+		}
+		return errNoNewTerminal
+	}
+	if os.Getenv("TILIX_ID") != "" {
+		if p, lerr := exec.LookPath("tilix"); lerr == nil {
+			return exec.Command(p, "--action=app-new-session", "-e", script).Start()
+		}
+		return errNoNewTerminal
+	}
+	if os.Getenv("TERMINATOR_UUID") != "" {
+		if p, lerr := exec.LookPath("terminator"); lerr == nil {
 			return exec.Command(p, "-e", script).Start()
 		}
-		if runtime.GOOS == "darwin" {
-			if err := exec.Command("open", "-na", "Alacritty", "--args", "-e", script).Start(); err == nil {
-				return nil
-			}
-		}
+		return errNoNewTerminal
 	}
-
-	switch runtime.GOOS {
-	case "darwin":
-		// iTerm2 — new tab in the current window
-		if os.Getenv("ITERM_SESSION_ID") != "" || strings.Contains(os.Getenv("TERM_PROGRAM"), "iTerm") {
-			as := fmt.Sprintf(
-				`tell application "iTerm2" to tell current window to create tab with default profile command %q`,
-				script)
-			return exec.Command("osascript", "-e", as).Start()
+	if os.Getenv("WT_SESSION") != "" {
+		if p, lerr := exec.LookPath("wt"); lerr == nil {
+			return exec.Command(p, "new-tab", "--", script).Start()
 		}
-		// Terminal.app fallback
-		as := fmt.Sprintf(`tell application "Terminal" to do script %q`, script)
-		return exec.Command("osascript", "-e", as).Start()
-
-	case "linux":
-		// GNOME Terminal — new tab in the running instance
-		if os.Getenv("GNOME_TERMINAL_SCREEN") != "" || os.Getenv("GNOME_TERMINAL_SERVICE") != "" {
-			if p, lerr := exec.LookPath("gnome-terminal"); lerr == nil {
-				return exec.Command(p, "--tab", "--", script).Start()
-			}
-		}
-		// Konsole — new tab in the running instance
-		if os.Getenv("KONSOLE_VERSION") != "" {
-			if p, lerr := exec.LookPath("konsole"); lerr == nil {
-				return exec.Command(p, "--new-tab", "-e", script).Start()
-			}
-		}
-		// Generic fallback — first terminal found on PATH wins
-		for _, cand := range [][]string{
-			{"x-terminal-emulator", "-e", script},
-			{"gnome-terminal", "--", script},
-			{"konsole", "-e", script},
-			{"xfce4-terminal", "-e", script},
-			{"alacritty", "-e", script},
-			{"ghostty", "--", script},
-			{"xterm", "-e", script},
-		} {
-			if _, lerr := exec.LookPath(cand[0]); lerr == nil {
-				return exec.Command(cand[0], cand[1:]...).Start()
-			}
-		}
-
-	case "windows":
-		if _, lerr := exec.LookPath("wt"); lerr == nil {
-			return exec.Command("wt", "new-tab", "--", script).Start()
-		}
-		return exec.Command("cmd", "/c", "start", script).Start()
+		return errNoNewTerminal
 	}
 
 	return errNoNewTerminal
+}
+
+func spawnGhostty(script string) error {
+	if p, err := exec.LookPath("ghostty"); err == nil {
+		return exec.Command(p, "-e", script).Start()
+	}
+	if runtime.GOOS == "darwin" {
+		return exec.Command("open", "-na", "Ghostty", "--args", "-e", script).Start()
+	}
+	return errNoNewTerminal
+}
+
+func spawnAlacritty(script string) error {
+	if p, err := exec.LookPath("alacritty"); err == nil {
+		return exec.Command(p, "-e", script).Start()
+	}
+	if runtime.GOOS == "darwin" {
+		return exec.Command("open", "-na", "Alacritty", "--args", "-e", script).Start()
+	}
+	return errNoNewTerminal
+}
+
+func spawnITerm2(script string) error {
+	as := fmt.Sprintf(
+		`tell application "iTerm2" to tell current window to create tab with default profile command %q`,
+		script)
+	return exec.Command("osascript", "-e", as).Start()
+}
+
+func spawnTerminalApp(script string) error {
+	as := fmt.Sprintf(`tell application "Terminal" to do script %q`, script)
+	return exec.Command("osascript", "-e", as).Start()
 }
 
 // writeLaunchScript writes a temp shell script (or .bat on Windows) that execs args.
