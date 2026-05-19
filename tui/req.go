@@ -18,7 +18,7 @@ import (
 
 // ─── Requirements command ─────────────────────────────────────────────────────
 
-// availableAITools returns tools that support arbitrary prompt → text generation.
+// availableAITools returns supported req harnesses currently available on PATH.
 // gh copilot (explain/suggest) is excluded — it only handles shell commands.
 func availableAITools(tools Tools) []aiOption {
 	var opts []aiOption
@@ -35,6 +35,9 @@ func availableAITools(tools Tools) []aiOption {
 }
 
 func runReq(tools Tools) error {
+	// Refresh tool detection on each req launch so newly-installed harnesses
+	// show up immediately in the picker without restarting maple.
+	tools = Detect()
 	opts := availableAITools(tools)
 	if len(opts) == 0 {
 		return fmt.Errorf("no AI tool available — install claude, copilot, or opencode")
@@ -398,7 +401,7 @@ func (m *reqModel) View() string {
 
 func (m *reqModel) aiPickerView(t Theme, cursor string) string {
 	var sb strings.Builder
-	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Select AI tool")
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Select harness")
 	sb.WriteString("  " + title + "\n")
 	sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 44)) + "\n\n")
 	for i, opt := range m.aiOptions {

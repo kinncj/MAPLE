@@ -418,7 +418,7 @@ func (m *dashboardModel) helpView() string {
 		{"r", "reload all pane data"},
 		{"F", "Skills marketplace (skills.sh)"},
 		{"x", "Quick Prompt — pick a skill or agent and launch"},
-		{"P", "Pipeline status — show active taffy pipeline progress"},
+		{"P", "Pipeline status — [a] approve gate · [v] open design portal"},
 		{"/", "search within active pane"},
 		{"?", "this help overlay"},
 		{"q  /  Ctrl+C", "quit"},
@@ -739,13 +739,22 @@ func (m *dashboardModel) quickLaunchView() string {
 		}
 
 		cmd := "/" + m.quickLaunchName
+		promptLabel := "  Add context (optional — press Enter to launch now):"
+		hint = "type context · Enter launch · Esc back"
+		promptValue := m.quickLaunchPrompt
+		if m.quickLaunchKind == "taffy" {
+			promptLabel = "  Describe this feature (required):"
+			hint = "type feature requirements · Enter launch · Esc back"
+			if strings.TrimSpace(promptValue) == "" {
+				promptValue = "<feature requirements>"
+			}
+		}
 		bodyLines = append(bodyLines,
 			harnessLine,
 			"",
-			mutedStyle.Render("  Add context (optional — press Enter to launch now):"),
-			"  "+cmd+" "+m.quickLaunchPrompt+"█",
+			mutedStyle.Render(promptLabel),
+			"  "+cmd+" "+promptValue+"█",
 		)
-		hint = "type context · Enter launch · Esc back"
 	}
 
 	return m.popupBox(titleText, strings.Join(bodyLines, "\n"), hint, t.Primary)
@@ -863,6 +872,8 @@ func (m *dashboardModel) pipelineStatusView() string {
 				"",
 				lipgloss.NewStyle().Foreground(t.Accent).Render("  ⏸ Awaiting approval: "+stage),
 				lipgloss.NewStyle().Foreground(t.Success).Bold(true).Render("  [a] approve  — advances pipeline to next stage"),
+				lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("  [v] open design review portal"),
+				lipgloss.NewStyle().Foreground(t.Muted).Render("  Portal \"request changes\" records feedback and keeps this gate paused."),
 			)
 		}
 		if ps.UpdatedAt != "" {

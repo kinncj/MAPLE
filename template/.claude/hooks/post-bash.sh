@@ -119,4 +119,9 @@ if echo "$COMMAND" | grep -q 'make test-all'; then
     fi
 fi
 
+# ── Design review portal auto-start at human approval gates ───────────────────
+if [ -f ".claude/state/approval-pending.txt" ] && [ -f "scripts/design-review-portal.sh" ]; then
+    bash scripts/design-review-portal.sh start >/dev/null 2>&1 || true
+fi
+
 exit 0

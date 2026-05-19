@@ -54,13 +54,13 @@ type dashAction int
 
 const (
 	dashActionNone      dashAction = iota
-	dashActionQuit                // plain quit — no follow-up workflow
-	dashActionReq                 // quit and run req (Gherkin converter)
-	dashActionUpdate              // quit and run init --force (re-sync template)
-	dashActionLabels              // quit and run labels bootstrap
-	dashActionProject             // quit and run project creation
-	dashActionOpenAgent           // quit and exec a session in Claude/OpenCode
-	dashActionLaunch              // quit and launch tool with optional command
+	dashActionQuit                 // plain quit — no follow-up workflow
+	dashActionReq                  // quit and run req (Gherkin converter)
+	dashActionUpdate               // quit and run init --force (re-sync template)
+	dashActionLabels               // quit and run labels bootstrap
+	dashActionProject              // quit and run project creation
+	dashActionOpenAgent            // quit and exec a session in Claude/OpenCode
+	dashActionLaunch               // quit and launch tool with optional command
 )
 
 // ─── Pane IDs ─────────────────────────────────────────────────────────────────
@@ -124,8 +124,14 @@ type rtkInitDoneMsg struct {
 
 type spawnSucceededMsg struct{ harness string }
 type spawnFailedMsg struct{ args []string }
+type designPortalResultMsg struct {
+	err   string
+	open  bool
+	auto  bool
+	stage string
+}
 
-const dashTickInterval    = 5 * time.Second
+const dashTickInterval = 5 * time.Second
 const dashNetTickInterval = 60 * time.Second
 
 func dashTickCmd() tea.Cmd {
@@ -145,28 +151,28 @@ type dashboardModel struct {
 	height      int
 	projectName string
 
-	focus      dashPane
-	fullscreen dashPane // paneDesign or paneLogs, -1 = none
-	showHelp        bool
-	showSkills      bool
-	skillsTabSearch bool // false = Installed tab, true = Search tab
-	skillsQuery     string
-	skillsItems     []skillRow
-	skillsCur       int
-	skillsLoading   bool
-	skillsErr       string
-	skillsSearched  bool // true after first search attempt
-	installedSkills []installedSkillRow
-	installedCur    int
+	focus            dashPane
+	fullscreen       dashPane // paneDesign or paneLogs, -1 = none
+	showHelp         bool
+	showSkills       bool
+	skillsTabSearch  bool // false = Installed tab, true = Search tab
+	skillsQuery      string
+	skillsItems      []skillRow
+	skillsCur        int
+	skillsLoading    bool
+	skillsErr        string
+	skillsSearched   bool // true after first search attempt
+	installedSkills  []installedSkillRow
+	installedCur     int
 	installedLoading bool
-	installedErr    string
-	npxPath         string // cached npx binary path
-	cmdMode       bool
-	cmdBuf     string
-	searchMode bool
-	searchBuf  string
-	status     string
-	statusErr  bool
+	installedErr     string
+	npxPath          string // cached npx binary path
+	cmdMode          bool
+	cmdBuf           string
+	searchMode       bool
+	searchBuf        string
+	status           string
+	statusErr        bool
 
 	// pane data
 	stories    []storyRow
@@ -189,15 +195,15 @@ type dashboardModel struct {
 	logLines []string
 	logsCur  int
 
-	lastKey    string // for gg double-key detection
-	debugMode  bool   // :debug — tee state to .claude/logs/tui.log
+	lastKey   string // for gg double-key detection
+	debugMode bool   // :debug — tee state to .claude/logs/tui.log
 
 	// story detail overlay
-	showStory      bool
-	storyLines     []string
-	storyScroll    int
-	storyTitle     string
-	storyDir       string // directory of the open story (for re-edit cleanup)
+	showStory   bool
+	storyLines  []string
+	storyScroll int
+	storyTitle  string
+	storyDir    string // directory of the open story (for re-edit cleanup)
 
 	// session detail overlay
 	showSession   bool
@@ -223,12 +229,12 @@ type dashboardModel struct {
 	testOutFailed  bool
 
 	// PR detail overlay
-	showPRDetail      bool
-	prDetailLines     []string
-	prDetailScroll    int
-	prDetailTitle     string
-	prDetailLoading   bool
-	prDetailNumber    int // number of the PR currently shown
+	showPRDetail    bool
+	prDetailLines   []string
+	prDetailScroll  int
+	prDetailTitle   string
+	prDetailLoading bool
+	prDetailNumber  int // number of the PR currently shown
 
 	// ShipSafe audit overlay
 	showShipSafe    bool
@@ -250,6 +256,7 @@ type dashboardModel struct {
 	showPipeline    bool
 	pipelineState   pipelineState
 	approvalPending string // non-empty stage name when .claude/state/approval-pending.txt exists
+	portalAutoStage string // last approval stage for which portal auto-start was attempted
 
 	// Session launcher overlay
 	showLauncher  bool
@@ -261,24 +268,25 @@ type dashboardModel struct {
 	pinnedSessions map[string]string
 
 	// Quick launch overlay (shown after picking an item)
-	showQuickLaunch         bool
-	quickLaunchName         string
-	quickLaunchPrompt       string
-	quickLaunchHarness      string
-	quickLaunchPickHarness  bool
-	quickLaunchHarnessCur   int
+	showQuickLaunch        bool
+	quickLaunchName        string
+	quickLaunchKind        string
+	quickLaunchPrompt      string
+	quickLaunchHarness     string
+	quickLaunchPickHarness bool
+	quickLaunchHarnessCur  int
 
 	// Manual launch modal — shown when spawnInNewTerminal fails
-	showManualLaunch    bool
-	manualLaunchArgs    []string
-	manualLaunchCopied  bool // shows "copied!" briefly after [c]
+	showManualLaunch   bool
+	manualLaunchArgs   []string
+	manualLaunchCopied bool // shows "copied!" briefly after [c]
 
 	// RTK harness selector overlay
-	showRTKHarness    bool
-	rtkHarnessCur     int
-	rtkHarnessToggled map[string]bool // selected in current session (not yet installed)
+	showRTKHarness      bool
+	rtkHarnessCur       int
+	rtkHarnessToggled   map[string]bool // selected in current session (not yet installed)
 	rtkHarnessInstalled map[string]bool // already installed (from .claude/state/rtk-harnesses.json)
-	rtkHarnessRunning bool
+	rtkHarnessRunning   bool
 
 	openTarget []string // command to exec when exitAction == dashActionOpenAgent
 	exitAction dashAction
@@ -384,6 +392,14 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case dashTickMsg:
 		m.reload()
+		if m.approvalPending == "" {
+			m.portalAutoStage = ""
+			return m, dashTickCmd()
+		}
+		if m.approvalPending != m.portalAutoStage {
+			m.portalAutoStage = m.approvalPending
+			return m, tea.Batch(dashTickCmd(), designPortalCmd(false, true, m.approvalPending))
+		}
 		return m, dashTickCmd()
 
 	case dashNetTickMsg:
@@ -447,6 +463,21 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showManualLaunch = true
 		m.manualLaunchArgs = msg.args
 		m.manualLaunchCopied = false
+
+	case designPortalResultMsg:
+		if msg.err == "" {
+			if !msg.auto && msg.open {
+				return m, m.setStatus("✓ opened design review portal", false)
+			}
+			if msg.auto {
+				return m, m.setStatus("✓ design review portal ready for stage "+msg.stage, false)
+			}
+			return m, nil
+		}
+		if msg.auto {
+			return m, nil
+		}
+		return m, m.setStatus("✗ design portal: "+msg.err, true)
 
 	case statusClearMsg:
 		m.status = ""
@@ -778,6 +809,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				item := filtered[m.quickItemCur]
 				m.showQuickPrompt = false
 				m.quickLaunchName = item.name
+				m.quickLaunchKind = item.kind
 				if item.kind == "taffy" {
 					m.quickLaunchName = "pipeline-runner " + item.name
 				}
@@ -839,10 +871,13 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			switch k {
 			case "enter":
 				name := m.quickLaunchName
-				prompt := m.quickLaunchPrompt
+				prompt := strings.TrimSpace(m.quickLaunchPrompt)
+				if m.quickLaunchKind == "taffy" && prompt == "" {
+					return m, m.setStatus("add feature requirements before launching a taffy workflow", true)
+				}
 				// Write RUNNING state immediately so [P] reflects it before the agent responds
 				writeQuickLaunchState(name, prompt)
-				cmd := buildQuickPromptCmd(name, prompt)
+				cmd := buildQuickPromptCmd(name, prompt, m.quickLaunchKind)
 				m.showQuickLaunch = false
 				target := buildLaunchCmd(m.quickLaunchHarness, cmd, m.pinnedSessions)
 				return m, trySpawnCmdForHarness(m.quickLaunchHarness, target)
@@ -880,11 +915,14 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, m.setStatus(msg, false)
 			}
+		case "v":
+			return m, designPortalCmd(true, false, m.approvalPending)
 		case "c":
 			_ = os.Remove(".claude/state/maple.json")
 			_ = os.Remove(".claude/state/approval-pending.txt")
 			m.pipelineState = pipelineState{}
 			m.approvalPending = ""
+			m.portalAutoStage = ""
 			m.showPipeline = false
 			return m, m.setStatus("✓ pipeline state cleared", false)
 		default:
@@ -1533,7 +1571,7 @@ func (m *dashboardModel) header() string {
 		name = "—"
 	}
 	info := lipgloss.NewStyle().Foreground(t.Muted).Render("  project: " + name + " · theme: " + t.Name)
-	
+
 	// Count Gherkin specs in docs/stories/ and Taffy workflows in .*/taffy/
 	gherkinCount := 0
 	if entries, err := os.ReadDir("docs/stories"); err == nil {
@@ -1555,7 +1593,7 @@ func (m *dashboardModel) header() string {
 			}
 		}
 	}
-	
+
 	badges := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("  📋 Gherkin: %d | ▶️ Taffy: %d", gherkinCount, taffyCount))
 	return logoCompact(t.Primary) + info + "\n" + badges + "\n"
 }
@@ -1594,11 +1632,11 @@ func (m *dashboardModel) footer() string {
 	case m.showPipeline:
 		switch {
 		case m.approvalPending != "":
-			keys = "  [a] approve stage · [c] clear state · any other key closes"
+			keys = "  [a] approve stage · [v] open design portal · [c] clear state · any other key closes"
 		case m.pipelineState.isStale():
-			keys = "  [c] clear stale state · any other key closes"
+			keys = "  [v] open design portal · [c] clear stale state · any other key closes"
 		default:
-			keys = "  [c] clear state · any other key closes"
+			keys = "  [v] open design portal · [c] clear state · any other key closes"
 		}
 	case m.showQuickLaunch:
 		if m.quickLaunchPickHarness {
@@ -1900,6 +1938,29 @@ func rtkInitCmd(h rtkHarness) tea.Cmd {
 	}
 }
 
+func designPortalCmd(open, auto bool, stage string) tea.Cmd {
+	return func() tea.Msg {
+		script := "scripts/design-review-portal.sh"
+		if _, err := os.Stat(script); err != nil {
+			return designPortalResultMsg{err: "scripts/design-review-portal.sh not found", open: open, auto: auto, stage: stage}
+		}
+		action := "start"
+		if open {
+			action = "open"
+		}
+		cmd := exec.Command("bash", script, action)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			msg := strings.TrimSpace(string(out))
+			if msg == "" {
+				msg = err.Error()
+			}
+			return designPortalResultMsg{err: msg, open: open, auto: auto, stage: stage}
+		}
+		return designPortalResultMsg{open: open, auto: auto, stage: stage}
+	}
+}
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 // runDashboard runs the dashboard and returns the exit action and any open
@@ -1935,12 +1996,23 @@ func writeQuickLaunchState(skill, stage string) {
 	_ = os.WriteFile(".claude/state/maple.json", append(data, '\n'), 0o644)
 }
 
-// buildQuickPromptCmd wraps the skill invocation with a silent pipeline-tracking
-// instruction so the agent keeps maple.json updated as it works.
-func buildQuickPromptCmd(skill, userPrompt string) string {
+// buildQuickPromptCmd wraps the skill invocation with silent control instructions
+// so the launched harness keeps maple.json updated and honors user-supplied context.
+func buildQuickPromptCmd(skill, userPrompt, kind string) string {
 	cmd := "/" + skill
 	if userPrompt != "" {
 		cmd += " " + userPrompt
+	}
+	taffyContext := ""
+	if kind == "taffy" {
+		taffyContext = `
+
+<maple-taffy-context>
+Treat the text after /` + skill + ` as the feature requirements for this workflow.
+Do not replace it with canned or default prompts. For new-ui-feature, pass these
+requirements into spec-kit so the generated story contains concrete Gherkin
+scenarios for this request.
+</maple-taffy-context>`
 	}
 	tracking := `
 
@@ -1949,7 +2021,7 @@ You were launched from the MAPLE quick-prompt. Keep .claude/state/maple.json upd
   {"taffy":"` + skill + `","stage":"<current step>","status":"RUNNING","updated_at":"<ISO-8601 timestamp>"}
 Set status to "DONE" when finished, "FAILED" if you cannot complete.
 </maple-pipeline>`
-	return cmd + tracking
+	return cmd + taffyContext + tracking
 }
 
 func writeRecoveryMarker(state string) {

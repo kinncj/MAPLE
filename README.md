@@ -110,7 +110,7 @@ zellij                      # then: maple
 | `p` | Pin selected session to `.claude/state/sessions.json` |
 | `L` | Launch overlay — pick harness, type optional command, open in new tab |
 | `x` | TAFFY picker — select a workflow, skill, or agent to launch |
-| `P` | Pipeline status — live view of active TAFFY run; `[a]` approve gate, `[c]` clear stale |
+| `P` | Pipeline status — live view of active TAFFY run; `[a]` approve gate, `[v]` open design-review portal, `[c]` clear stale |
 | `n` | Requirements wizard → new Gherkin story |
 | `r` | Run selected test (QA pane) / reload all panes |
 | `d` | Design artifacts pane (full-screen toggle) |
@@ -127,6 +127,16 @@ zellij                      # then: maple
 **Themes:** `tokyo-night` (default) · `catppuccin-mocha` · `gruvbox` · `nord` · `everforest`
 
 Switch with `:theme <name>`, or auto-detected from `~/.config/omarchy/current/theme`.
+
+### Design Review Portal (optional companion)
+
+At TAFFY human-approval stages, press `P` then `v` to open a local review UI:
+
+```bash
+scripts/design-review-portal.sh open
+```
+
+It reads `docs/design/**` + `docs/stories/**`, lets you approve a stage (same signal as `P` → `a`), or request changes by recording feedback in `.claude/state/design-feedback.json`. The TUI remains the primary approval surface.
 
 ### CLI Commands
 
