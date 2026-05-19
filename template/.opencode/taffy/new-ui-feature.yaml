@@ -21,28 +21,28 @@ stages:
     agent: wireframe-architect
     description: "ASCII/SVG wireframes for every screen state"
     gate: human-approval
-    when: ui:true
+    when: always
     depends_on: [spec-kit]
 
   - name: visual-identity
     agent: visual-identity-designer
     description: "Palette, typography, spacing — only if tokens.json is missing"
     gate: human-approval
-    when: ui:true
+    when: always
     depends_on: [wireframe]
 
   - name: design-tokens
     agent: design-system-author
     description: "Emit CSS vars, Tailwind config, Mantine theme from approved tokens"
     gate: auto
-    when: ui:true
+    when: always
     depends_on: [visual-identity]
 
   - name: ui-mockup-builder
     agent: ui-mockup-builder
     description: "High-fidelity code mockup from approved wireframe and tokens"
     gate: human-approval
-    when: ui:true
+    when: always
     depends_on: [design-tokens]
 
   - name: standard-8-phase
@@ -55,5 +55,5 @@ stages:
     agent: a11y-auditor
     description: "WCAG 2.2 AA accessibility audit — blocks merge if critical/serious violations"
     gate: auto
-    when: ui:true
+    when: always
     depends_on: [standard-8-phase]

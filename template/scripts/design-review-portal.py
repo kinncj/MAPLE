@@ -46,6 +46,7 @@ class PortalState:
         self.root = root
         self.state_dir = root / ".claude" / "state"
         self.review_input_dir = root / "docs" / "design" / "review-input"
+        self.artifact_index_file = self.state_dir / "design-artifacts.json"
         self.maple_json = self.state_dir / "maple.json"
         self.pending_file = self.state_dir / "approval-pending.txt"
         self.feedback_file = self.state_dir / "design-feedback.json"
@@ -65,15 +66,17 @@ class PortalState:
         p = read_json(self.maple_json)
         pending = read_text(self.pending_file)
         feedback = read_json(self.feedback_file)
+        stage = p.get("stage", "")
         return {
             "taffy": p.get("taffy", ""),
-            "stage": p.get("stage", ""),
+            "stage": stage,
             "status": p.get("status", ""),
             "awaiting_approval": p.get("awaiting_approval", ""),
             "updated_at": p.get("updated_at", ""),
             "approval_pending": pending,
             "feedback": feedback,
             "uploads": self.list_uploads(),
+            "declared_artifacts": self.declared_artifacts(stage),
         }
 
     def request_changes(self, message: str, attachments: Optional[List[str]] = None) -> Dict:
@@ -166,6 +169,38 @@ class PortalState:
             "platform": infer_platform(rel),
             "size": len(content),
         }
+
+    def declared_artifacts(self, stage: str) -> List[Dict]:
+        raw = read_json(self.artifact_index_file)
+        items = raw.get("items", [])
+        if not isinstance(items, list):
+            return []
+        out: List[Dict] = []
+        stage_l = (stage or "").lower()
+        for item in items:
+            if isinstance(item, str):
+                rel = normalize_rel(item)
+                if rel and is_allowed_rel(rel):
+                    out.append({"path": rel, "kind": "file", "platform": infer_platform(rel), "mtime": 0, "source": "manifest"})
+                continue
+            if not isinstance(item, dict):
+                continue
+            rel = normalize_rel(str(item.get("path", "")))
+            if not rel or not is_allowed_rel(rel):
+                continue
+            declared_stage = str(item.get("stage", "")).strip().lower()
+            if declared_stage and stage_l and declared_stage != stage_l:
+                continue
+            out.append(
+                {
+                    "path": rel,
+                    "kind": str(item.get("kind", "file")),
+                    "platform": str(item.get("platform", infer_platform(rel))),
+                    "mtime": int(item.get("mtime", 0) or 0),
+                    "source": "manifest",
+                }
+            )
+        return out[:200]
 
 
 def sanitize_filename(name: str) -> str:
@@ -268,6 +303,19 @@ def list_artifacts(root: pathlib.Path, stage: str) -> List[Dict]:
             )
     items.sort(key=lambda x: x["mtime"], reverse=True)
     return items[:200]
+
+
+def merge_artifacts(scanned: List[Dict], declared: List[Dict]) -> List[Dict]:
+    merged: List[Dict] = []
+    seen: Dict[str, bool] = {}
+    for item in declared + scanned:
+        path = str(item.get("path", "")).strip()
+        if not path or seen.get(path):
+            continue
+        seen[path] = True
+        merged.append(item)
+    merged.sort(key=lambda x: int(x.get("mtime", 0) or 0), reverse=True)
+    return merged[:300]
 
 
 def content_type_for(path: pathlib.Path) -> str:
@@ -593,31 +641,32 @@ def render_index(token: str) -> str:
       box.innerHTML = "";
       let selected = null;
       if (!a.items || a.items.length === 0) {{
-        box.innerHTML = '<div class="item"><span>No artifacts found for this stage.</span></div>';
+        box.innerHTML = '<div class="item"><span>No artifacts found yet for this stage. Expected: previewable files (.excalidraw/.html/.svg/.png/.jpg/.md) and optional .claude/state/design-artifacts.json manifest.</span></div>';
         setPreview(null);
-        return;
-      }}
-      for (const item of a.items) {{
-        const row = document.createElement("div");
-        row.className = "item";
-        const left = document.createElement("span");
-        const pathBtn = document.createElement("button");
-        pathBtn.className = "path-btn";
-        pathBtn.textContent = item.path;
-        pathBtn.addEventListener("click", () => openArtifactModal(item));
-        left.appendChild(pathBtn);
-        const right = document.createElement("span");
-        right.innerHTML = `<span class="chip">${{esc(item.platform || "general")}}</span> <span class="chip">${{esc(item.kind)}}</span>`;
-        const btn = document.createElement("button");
-        btn.textContent = "preview";
-        btn.addEventListener("click", () => setPreview(item));
-        right.appendChild(document.createTextNode(" "));
-        right.appendChild(btn);
-        row.appendChild(left);
-        row.appendChild(right);
-        box.appendChild(row);
-        if (!selected && isPreviewable(item)) {{
-          selected = item;
+      }} else {{
+        for (const item of a.items) {{
+          const row = document.createElement("div");
+          row.className = "item";
+          const left = document.createElement("span");
+          const pathBtn = document.createElement("button");
+          pathBtn.className = "path-btn";
+          pathBtn.textContent = item.path;
+          pathBtn.addEventListener("click", () => openArtifactModal(item));
+          left.appendChild(pathBtn);
+          const right = document.createElement("span");
+          const sourceChip = item.source ? ` <span class="chip">${{esc(item.source)}}</span>` : "";
+          right.innerHTML = `<span class="chip">${{esc(item.platform || "general")}}</span> <span class="chip">${{esc(item.kind)}}</span>${{sourceChip}}`;
+          const btn = document.createElement("button");
+          btn.textContent = "preview";
+          btn.addEventListener("click", () => setPreview(item));
+          right.appendChild(document.createTextNode(" "));
+          right.appendChild(btn);
+          row.appendChild(left);
+          row.appendChild(right);
+          box.appendChild(row);
+          if (!selected && isPreviewable(item)) {{
+            selected = item;
+          }}
         }}
       }}
       setPreview(selected);
@@ -933,7 +982,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("/api/artifacts"):
             stage = self._state().pipeline().get("approval_pending") or self._state().pipeline().get("stage", "")
-            items = list_artifacts(self._state().root, stage)
+            scanned = list_artifacts(self._state().root, stage)
+            declared = self._state().declared_artifacts(stage)
+            items = merge_artifacts(scanned, declared)
             self._json({"items": items, "stage": stage})
             return
         if self.path.startswith("/api/uploads"):

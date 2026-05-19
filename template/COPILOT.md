@@ -67,3 +67,4 @@ At human-approval gates:
 - wait for approval signal before advancing
 - process `.claude/state/design-feedback.json` (including `attachments`) before resume when status indicates requested changes or rejection
 
+For design review gates, also keep `.claude/state/design-artifacts.json` updated with previewable artifact paths so the MAPLE review portal reflects progress continuously.

@@ -172,6 +172,10 @@ Delegate to `@<name>`. Update `maple.json` on start and completion.
 When a stage has `gate: human-approval`:
 
 1. Complete stage work (produce artifact).
+   - For design review stages (`wireframe`, `visual-identity`, `design-tokens`, `ui-mockup-builder`, `design-refresh`), artifact production is mandatory:
+     - create at least one previewable artifact (`.excalidraw`, `.html`, `.svg`, `.png`, `.jpg`, `.jpeg`, `.webp`, or `.md`) under docs/design (or approved artifact dirs), and
+     - update `.claude/state/design-artifacts.json` with current stage artifact paths so the review portal can update live.
+   - If no reviewable artifact exists for a design gate, set `maple.json` to `FAILED` and stop.
 2. Write PAUSED state:
 ```json
 { "stage": "<name>", "status": "PAUSED", "awaiting_approval": "<name>", "updated_at": "<iso8601>" }

@@ -801,6 +801,7 @@ Never go silent during this TAFFY implementation run:
 - Do not send heartbeat-only timestamp churn with no artifact/blocker details.
 - If the stage requires writing artifacts and write access/tools are unavailable, set status FAILED with a clear error and stop.
 - If blocked/waiting, state exactly what is pending and keep posting heartbeats.
+- For design-review stages, continuously produce previewable artifacts (.excalidraw/.html/.svg/.png/.jpg/.md) and keep .claude/state/design-artifacts.json updated so the review portal reflects progress live.
 - Before reporting DONE, verify and report concrete artifact paths for: app/domain changes, tests changes, and tests/features + step files.
 - If required test or gherkin artifacts are missing, set status FAILED and report missing paths.
 - If generated runtime code imports docs/, .github/, or .claude/ files by path, set status FAILED and report offending import paths.

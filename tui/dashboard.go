@@ -392,13 +392,17 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case dashTickMsg:
 		m.reload()
-		if m.approvalPending == "" {
+		autoStage := strings.TrimSpace(m.approvalPending)
+		if autoStage == "" && shouldAutoOpenDesignPortalStage(m.pipelineState.Stage) {
+			autoStage = m.pipelineState.Stage
+		}
+		if autoStage == "" {
 			m.portalAutoStage = ""
 			return m, dashTickCmd()
 		}
-		if m.approvalPending != m.portalAutoStage {
-			m.portalAutoStage = m.approvalPending
-			return m, tea.Batch(dashTickCmd(), designPortalCmd(false, true, m.approvalPending))
+		if autoStage != m.portalAutoStage {
+			m.portalAutoStage = autoStage
+			return m, tea.Batch(dashTickCmd(), designPortalCmd(false, true, autoStage))
 		}
 		return m, dashTickCmd()
 
@@ -1971,6 +1975,18 @@ func truncate(s string, n int) string {
 	return string(runes[:n-1]) + "…"
 }
 
+func shouldAutoOpenDesignPortalStage(stage string) bool {
+	s := strings.ToLower(strings.TrimSpace(stage))
+	if s == "" {
+		return false
+	}
+	return strings.Contains(s, "wireframe") ||
+		strings.Contains(s, "visual-identity") ||
+		strings.Contains(s, "design-tokens") ||
+		strings.Contains(s, "mockup") ||
+		strings.Contains(s, "design")
+}
+
 func keyTextInput(msg tea.KeyMsg) string {
 	if len(msg.Runes) > 0 {
 		return string(msg.Runes)
@@ -2101,6 +2117,7 @@ While this TAFFY run is active, never go silent:
 - Do not send heartbeat-only timestamp churn with no artifact/blocker details.
 - If the stage requires writing artifacts and write access/tools are unavailable, set status FAILED with a clear error and stop.
 - If blocked or waiting on external work, explicitly say what is pending and keep posting heartbeats.
+- For design-review stages, continuously produce previewable artifacts (.excalidraw/.html/.svg/.png/.jpg/.md) and keep .claude/state/design-artifacts.json updated so the review portal reflects progress live.
 - Runtime code and tests must not import from docs/, .github/, or .claude/ paths.
 - Copying/adapting artifact content into app/test source is allowed; direct path imports/references to those docs are not.
 - If generated code imports instruction/design docs by path, treat that as a contract failure and set status FAILED.

@@ -7,6 +7,12 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.12.12] — 2026-05-19
+
+### Fixed
+- **`new-ui-feature` design phases no longer skip**: wireframe, visual-identity, design-tokens, ui-mockup-builder, and a11y-audit TAFFY stages now run with `when: always` across Claude/OpenCode/Cursor templates so review gates trigger consistently.
+- **Design review artifact visibility and contract hardening**: pipeline-runner contracts now require reviewable design artifacts and explicit artifact-manifest updates during UI approval flows, and the portal surfaces those artifacts for approve/reject/request-changes review loops.
+
 ## [4.12.11] — 2026-05-19
 
 ### Added

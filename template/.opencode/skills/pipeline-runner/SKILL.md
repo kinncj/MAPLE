@@ -173,6 +173,10 @@ For each stage in order:
 When a stage has `gate: human-approval`:
 
 1. Complete the stage work (produce the artifact).
+   - For design review stages (`wireframe`, `visual-identity`, `design-tokens`, `ui-mockup-builder`, `design-refresh`), artifact production is mandatory:
+     - create at least one previewable artifact (`.excalidraw`, `.html`, `.svg`, `.png`, `.jpg`, `.jpeg`, `.webp`, or `.md`) under docs/design (or approved artifact dirs), and
+     - update `.claude/state/design-artifacts.json` with current stage artifact paths so the review portal can update live.
+   - If no reviewable artifact exists for a design gate, set `maple.json` to `FAILED` and stop.
 2. Write PAUSED state to `maple.json`:
 ```json
 {
