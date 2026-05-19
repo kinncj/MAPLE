@@ -879,7 +879,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				writeQuickLaunchState(name, prompt)
 				cmd := buildQuickPromptCmd(name, prompt, m.quickLaunchKind, m.quickLaunchHarness)
 				m.showQuickLaunch = false
-				target := buildLaunchCmd(m.quickLaunchHarness, cmd, m.pinnedSessions)
+				target := buildLaunchCmd(m.quickLaunchHarness, cmd, m.pinnedSessions, m.quickLaunchKind == "taffy")
 				return m, trySpawnCmdForHarness(m.quickLaunchHarness, target)
 			case "esc":
 				m.quickLaunchPickHarness = true
@@ -941,7 +941,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				if len(tools) > 0 && m.launcherCur < len(tools) {
 					tool := tools[m.launcherCur]
 					m.showLauncher = false
-					cmd := buildLaunchCmd(tool, m.launcherCmd, m.pinnedSessions)
+					cmd := buildLaunchCmd(tool, m.launcherCmd, m.pinnedSessions, false)
 					return m, trySpawnCmdForHarness(tool, cmd)
 				}
 			case "esc":
@@ -1898,20 +1898,22 @@ func launcherTools() []string {
 // buildLaunchCmd constructs the exec command for launching a tool, resuming a pinned
 // session if one exists, otherwise starting fresh with the given command/prompt.
 // When rtk is on PATH, RTK_HOOK_AUDIT=1 is prepended so hook activity is logged.
-func buildLaunchCmd(tool, cmd string, pinned map[string]string) []string {
+func buildLaunchCmd(tool, cmd string, pinned map[string]string, dangerous bool) []string {
 	pinnedID := pinned[tool]
 	var args []string
 	switch tool {
 	case "claude":
+		args = []string{"claude"}
+		if dangerous {
+			args = append(args, "--dangerously-skip-permissions")
+		}
 		if pinnedID != "" {
-			args = []string{"claude", "--resume", pinnedID}
+			args = append(args, "--resume", pinnedID)
 			if cmd != "" {
 				args = append(args, cmd)
 			}
 		} else if cmd != "" {
-			args = []string{"claude", cmd}
-		} else {
-			args = []string{"claude"}
+			args = append(args, cmd)
 		}
 	case "opencode":
 		if cmd != "" {
@@ -1920,15 +1922,17 @@ func buildLaunchCmd(tool, cmd string, pinned map[string]string) []string {
 			args = []string{"opencode"}
 		}
 	case "copilot":
+		args = []string{"copilot"}
+		if dangerous {
+			args = append(args, "--allow-all")
+		}
 		if pinnedID != "" {
-			args = []string{"copilot", "--resume=" + pinnedID}
+			args = append(args, "--resume="+pinnedID)
 			if cmd != "" {
 				args = append(args, "-i", cmd)
 			}
 		} else if cmd != "" {
-			args = []string{"copilot", "-i", cmd}
-		} else {
-			args = []string{"copilot"}
+			args = append(args, "-i", cmd)
 		}
 	case "cursor":
 		cursorBin := "cursor-agent"
@@ -1936,7 +1940,11 @@ func buildLaunchCmd(tool, cmd string, pinned map[string]string) []string {
 			cursorBin = "cursor"
 		}
 		if cmd != "" {
-			args = []string{cursorBin, "-p", "--output-format", "text", "--trust", cmd}
+			args = []string{cursorBin}
+			if dangerous {
+				args = append(args, "--yolo", "--sandbox", "disabled", "--approve-mcps")
+			}
+			args = append(args, "-p", "--output-format", "text", "--trust", cmd)
 		} else {
 			args = []string{cursorBin}
 		}
@@ -2069,12 +2077,17 @@ While this TAFFY run is active, never go silent:
 - Post an immediate kickoff update before the first long-running tool/agent call.
 - Post a concise progress heartbeat to chat every 60-120 seconds while work is ongoing.
 - On each heartbeat, also refresh .claude/state/maple.json updated_at and current stage.
+- Every heartbeat must include concrete progress evidence:
+  - changed files/artifacts since last update (explicit paths), or
+  - a specific blocker that prevented changes.
 - Use this heartbeat format:
   Progress: <stage name / phase>
   Done since last update: <brief>
   Current action: <brief>
   Blockers: <none or brief blocker>
   Next update: <ETA>
+- Do not send heartbeat-only timestamp churn with no artifact/blocker details.
+- If the stage requires writing artifacts and write access/tools are unavailable, set status FAILED with a clear error and stop.
 - If blocked or waiting on external work, explicitly say what is pending and keep posting heartbeats.
 </maple-progress>`
 	}

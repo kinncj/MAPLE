@@ -7,6 +7,12 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.12.7] — 2026-05-19
+
+### Fixed
+- **TAFFY harness permission mode**: TAFFY launches now run in permissive mode per harness where supported so orchestrated phases do not stall on interactive permission prompts. Claude uses `--dangerously-skip-permissions`, Copilot uses `--allow-all`, and Cursor uses `--yolo --sandbox disabled --approve-mcps`. Non-TAFFY launches are unchanged.
+- **Implement-stories TAFFY handoff mode**: `maple req` implementation handoff now uses the same TAFFY permissive launch path for consistent runtime behavior across quick-launch and req flows.
+
 ## [4.10.2] — 2026-04-22
 
 ### Fixed
@@ -193,4 +199,3 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 - Removed empty scaffold stubs (`template/app/`, `template/common/`, `template/infra/`)
 - Baked BusinessRepo/SOLID standards into `template/CLAUDE.md`, orchestrators, and architect agent
 - Rewrote `scripts/maple`: 1,254 → ~700 lines
-

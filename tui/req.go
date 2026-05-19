@@ -786,12 +786,17 @@ Never go silent during this TAFFY implementation run:
 - Post an immediate kickoff update before the first long-running tool/agent call.
 - Post a concise progress heartbeat every 60-120 seconds while actively running stages.
 - On each heartbeat, refresh .claude/state/maple.json updated_at and current stage.
+- Every heartbeat must include concrete progress evidence:
+  - changed files/artifacts since last update (explicit paths), or
+  - a specific blocker that prevented changes.
 - Use this heartbeat format:
   Progress: <stage name / phase>
   Done since last update: <brief>
   Current action: <brief>
   Blockers: <none or brief blocker>
   Next update: <ETA>
+- Do not send heartbeat-only timestamp churn with no artifact/blocker details.
+- If the stage requires writing artifacts and write access/tools are unavailable, set status FAILED with a clear error and stop.
 - If blocked/waiting, state exactly what is pending and keep posting heartbeats.
 </maple-progress>`)
 	return sb.String()
@@ -810,7 +815,7 @@ func (m *reqModel) launchImplementationCmd(ai aiOption) tea.Cmd {
 		}
 		writeQuickLaunchState("pipeline-runner implement-stories", "starting")
 		cmd := m.buildImplementationPrompt(ai.kind)
-		args := buildLaunchCmd(ai.kind, cmd, loadPinnedSessions())
+		args := buildLaunchCmd(ai.kind, cmd, loadPinnedSessions(), true)
 		msg := trySpawnCmdForHarness(ai.kind, args)
 		return msg()
 	}

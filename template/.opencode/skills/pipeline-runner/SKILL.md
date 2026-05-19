@@ -136,12 +136,17 @@ For each stage in order:
 - Send an immediate kickoff status before the first long-running tool/agent call.
 - While a taffy run is active, send a concise progress update at least every 60-120 seconds.
 - On each heartbeat, refresh `maple.json` `updated_at` and current `stage`.
+- Every heartbeat must include concrete progress evidence:
+  - changed files/artifacts since last update (explicit paths), or
+  - a specific blocker that prevented changes.
 - Use this status format:
   - Progress: `<stage / phase>`
   - Done since last update: `<brief>`
   - Current action: `<brief>`
   - Blockers: `<none or blocker>`
   - Next update: `<ETA>`
+- Do not send heartbeat-only timestamp churn with no artifact/blocker details.
+- If a stage requires writing artifacts and write access/tools are unavailable, set `maple.json` to `FAILED` with an explicit error and stop.
 - If blocked/waiting, report what is pending and continue heartbeats until unblocked.
 
 ### 4. Human-approval gates
