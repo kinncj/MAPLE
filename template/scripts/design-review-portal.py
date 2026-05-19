@@ -247,8 +247,7 @@ def is_allowed_rel(path: str) -> bool:
     allowed_roots = (
         "docs/design/",
         "docs/stories/",
-        "app/",
-        "tests/",
+        "docs/specs/",
         "artifacts/",
         "screenshots/",
         "previews/",
@@ -274,29 +273,46 @@ def list_artifacts(root: pathlib.Path, stage: str) -> List[Dict]:
     roots = [
         "docs/design",
         "docs/stories",
+        "docs/specs",
         "artifacts",
         "screenshots",
         "previews",
-        "app",
-        "tests",
     ]
     if "wireframe" in stage:
-        roots = ["docs/design/wireframes", "docs/design", "docs/stories", "previews", "screenshots"]
+        roots = ["docs/design/wireframes", "docs/design", "docs/stories", "docs/specs", "previews", "screenshots"]
     elif "visual-identity" in stage or "design-tokens" in stage:
-        roots = ["docs/design/identity", "docs/design", "docs/stories", "previews"]
+        roots = ["docs/design/identity", "docs/design", "docs/stories", "docs/specs", "previews"]
     elif "mockup" in stage:
         roots = [
             "docs/design/mockups",
             "docs/design/system/components",
             "docs/design/identity",
             "docs/stories",
-            "app",
-            "tests",
+            "docs/specs",
             "artifacts",
             "screenshots",
             "previews",
         ]
 
+    reviewable_ext = {
+        ".excalidraw",
+        ".md",
+        ".txt",
+        ".html",
+        ".htm",
+        ".svg",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".css",
+        ".mp4",
+        ".webm",
+    }
     items: List[Dict] = []
     for r in roots:
         base = root / r
@@ -305,8 +321,12 @@ def list_artifacts(root: pathlib.Path, stage: str) -> List[Dict]:
         for p in base.rglob("*"):
             if not p.is_file():
                 continue
+            if p.name.startswith("."):
+                continue
             rel = p.relative_to(root).as_posix()
             ext = p.suffix.lower()
+            if ext not in reviewable_ext:
+                continue
             kind = "text"
             if ext in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
                 kind = "image"
@@ -534,6 +554,7 @@ def render_index(token: str) -> str:
       <div id="modalBody" class="modal-body">No artifact selected.</div>
     </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <script>
     let TOKEN = {token_js};
     const selectedUploads = new Set();
@@ -556,9 +577,10 @@ def render_index(token: str) -> str:
     }}
 
     function renderMarkdown(md) {{
-      const lines = String(md || "").replace(/\r\n/g, "\n").split("\n");
+      const lines = String(md || "").replace(/\\r\\n/g, "\\n").split("\\n");
       let htmlOut = '<div class="md">';
       let inCode = false;
+      let codeLang = "";
       let codeLines = [];
       let inUl = false;
       let inOl = false;
@@ -570,8 +592,14 @@ def render_index(token: str) -> str:
 
       const flushCode = () => {{
         if (!inCode) return;
-        htmlOut += `<pre><code>${{esc(codeLines.join("\\n"))}}</code></pre>`;
+        const codeText = codeLines.join("\\n");
+        if (codeLang === "mermaid") {{
+          htmlOut += `<pre class="mermaid-source">${{esc(codeText)}}</pre>`;
+        }} else {{
+          htmlOut += `<pre><code>${{esc(codeText)}}</code></pre>`;
+        }}
         inCode = false;
+        codeLang = "";
         codeLines = [];
       }};
 
@@ -584,6 +612,8 @@ def render_index(token: str) -> str:
           }} else {{
             flushLists();
             inCode = true;
+            const fence = trimmed.match(/^```([A-Za-z0-9_-]+)?\\s*$/);
+            codeLang = String((fence && fence[1]) || "").toLowerCase();
             codeLines = [];
           }}
           continue;
@@ -597,10 +627,10 @@ def render_index(token: str) -> str:
           htmlOut += "<p></p>";
           continue;
         }}
-        if (/^#{1,4}\\s+/.test(trimmed)) {{
+        if (/^#{{1,4}}\\s+/.test(trimmed)) {{
           flushLists();
           const level = (trimmed.match(/^#+/) || ["#"])[0].length;
-          const content = trimmed.replace(/^#{1,4}\\s+/, "");
+          const content = trimmed.replace(/^#{{1,4}}\\s+/, "");
           htmlOut += `<h${{level}}>${{renderInlineMarkdown(content)}}</h${{level}}>`;
           continue;
         }}
@@ -626,6 +656,38 @@ def render_index(token: str) -> str:
       flushLists();
       htmlOut += "</div>";
       return htmlOut;
+    }}
+
+    let mermaidInitialized = false;
+
+    function ensureMermaid() {{
+      if (!window.mermaid) return false;
+      if (!mermaidInitialized) {{
+        window.mermaid.initialize({{
+          startOnLoad: false,
+          securityLevel: "loose",
+          theme: "default",
+        }});
+        mermaidInitialized = true;
+      }}
+      return true;
+    }}
+
+    async function renderMermaidIn(container) {{
+      if (!container) return;
+      const sources = Array.from(container.querySelectorAll("pre.mermaid-source"));
+      if (!sources.length) return;
+      if (!ensureMermaid()) return;
+      for (const pre of sources) {{
+        const holder = document.createElement("div");
+        holder.className = "mermaid";
+        holder.textContent = pre.textContent || "";
+        pre.replaceWith(holder);
+      }}
+      try {{
+        await window.mermaid.run({{ nodes: container.querySelectorAll(".mermaid") }});
+      }} catch (_e) {{
+      }}
     }}
 
     async function api(path, options={{}}) {{
@@ -816,6 +878,7 @@ def render_index(token: str) -> str:
         const txt = await res.text();
         if (lower.endsWith(".md")) {{
           body.innerHTML = renderMarkdown(txt.slice(0, 200000));
+          await renderMermaidIn(body);
           return;
         }}
         if (lower.endsWith(".excalidraw")) {{
@@ -911,6 +974,7 @@ def render_index(token: str) -> str:
         const txt = await res.text();
         if (lower.endsWith(".md")) {{
           modalBody.innerHTML = renderMarkdown(txt.slice(0, 240000));
+          await renderMermaidIn(modalBody);
           return;
         }}
         if (lower.endsWith(".excalidraw")) {{
@@ -1008,7 +1072,7 @@ def render_index(token: str) -> str:
           document.getElementById("msg").textContent = "Choose at least one file to upload.";
           return;
         }}
-        document.getElementById("msg").textContent = `Uploaded ${uploaded.length} file(s).`;
+        document.getElementById("msg").textContent = `Uploaded ${{uploaded.length}} file(s).`;
         await refreshAll();
       }} catch (e) {{
         document.getElementById("msg").textContent = e.message;

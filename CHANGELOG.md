@@ -7,6 +7,13 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.12.14] — 2026-05-19
+
+### Fixed
+- **Design Review Portal artifact scope**: review artifact discovery now targets review-centric paths (`docs/design`, `docs/stories`, `docs/specs`, `artifacts`, `screenshots`, `previews`) and reviewable file types only, avoiding broad codebase listings.
+- **Markdown + Mermaid rendering**: markdown previews now support Mermaid fenced code blocks (```` ```mermaid ````) and render diagrams inline in both preview pane and modal.
+- **Portal page stability**: corrected script-template escaping issues that could break frontend execution and cause empty artifact views.
+
 ## [4.12.13] — 2026-05-19
 
 ### Fixed
