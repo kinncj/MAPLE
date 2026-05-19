@@ -42,6 +42,8 @@ Read skills from `.claude/skills/` before executing tasks:
 
 | Skill | When to use |
 |---|---|
+| `karpathy-audit` | After Phase 5 IMPLEMENT (gates Phase 6 advancement); detects scope creep + over-engineering |
+| `humanizer` | After Phase 7 DOCUMENT (polish prose, remove AI-isms) |
 | `tdd-workflow` | Before any implementation (Phase 5) |
 | `playwright-cli` | E2E / browser testing |
 | `github-cli` | Issue + PR management via `gh` |
@@ -64,8 +66,24 @@ Read skills from `.claude/skills/` before executing tasks:
 4. **No secrets in code.** Never write API keys, passwords, or tokens directly in source files.
 5. **Conventional Commits.** All commits use `feat:`, `fix:`, `test:`, `docs:`, `infra:`, `refactor:`.
 6. **`make test-all` must pass** before any PR is created (Phase 8 gate).
+7. **Karpathy principles enforced at Phase 5→6 gate.** After IMPLEMENT, `/karpathy-audit` scores code; <70 blocks Phase 6. Never bypass.
 
-## Before Writing Any Code
+## Karpathy Principles (Phase 5 → Phase 6 Gate)
+
+After Phase 5 IMPLEMENT is complete, Orchestrator auto-calls `@karpathy-audit` to score against 4 principles:
+
+| Principle | Enforces |
+|-----------|----------|
+| **Think Before Coding** | Assumptions stated. Ambiguities surfaced. No silent interpretations. |
+| **Simplicity First** | Minimum code. No speculation, abstractions, or over-engineering. |
+| **Surgical Changes** | Only requested changes. No unrelated refactoring or cleanup. |
+| **Goal-Driven Execution** | Tests first. Success criteria explicit. Every line traces to requirement. |
+
+**Scoring:** ≥90 auto-advance, 70-89 require approval, <70 BLOCK.
+
+Manual invocation: `/karpathy-audit` or `@karpathy-audit` at any phase.
+
+---
 
 Read `project.config.yaml`:
 - Check `stack:` — if any key is null, run tech-stack discovery (ask the user).
