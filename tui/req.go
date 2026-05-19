@@ -828,6 +828,7 @@ func invokeAI(ai aiOption, prompt string) ([]byte, error) {
 
 func invokeCursor(binPath, prompt string) ([]byte, error) {
 	candidates := []*exec.Cmd{
+		exec.Command(binPath, "-p", "--output-format", "text", "--trust", prompt),
 		exec.Command(binPath, "-p", prompt),
 		exec.Command(binPath, "--prompt", prompt),
 		exec.Command(binPath, "run", prompt),

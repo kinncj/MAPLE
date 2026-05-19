@@ -1901,7 +1901,7 @@ func buildLaunchCmd(tool, cmd string, pinned map[string]string) []string {
 			cursorBin = "cursor"
 		}
 		if cmd != "" {
-			args = []string{cursorBin, cmd}
+			args = []string{cursorBin, "-p", "--output-format", "text", "--trust", cmd}
 		} else {
 			args = []string{cursorBin}
 		}
