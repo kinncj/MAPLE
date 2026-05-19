@@ -769,6 +769,9 @@ func (m *reqModel) buildImplementationPrompt(harness string) string {
 	sb.WriteString("Hard requirements:\n")
 	sb.WriteString("- Strictly follow repository instruction files: `CLAUDE.md`, `.github/copilot-instructions.md`, and `.github/instructions/stories.instructions.md`.\n")
 	sb.WriteString("- Preserve the BusinessRepo model and required repository layout defined by those files.\n")
+	sb.WriteString("- Never place acceptance tests in `/app`; write them under `/tests` and `/tests/features`.\n")
+	sb.WriteString("- Runtime code and tests must never import from `docs/`, `.github/`, or `.claude/` paths.\n")
+	sb.WriteString("- Copying/adapting approved artifacts into app/test source is allowed; direct path imports/references to docs are not.\n")
 	sb.WriteString("- Respect the existing Cucumber stack already present in the generated stories.\n")
 	sb.WriteString("- If a story has `cucumber/*_steps.py`, continue with Python behave-style steps and do NOT switch to TypeScript `@cucumber/cucumber`.\n")
 	sb.WriteString("- Do not invent alternative test frameworks when story artifacts already define one.\n")
@@ -798,6 +801,9 @@ Never go silent during this TAFFY implementation run:
 - Do not send heartbeat-only timestamp churn with no artifact/blocker details.
 - If the stage requires writing artifacts and write access/tools are unavailable, set status FAILED with a clear error and stop.
 - If blocked/waiting, state exactly what is pending and keep posting heartbeats.
+- Before reporting DONE, verify and report concrete artifact paths for: app/domain changes, tests changes, and tests/features + step files.
+- If required test or gherkin artifacts are missing, set status FAILED and report missing paths.
+- If generated runtime code imports docs/, .github/, or .claude/ files by path, set status FAILED and report offending import paths.
 </maple-progress>`)
 	return sb.String()
 }

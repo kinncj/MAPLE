@@ -100,6 +100,14 @@ When the launch prompt contains a `<maple-gherkin-handoff>` block:
    - If generated stories include `cucumber/*_steps.py`, use Python behave-style steps.
    - Do **not** introduce TypeScript `@cucumber/cucumber` unless the repository already uses it as the active standard.
 4. Keep BusinessRepo structure and phase gates exactly as defined by instruction files.
+5. Treat test layout as mandatory:
+   - Gherkin feature files must live under `/tests/features/`.
+   - Step definitions must use the repository's active Cucumber stack and live under `/tests`.
+   - Do not place acceptance tests under `/app` or story directories.
+6. Enforce module boundaries independent of language:
+   - Runtime/source files must not import from `docs/`, `.github/`, or `.claude/`.
+   - Copying/adapting approved artifact content into app/test source is allowed.
+   - Design/spec artifacts are references, not runtime code dependencies.
 
 ### Step 3a: Taffy workflow execution
 
@@ -139,6 +147,16 @@ After each stage: update `maple.json` with current stage + `RUNNING`.
 - Do not send heartbeat-only timestamp churn with no artifact/blocker details.
 - If a stage requires writing artifacts and write access/tools are unavailable, set `maple.json` to `FAILED` with an explicit error and stop.
 - If blocked/waiting, report what is pending and continue heartbeats until unblocked.
+
+**Completion artifact gate (mandatory):**
+- Before marking `DONE`, verify the run produced concrete story-linked artifacts under the BusinessRepo layout.
+- Required for implementation runs:
+  - application changes in `/app` (or existing domain folders),
+  - tests in `/tests` (unit/integration/e2e as applicable),
+  - Gherkin assets in `/tests/features` plus matching step implementations.
+- Boundary check:
+  - fail the run if generated runtime code imports paths under `docs/`, `.github/`, or `.claude/`.
+- If required test/gherkin artifacts are missing, set `maple.json` to `FAILED` and report missing paths explicitly.
 
 ### Step 3b: Skill invocation
 

@@ -17,9 +17,16 @@ stages:
     when: always
     depends_on: [orchestrator-kickoff]
 
+  - name: qa-cucumber
+    agent: qa-cucumber
+    description: "Materialize and validate required Gherkin/Cucumber artifacts and step implementations under /tests"
+    gate: auto
+    when: always
+    depends_on: [standard-8-phase]
+
   - name: a11y-audit
     agent: a11y-auditor
     description: "WCAG 2.2 AA accessibility audit for UI stories"
     gate: auto
     when: ui:true
-    depends_on: [standard-8-phase]
+    depends_on: [qa-cucumber]

@@ -27,6 +27,8 @@ func governanceBootstrapBlock(harness string) string {
 		sb.WriteString("- " + f + "\n")
 	}
 	sb.WriteString("Treat them as mandatory constraints for every delegated skill/agent call.\n")
+	sb.WriteString("Runtime code and tests must never import from docs/, .github/, or .claude/ paths.\n")
+	sb.WriteString("Copying or adapting artifact content from docs into app/test code is allowed; path-based imports/references are not.\n")
 	sb.WriteString("</maple-governance-bootstrap>\n")
 	return sb.String()
 }

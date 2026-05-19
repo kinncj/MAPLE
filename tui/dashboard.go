@@ -2089,6 +2089,9 @@ While this TAFFY run is active, never go silent:
 - Do not send heartbeat-only timestamp churn with no artifact/blocker details.
 - If the stage requires writing artifacts and write access/tools are unavailable, set status FAILED with a clear error and stop.
 - If blocked or waiting on external work, explicitly say what is pending and keep posting heartbeats.
+- Runtime code and tests must not import from docs/, .github/, or .claude/ paths.
+- Copying/adapting artifact content into app/test source is allowed; direct path imports/references to those docs are not.
+- If generated code imports instruction/design docs by path, treat that as a contract failure and set status FAILED.
 </maple-progress>`
 	}
 	governance := ""

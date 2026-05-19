@@ -7,6 +7,13 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.12.8] — 2026-05-19
+
+### Fixed
+- **Implement-stories execution contract**: added a mandatory `qa-cucumber` stage to `implement-stories` TAFFY workflows (Claude/OpenCode/Cursor) so story implementation runs must materialize and validate Gherkin/Cucumber outputs before final UI audit.
+- **Pipeline completion gating**: strengthened `pipeline-runner` requirements to fail when implementation runs do not produce required `/tests` and `/tests/features` artifacts, instead of reporting success with incomplete outputs.
+- **Language-agnostic boundary enforcement**: clarified governance rules that runtime/test code may copy/adapt artifact content from docs, but must never import from `docs/`, `.github/`, or `.claude/` paths; violating runs must fail with offending paths.
+
 ## [4.12.7] — 2026-05-19
 
 ### Fixed
