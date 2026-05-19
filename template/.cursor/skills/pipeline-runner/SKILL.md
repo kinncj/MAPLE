@@ -105,6 +105,8 @@ When the launch prompt contains a `<maple-gherkin-handoff>` block:
 
 Load `.claude/taffy/<name>.yaml`, parse `stages:`, resolve `depends_on` order.
 
+If the workflow defines an `orchestrator-kickoff` stage, execute it first before all other stages. This stage must publish the initial plan and heartbeat cadence.
+
 For each stage:
 
 **`when:` guard:**
@@ -122,9 +124,16 @@ For each stage:
 After each stage: update `maple.json` with current stage + `RUNNING`.
 
 **Progress heartbeats (mandatory):**
+- Send an immediate kickoff status before the first long-running tool/agent call.
 - While a taffy run is active, send a concise progress update at least every 60-120 seconds.
 - On each heartbeat, refresh `maple.json` `updated_at` and current `stage`.
-- If blocked/waiting, report what is pending and the next expected update time.
+- Use this status format:
+  - Progress: `<stage / phase>`
+  - Done since last update: `<brief>`
+  - Current action: `<brief>`
+  - Blockers: `<none or blocker>`
+  - Next update: `<ETA>`
+- If blocked/waiting, report what is pending and continue heartbeats until unblocked.
 
 ### Step 3b: Skill invocation
 

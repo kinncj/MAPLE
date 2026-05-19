@@ -4,11 +4,18 @@ version: "1.0"
 tags: [ui, frontend, full-pipeline]
 
 stages:
+  - name: orchestrator-kickoff
+    agent: orchestrator
+    description: "Kick off workflow, publish stage plan, and maintain heartbeat feedback throughout execution"
+    gate: auto
+    when: always
+
   - name: spec-kit
     agent: spec-kit
     description: "Author Gherkin story file and emit to docs/stories/"
     gate: human-approval
     when: always
+    depends_on: [orchestrator-kickoff]
 
   - name: wireframe
     agent: wireframe-architect

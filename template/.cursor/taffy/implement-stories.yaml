@@ -4,11 +4,18 @@ version: "1.0"
 tags: [implementation, orchestrator, gherkin]
 
 stages:
+  - name: orchestrator-kickoff
+    agent: orchestrator
+    description: "Kick off workflow, publish stage plan, and maintain heartbeat feedback throughout execution"
+    gate: auto
+    when: always
+
   - name: standard-8-phase
     pipeline: standard
     description: "Run the full 8-phase SDLC pipeline (DISCOVER → FINAL GATE) over existing stories, enforcing repo instruction markdowns and existing test-stack conventions"
     gate: auto
     when: always
+    depends_on: [orchestrator-kickoff]
 
   - name: a11y-audit
     agent: a11y-auditor

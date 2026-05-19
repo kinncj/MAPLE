@@ -2066,9 +2066,16 @@ Set status to "DONE" when finished, "FAILED" if you cannot complete.
 
 <maple-progress>
 While this TAFFY run is active, never go silent:
+- Post an immediate kickoff update before the first long-running tool/agent call.
 - Post a concise progress heartbeat to chat every 60-120 seconds while work is ongoing.
 - On each heartbeat, also refresh .claude/state/maple.json updated_at and current stage.
-- If blocked or waiting on external work, explicitly say what is pending and the next expected update window.
+- Use this heartbeat format:
+  Progress: <stage name / phase>
+  Done since last update: <brief>
+  Current action: <brief>
+  Blockers: <none or brief blocker>
+  Next update: <ETA>
+- If blocked or waiting on external work, explicitly say what is pending and keep posting heartbeats.
 </maple-progress>`
 	}
 	governance := ""

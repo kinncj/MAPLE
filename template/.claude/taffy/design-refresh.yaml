@@ -4,11 +4,18 @@ version: "1.0"
 tags: [design, ui, tokens]
 
 stages:
+  - name: orchestrator-kickoff
+    agent: orchestrator
+    description: "Kick off workflow, publish stage plan, and maintain heartbeat feedback throughout execution"
+    gate: auto
+    when: always
+
   - name: visual-identity
     agent: visual-identity-designer
     description: "New palette, typography, spacing — output to docs/design/identity/"
     gate: human-approval
     when: always
+    depends_on: [orchestrator-kickoff]
 
   - name: design-tokens
     agent: design-system-author
