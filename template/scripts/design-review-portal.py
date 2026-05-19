@@ -9,6 +9,7 @@ import pathlib
 import posixpath
 import re
 import secrets
+import subprocess
 import urllib.parse
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -51,6 +52,7 @@ class PortalState:
         self.pending_file = self.state_dir / "approval-pending.txt"
         self.feedback_file = self.state_dir / "design-feedback.json"
         self.feedback_log = self.state_dir / "design-feedback.log"
+        self.panes_file = self.state_dir / "panes.json"
         self.token_file = token_file
 
     def token(self) -> str:
@@ -65,22 +67,92 @@ class PortalState:
     def pipeline(self) -> Dict:
         p = read_json(self.maple_json)
         pending = read_text(self.pending_file)
+        awaiting = str(p.get("awaiting_approval", "") or "").strip()
+        approval_pending = pending or awaiting
         feedback = read_json(self.feedback_file)
         stage = p.get("stage", "")
         return {
             "taffy": p.get("taffy", ""),
             "stage": stage,
             "status": p.get("status", ""),
-            "awaiting_approval": p.get("awaiting_approval", ""),
+            "awaiting_approval": awaiting,
             "updated_at": p.get("updated_at", ""),
-            "approval_pending": pending,
+            "approval_pending": approval_pending,
             "feedback": feedback,
             "uploads": self.list_uploads(),
             "declared_artifacts": self.declared_artifacts(stage),
         }
 
+    def pending_stage(self) -> str:
+        pending = read_text(self.pending_file)
+        if pending:
+            return pending
+        p = read_json(self.maple_json)
+        return str(p.get("awaiting_approval", "") or "").strip()
+
+    def mark_resumed(self, stage: str) -> None:
+        p = read_json(self.maple_json)
+        if not isinstance(p, dict):
+            p = {}
+        awaiting = str(p.get("awaiting_approval", "") or "").strip()
+        if stage and awaiting and awaiting != stage:
+            return
+        if awaiting:
+            p["awaiting_approval"] = ""
+        status = str(p.get("status", "") or "").strip().upper()
+        if status == "PAUSED":
+            p["status"] = "RUNNING"
+        p["updated_at"] = now_iso()
+        write_json(self.maple_json, p)
+
+    def notify_continue(self) -> int:
+        panes = read_json(self.panes_file)
+        if not isinstance(panes, dict):
+            return 0
+        notified = 0
+        for pane in panes.values():
+            if not isinstance(pane, dict):
+                continue
+            kind = str(pane.get("kind", "") or "").strip()
+            target = str(pane.get("target", "") or "").strip()
+            if not kind or not target:
+                continue
+            try:
+                if kind == "tmux":
+                    subprocess.run(
+                        ["tmux", "send-keys", "-t", target, "continue", "Enter"],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    notified += 1
+                    continue
+                if kind == "zellij":
+                    subprocess.run(
+                        ["zellij", "action", "go-to-tab-name", target],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    subprocess.run(
+                        ["zellij", "action", "write-chars", "continue"],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    subprocess.run(
+                        ["zellij", "action", "write", "13"],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    notified += 1
+            except Exception:
+                continue
+        return notified
+
     def request_changes(self, message: str, attachments: Optional[List[str]] = None) -> Dict:
-        stage = read_text(self.pending_file)
+        stage = self.pending_stage()
         payload = {
             "stage": stage,
             "message": message.strip(),
@@ -94,10 +166,12 @@ class PortalState:
             f.write(json.dumps(payload) + "\n")
         if self.pending_file.exists():
             self.pending_file.unlink()
+        self.mark_resumed(stage)
+        payload["signaled_panes"] = self.notify_continue()
         return payload
 
     def reject(self, message: str, attachments: Optional[List[str]] = None) -> Dict:
-        stage = read_text(self.pending_file)
+        stage = self.pending_stage()
         payload = {
             "stage": stage,
             "message": message.strip(),
@@ -111,13 +185,16 @@ class PortalState:
             f.write(json.dumps(payload) + "\n")
         if self.pending_file.exists():
             self.pending_file.unlink()
+        self.mark_resumed(stage)
+        payload["signaled_panes"] = self.notify_continue()
         return payload
 
     def approve(self) -> Dict:
-        stage = read_text(self.pending_file)
+        stage = self.pending_stage()
         if self.pending_file.exists():
             self.pending_file.unlink()
-        return {"approved": True, "stage": stage, "ts": now_iso()}
+        self.mark_resumed(stage)
+        return {"approved": True, "stage": stage, "ts": now_iso(), "signaled_panes": self.notify_continue()}
 
     def list_uploads(self) -> List[Dict]:
         out: List[Dict] = []

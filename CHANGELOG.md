@@ -7,6 +7,12 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.12.15] — 2026-05-19
+
+### Fixed
+- **Portal approval resume signal**: design review portal approval actions now send `continue` to recorded tmux/zellij panes from `.claude/state/panes.json`, so approving in the web portal resumes paused TAFFY runs waiting on terminal input.
+- **Approval state fallback handling**: portal approval actions continue to resolve pending stage via `awaiting_approval` when `approval-pending.txt` is missing, and clear paused state fields consistently.
+
 ## [4.12.14] — 2026-05-19
 
 ### Fixed
