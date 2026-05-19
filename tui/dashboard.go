@@ -529,6 +529,7 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := msg.String()
+	keyText := keyTextInput(msg)
 
 	// Search mode input
 	if m.searchMode {
@@ -544,8 +545,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.searchBuf = m.searchBuf[:len(m.searchBuf)-size]
 			}
 		default:
-			if len(k) == 1 {
-				m.searchBuf += k
+			if keyText != "" {
+				m.searchBuf += keyText
 			}
 		}
 		return m, nil
@@ -574,8 +575,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.cmdBuf = m.cmdBuf[:len(m.cmdBuf)-size]
 			}
 		default:
-			if len(k) == 1 {
-				m.cmdBuf += k
+			if keyText != "" {
+				m.cmdBuf += keyText
 			}
 		}
 		return m, nil
@@ -638,8 +639,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.skillsItems = nil
 			}
 		default:
-			if m.skillsTabSearch && len(k) == 1 {
-				m.skillsQuery += k
+			if m.skillsTabSearch && keyText != "" {
+				m.skillsQuery += keyText
 				m.skillsItems = nil
 			}
 		}
@@ -835,8 +836,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.showQuickPrompt = false
 			}
 		default:
-			if len(k) == 1 && k >= " " {
-				m.quickSearch += k
+			if keyText != "" {
+				m.quickSearch += keyText
 				m.quickItemCur = 0
 				m.quickItemScroll = 0
 			}
@@ -891,8 +892,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.quickLaunchPrompt = m.quickLaunchPrompt[:len(m.quickLaunchPrompt)-size]
 				}
 			default:
-				if len(k) == 1 {
-					m.quickLaunchPrompt += k
+				if keyText != "" {
+					m.quickLaunchPrompt += keyText
 				}
 			}
 		}
@@ -952,8 +953,8 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.launcherCmd = m.launcherCmd[:len(m.launcherCmd)-size]
 				}
 			default:
-				if len(k) == 1 {
-					m.launcherCmd += k
+				if keyText != "" {
+					m.launcherCmd += keyText
 				}
 			}
 		default:
@@ -1968,6 +1969,17 @@ func truncate(s string, n int) string {
 		return "…"
 	}
 	return string(runes[:n-1]) + "…"
+}
+
+func keyTextInput(msg tea.KeyMsg) string {
+	if len(msg.Runes) > 0 {
+		return string(msg.Runes)
+	}
+	k := msg.String()
+	if len(k) == 1 && k >= " " {
+		return k
+	}
+	return ""
 }
 
 // rtkInitCmd runs rtk init with the harness-specific flags and reports back.

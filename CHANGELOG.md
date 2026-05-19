@@ -7,6 +7,11 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.12.10] — 2026-05-19
+
+### Fixed
+- **Quick prompt paste support**: `[x]` quick-prompt and related text-input overlays now correctly accept pasted clipboard content by handling multi-rune key events instead of only single-character keystrokes.
+
 ## [4.12.9] — 2026-05-19
 
 ### Added
