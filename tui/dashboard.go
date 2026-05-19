@@ -1572,30 +1572,65 @@ func (m *dashboardModel) header() string {
 	}
 	info := lipgloss.NewStyle().Foreground(t.Muted).Render("  project: " + name + " · theme: " + t.Name)
 
-	// Count Gherkin specs in docs/stories/ and Taffy workflows in .*/taffy/
-	gherkinCount := 0
-	if entries, err := os.ReadDir("docs/stories"); err == nil {
-		for _, e := range entries {
-			name := e.Name()
-			// Skip template and special files
-			if !e.IsDir() && strings.HasSuffix(name, ".md") && name != "_template.md" && !strings.HasPrefix(name, ".") {
-				gherkinCount++
-			}
-		}
-	}
-	taffyCount := 0
-	for _, harness := range []string{".claude", ".cursor", ".opencode"} {
-		if entries, err := os.ReadDir(filepath.Join(harness, "taffy")); err == nil {
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
-					taffyCount++
-				}
-			}
-		}
+	gherkinCount := countGherkinStories()
+	taffyWorkflowCount := countTaffyWorkflows()
+	taffyRunningCount := 0
+	if m.pipelineState.Taffy != "" && (m.pipelineState.Status == "RUNNING" || m.pipelineState.Status == "PAUSED") {
+		taffyRunningCount = 1
 	}
 
-	badges := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("  📋 Gherkin: %d | ▶️ Taffy: %d", gherkinCount, taffyCount))
+	badges := lipgloss.NewStyle().Foreground(t.Accent).Render(
+		fmt.Sprintf("  📋 Gherkin: %d | ▶️ Taffy: %d (%d running)", gherkinCount, taffyWorkflowCount, taffyRunningCount),
+	)
 	return logoCompact(t.Primary) + info + "\n" + badges + "\n"
+}
+
+func countGherkinStories() int {
+	count := 0
+	seenLegacy := map[string]bool{}
+	_ = filepath.Walk("docs/stories", func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		base := info.Name()
+		if base == "Story.md" {
+			count++
+			return nil
+		}
+		// Backward compatibility: older flat story files directly in docs/stories.
+		if filepath.Dir(path) == "docs/stories" && strings.HasSuffix(base, ".md") && base != "_template.md" && !strings.HasPrefix(base, ".") {
+			if !seenLegacy[base] {
+				seenLegacy[base] = true
+				count++
+			}
+		}
+		return nil
+	})
+	return count
+}
+
+func countTaffyWorkflows() int {
+	unique := map[string]bool{}
+	for _, harness := range []string{".claude", ".cursor", ".opencode"} {
+		entries, err := os.ReadDir(filepath.Join(harness, "taffy"))
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			if name == "schema.yaml" || name == "schema.yml" {
+				continue
+			}
+			if !(strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml")) {
+				continue
+			}
+			unique[strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".yml")] = true
+		}
+	}
+	return len(unique)
 }
 
 func (m *dashboardModel) footer() string {
