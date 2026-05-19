@@ -136,4 +136,28 @@ Makefile    # all CI/CD calls Makefile targets
 ## Skills
 
 Read skills from `.claude/skills/` before executing tasks.
-Key skills: `tdd-workflow`, `playwright-cli`, `github-cli`, `mermaid-diagrams`, `pipeline-runner`, `ship-safe`.
+
+**Core skills:** `karpathy-audit`, `humanizer`, `tdd-workflow`, `playwright-cli`, `github-cli`, `mermaid-diagrams`, `pipeline-runner`, `ship-safe`.
+
+### Karpathy Audit (Phase 5 → Phase 6 Gate)
+
+After Phase 5 IMPLEMENT, orchestrator auto-calls `/karpathy-audit` to enforce 4 principles:
+
+- **Think Before Coding** — Assumptions stated, ambiguities surfaced, no silent interpretations
+- **Simplicity First** — Minimum code, no speculation/abstractions, 200→50 lines if possible
+- **Surgical Changes** — Only requested changes, no unrelated refactoring/cleanup
+- **Goal-Driven Execution** — Tests first, success criteria explicit, every line traces to requirement
+
+Scoring: ≥90 auto-advance, 70-89 require approval, <70 **BLOCK**.
+
+Manual: `/karpathy-audit` at any phase. Detects scope creep, over-engineering, hidden assumptions.
+
+### Humanizer Skill
+
+After Phase 7 DOCUMENT, invoke `/humanizer` to remove AI-isms from prose:
+
+- Removes 29 AI-writing patterns (significance inflation, hedging, notability name-dropping, etc.)
+- Voice calibration: provide sample of your writing for style matching
+- Use before finalizing documentation, commit messages, comments
+
+---

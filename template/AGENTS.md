@@ -42,9 +42,19 @@
 | 35 | rubber-duck | Second-opinion reviewer — surfaces bugs, design flaws, edge cases (no style comments) |
 
 ## Pipeline Phases
-1. DISCOVER → 2. ARCHITECT → 3. PLAN → 4. INFRA → 5. IMPLEMENT → 6. VALIDATE → 7. DOCUMENT → 8. FINAL GATE
+1. DISCOVER → 2. ARCHITECT → 3. PLAN → 4. INFRA → 5. IMPLEMENT → **[Karpathy Gate]** → 6. VALIDATE → 7. DOCUMENT → 8. FINAL GATE
 
-## Makefile Contract
+**[Karpathy Gate]** — After Phase 5 IMPLEMENT, orchestrator auto-calls karpathy-audit to enforce:
+- Think Before Coding
+- Simplicity First
+- Surgical Changes
+- Goal-Driven Execution
+
+Score ≥90 auto-advance, 70-89 require approval, <70 BLOCK.
+
+After Phase 7 DOCUMENT, call `/humanizer` to remove AI-isms from prose before merge.
+
+---
 All agents use: `make build`, `make test`, `make test-integration`, `make test-e2e`,
 `make test-contract`, `make test-all`, `make lint`, `make security-scan`, `make fmt`,
 `make containers-up`, `make containers-down`, `make seed-test`, `make migrate`.
