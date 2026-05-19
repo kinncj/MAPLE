@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -1532,7 +1533,29 @@ func (m *dashboardModel) header() string {
 		name = "—"
 	}
 	info := lipgloss.NewStyle().Foreground(t.Muted).Render("  project: " + name + " · theme: " + t.Name)
-	return logoCompact(t.Primary) + info + "\n"
+	
+	// Count Gherkin specs in docs/stories/ and Taffy workflows in .*/taffy/
+	gherkinCount := 0
+	if entries, err := os.ReadDir("docs/stories"); err == nil {
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+				gherkinCount++
+			}
+		}
+	}
+	taffyCount := 0
+	for _, harness := range []string{".claude", ".cursor", ".opencode"} {
+		if entries, err := os.ReadDir(filepath.Join(harness, "taffy")); err == nil {
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), ".yml") {
+					taffyCount++
+				}
+			}
+		}
+	}
+	
+	badges := lipgloss.NewStyle().Foreground(t.Accent).Render(fmt.Sprintf("  📋 Gherkin: %d | ▶️ Taffy: %d", gherkinCount, taffyCount))
+	return logoCompact(t.Primary) + info + "\n" + badges + "\n"
 }
 
 func (m *dashboardModel) footer() string {
