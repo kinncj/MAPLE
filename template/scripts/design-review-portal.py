@@ -105,7 +105,7 @@ def list_artifacts(root: pathlib.Path, stage: str) -> List[Dict]:
     elif "visual-identity" in stage or "design-tokens" in stage:
         roots = ["docs/design/identity", "docs/stories"]
     elif "mockup" in stage:
-        roots = ["docs/design/mockups", "docs/design/identity", "docs/stories"]
+        roots = ["docs/design/mockups", "docs/design/system/components", "docs/design/identity", "docs/stories"]
 
     items: List[Dict] = []
     for r in roots:
@@ -118,8 +118,10 @@ def list_artifacts(root: pathlib.Path, stage: str) -> List[Dict]:
             rel = p.relative_to(root).as_posix()
             ext = p.suffix.lower()
             kind = "text"
-            if ext in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}:
+            if ext in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
                 kind = "image"
+            elif ext in {".html", ".htm", ".svg"}:
+                kind = "preview"
             elif ext in {".json", ".md", ".tsx", ".ts", ".css", ".html", ".yaml", ".yml"}:
                 kind = "text"
             else:
@@ -181,6 +183,7 @@ def render_index(token: str) -> str:
     .h1 {{ font-size:24px; font-weight:700; margin:0 0 16px; }}
     .sub {{ color:var(--muted); font-size:13px; margin-bottom:16px; }}
     .row {{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }}
+    @media (max-width: 980px) {{ .row {{ grid-template-columns: 1fr; }} }}
     .card {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }}
     .label {{ color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; }}
     .value {{ font-size:15px; margin-top:4px; }}
@@ -193,6 +196,13 @@ def render_index(token: str) -> str:
     .list {{ margin-top:12px; max-height:520px; overflow:auto; border:1px solid var(--line); border-radius:10px; }}
     .item {{ display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border-bottom:1px solid var(--line); }}
     .item:last-child {{ border-bottom:none; }}
+    .item button {{ background:#1f2937; padding:5px 10px; border-radius:8px; font-size:12px; }}
+    .preview {{ margin-top:12px; border:1px solid var(--line); border-radius:10px; background:#0b0d12; min-height:260px; }}
+    .preview-head {{ display:flex; justify-content:space-between; gap:8px; border-bottom:1px solid var(--line); padding:10px 12px; color:var(--muted); font-size:12px; }}
+    .preview-body {{ padding:12px; max-height:520px; overflow:auto; }}
+    .preview-body img {{ max-width:100%; border-radius:8px; }}
+    .preview-body iframe {{ width:100%; height:520px; border:0; border-radius:8px; background:#fff; }}
+    .code {{ white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }}
     a {{ color:var(--accent); text-decoration:none; }}
     .chip {{ font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px; }}
     .status {{ font-weight:700; }}
@@ -220,6 +230,13 @@ def render_index(token: str) -> str:
       <div class="card">
         <div class="label">Artifacts</div>
         <div id="artifacts" class="list"></div>
+        <div class="preview">
+          <div class="preview-head">
+            <span>Visual preview</span>
+            <span id="previewPath">No preview selected</span>
+          </div>
+          <div id="previewBody" class="preview-body">No preview available yet for this stage.</div>
+        </div>
       </div>
     </div>
   </div>
@@ -260,16 +277,68 @@ def render_index(token: str) -> str:
       const a = await api("/api/artifacts");
       const box = document.getElementById("artifacts");
       box.innerHTML = "";
+      let selected = null;
       if (!a.items || a.items.length === 0) {{
         box.innerHTML = '<div class="item"><span>No artifacts found for this stage.</span></div>';
+        setPreview(null);
         return;
       }}
       for (const item of a.items) {{
         const row = document.createElement("div");
         row.className = "item";
         const href = "/artifact/" + encodeURIComponent(item.path);
-        row.innerHTML = `<span><a target="_blank" href="${{href}}">${{esc(item.path)}}</a></span><span class="chip">${{esc(item.kind)}}</span>`;
+        const left = document.createElement("span");
+        left.innerHTML = `<a target="_blank" href="${{href}}">${{esc(item.path)}}</a>`;
+        const right = document.createElement("span");
+        right.innerHTML = `<span class="chip">${{esc(item.kind)}}</span>`;
+        const btn = document.createElement("button");
+        btn.textContent = "preview";
+        btn.addEventListener("click", () => setPreview(item));
+        right.appendChild(document.createTextNode(" "));
+        right.appendChild(btn);
+        row.appendChild(left);
+        row.appendChild(right);
         box.appendChild(row);
+        if (!selected && isPreviewable(item)) {{
+          selected = item;
+        }}
+      }}
+      setPreview(selected);
+    }}
+
+    function isPreviewable(item) {{
+      if (!item) return false;
+      if (item.kind === "image" || item.kind === "preview") return true;
+      const p = String(item.path || "").toLowerCase();
+      return p.endsWith(".md") || p.endsWith(".tsx") || p.endsWith(".ts") || p.endsWith(".css") || p.endsWith(".json");
+    }}
+
+    async function setPreview(item) {{
+      const pathEl = document.getElementById("previewPath");
+      const body = document.getElementById("previewBody");
+      if (!item) {{
+        pathEl.textContent = "No preview selected";
+        body.textContent = "No preview available yet for this stage.";
+        return;
+      }}
+      const path = String(item.path || "");
+      const lower = path.toLowerCase();
+      const href = "/artifact/" + encodeURIComponent(path);
+      pathEl.textContent = path;
+      if (item.kind === "image") {{
+        body.innerHTML = `<img src="${{href}}" alt="${{esc(path)}}"/>`;
+        return;
+      }}
+      if (item.kind === "preview" || lower.endsWith(".html") || lower.endsWith(".htm") || lower.endsWith(".svg")) {{
+        body.innerHTML = `<iframe src="${{href}}" title="${{esc(path)}}"></iframe>`;
+        return;
+      }}
+      try {{
+        const res = await fetch(href);
+        const txt = await res.text();
+        body.innerHTML = `<div class="code">${{esc(txt.slice(0, 120000))}}</div>`;
+      }} catch (e) {{
+        body.textContent = "Failed to load preview content.";
       }}
     }}
 
