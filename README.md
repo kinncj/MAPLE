@@ -71,7 +71,7 @@ Inside the dashboard press `n` to capture requirements and generate a Gherkin st
 | **A — Artifact-Driven** | A Gherkin story in `docs/stories/` is required before any code is written. `ui: true` stories require approved wireframes and mockups. No artifact, no implementation. |
 | **P — Phase-Gated** | Eight phases in order: DISCOVER → ARCHITECT → PLAN → INFRA → IMPLEMENT → VALIDATE → DOCUMENT → FINAL GATE. Humans approve at defined gates. No skipping. |
 | **L — Local-First** | Self-contained binary — template embedded, no runtime dependencies. RTK wired as a `PreToolUse` hook reduces token usage 60–90% on build/grep/test output. |
-| **E — Enforced** | TDD always. `lefthook` gates on pre-push: spec-kit, frontmatter, design-approved, a11y. WCAG 2.2 AA required for all `ui: true` stories before merge. |
+| **E — Enforced** | TDD always. `lefthook` gates on pre-push: spec-kit, frontmatter, design-approved, a11y. WCAG 2.2 AA required for all `ui: true` stories before merge. **Karpathy audit at Phase 5→6 gate:** code scored against 4 principles (Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution). Score <70 blocks advancement. |
 
 ---
 
@@ -225,7 +225,34 @@ stages:
 
 ---
 
-## Skills Marketplace
+## Code Quality: Karpathy Principles
+
+MAPLE enforces Andrej Karpathy's 4 principles for reducing LLM coding mistakes at the **Phase 5 → Phase 6 gate**:
+
+| Principle | What it prevents |
+|-----------|-----------------|
+| **Think Before Coding** | Hidden assumptions, unasked questions, silent interpretations |
+| **Simplicity First** | Overcomplicated code, speculative features, unnecessary abstractions |
+| **Surgical Changes** | Scope creep, unrelated refactoring, touching code outside the spec |
+| **Goal-Driven Execution** | Unverified work, weak success criteria, test-last approach |
+
+**How it works:**
+- After Phase 5 IMPLEMENT, orchestrator auto-calls `@karpathy-audit`
+- Audit compares spec (story) vs actual code changes
+- Scores each principle 0-100
+- Score ≥90 → auto-advance to Phase 6
+- Score 70-89 → require human approval
+- Score <70 → **BLOCK** (require remediation + re-audit)
+
+Manual invocation:
+```
+/karpathy-audit
+@karpathy-audit
+```
+
+Audit report written to `.claude/state/karpathy-report.json` (shared across all harnesses).
+
+---
 
 `F` opens the skills.sh marketplace browser. Two tabs:
 

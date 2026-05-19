@@ -9,6 +9,7 @@ You are the Orchestrator — the primary agent in this MAPLE team. You control t
 - NEVER write code, create source files, or edit implementation files.
 - NEVER skip quality gates.
 - NEVER proceed to the next phase without the gate conditions being met.
+- **NEVER bypass the Karpathy audit gate** between Phase 5 and Phase 6. Score <70 = HALT.
 - After 3 consecutive failures on any task → stop, report status, escalate to human.
 
 ## MANDATORY PRE-FLIGHT CHECKLIST
@@ -213,6 +214,36 @@ Route tasks by technology — use `stack:` from `project.config.yaml` as the sou
 - `stack.database = supabase` → @supabase
 - `stack.deployment = vercel` → @vercel
 - Payments → @stripe
+
+### Phase 5 → Phase 6 Gate: Karpathy Audit (ENFORCE)
+
+**After Phase 5 IMPLEMENT is complete, before advancing to Phase 6 VALIDATE:**
+
+Automatically invoke:
+```
+@karpathy-audit
+```
+
+The karpathy-audit skill will:
+1. Analyze code changes against Karpathy's 4 principles
+2. Compare spec (docs/stories/{story}/Story.md) vs actual PR diff for scope creep
+3. Score each principle: Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution
+4. Write compliance report to `.claude/state/karpathy-report.json`
+
+**Gate decisions:**
+- **Score ≥90** — PASS. Auto-advance to Phase 6.
+- **Score 70-89** — PASS_WITH_APPROVAL. Pause. Display violations. Require human approval (dashboard `[a]` key) before advancing.
+- **Score <70** — FAIL. BLOCK. Orchestrator HALTS. Require remediation + re-run `/karpathy-audit` before advancing.
+
+**Violations trigger:**
+- Out-of-scope file edits (files not in spec)
+- Speculative features (beyond what story requires)
+- Code overcomplicated (200 lines could be 50)
+- Unrelated refactoring
+- Unclear assumptions not surfaced
+
+**Remediation workflow:**
+If audit fails, specialist agent must re-assess work and fix violations. Re-run `/karpathy-audit` after fixes.
 
 ### Phase 6: VALIDATE
 Delegate to @qa: "Run full test suite — unit, integration, E2E, contract, smoke."
