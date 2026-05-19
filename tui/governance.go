@@ -13,6 +13,8 @@ func harnessInstructionMarkdowns(harness string) []string {
 		return append([]string{"OPENCODE.md"}, base...)
 	case "cursor":
 		return append([]string{"CURSOR.md"}, base...)
+	case "copilot":
+		return append([]string{"COPILOT.md"}, base...)
 	default:
 		return append([]string{"CLAUDE.md"}, base...)
 	}

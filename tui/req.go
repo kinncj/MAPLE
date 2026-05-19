@@ -767,7 +767,7 @@ func (m *reqModel) buildImplementationPrompt(harness string) string {
 	sb.WriteString("</maple-gherkin-handoff>\n")
 	sb.WriteString("\n<maple-governance>\n")
 	sb.WriteString("Hard requirements:\n")
-	sb.WriteString("- Strictly follow repository instruction files: `CLAUDE.md`, `.github/copilot-instructions.md`, and `.github/instructions/stories.instructions.md`.\n")
+	sb.WriteString("- Strictly follow repository instruction files: harness root markdown (`CLAUDE.md`/`OPENCODE.md`/`CURSOR.md`/`COPILOT.md`), `.github/copilot-instructions.md`, and `.github/instructions/stories.instructions.md`.\n")
 	sb.WriteString("- Preserve the BusinessRepo model and required repository layout defined by those files.\n")
 	sb.WriteString("- Never place acceptance tests in `/app`; write them under `/tests` and `/tests/features`.\n")
 	sb.WriteString("- Runtime code and tests must never import from `docs/`, `.github/`, or `.claude/` paths.\n")

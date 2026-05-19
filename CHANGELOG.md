@@ -7,6 +7,16 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.12.11] — 2026-05-19
+
+### Added
+- **Copilot harness governance contract**: added `COPILOT.md` as a first-class runtime instruction file for MAPLE launches, including pipeline-runner behavior, heartbeat requirements, BusinessRepo boundaries, and approval-loop handling.
+
+### Changed
+- **Governance bootstrap harness mapping**: Copilot launches now include `COPILOT.md` in mandatory instruction bootstrap alongside shared policy files.
+- **Pipeline-runner harness docs parity**: pipeline-runner skill templates (Claude/OpenCode/Cursor) now explicitly list Copilot root markdown support in runtime policy enforcement.
+- **Req handoff instruction wording**: implementation handoff prompts now reference harness-specific root markdown (`CLAUDE.md` / `OPENCODE.md` / `CURSOR.md` / `COPILOT.md`) instead of a Claude-only root file.
+
 ## [4.12.10] — 2026-05-19
 
 ### Fixed

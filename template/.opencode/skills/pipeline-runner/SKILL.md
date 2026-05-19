@@ -92,6 +92,7 @@ Before any stage execution, read and enforce:
   - Claude harness → `CLAUDE.md`
   - OpenCode harness → `OPENCODE.md`
   - Cursor harness → `CURSOR.md`
+  - Copilot harness → `COPILOT.md`
 - `AGENTS.md`
 - `.github/copilot-instructions.md`
 - `.github/instructions/stories.instructions.md` (when touching story files)
