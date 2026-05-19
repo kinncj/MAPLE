@@ -1851,19 +1851,8 @@ func sessionUUID(s sessionRow) string {
 // launcherTools returns a list of tool names available for launching.
 func launcherTools() []string {
 	var tools []string
-	if p, _ := exec.LookPath("claude"); p != "" {
-		tools = append(tools, "claude")
-	}
-	if p, _ := exec.LookPath("opencode"); p != "" {
-		tools = append(tools, "opencode")
-	}
-	if p, _ := exec.LookPath("copilot"); p != "" {
-		tools = append(tools, "copilot")
-	}
-	if p, _ := exec.LookPath("cursor-agent"); p != "" {
-		tools = append(tools, "cursor")
-	} else if p, _ := exec.LookPath("cursor"); p != "" {
-		tools = append(tools, "cursor")
+	for _, h := range Detect().Harnesses() {
+		tools = append(tools, h.Key)
 	}
 	if len(tools) == 0 {
 		tools = append(tools, "claude") // show as option even if not detected

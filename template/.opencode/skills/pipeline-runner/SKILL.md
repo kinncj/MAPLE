@@ -26,6 +26,7 @@ Examples:
 ```
 /pipeline-runner new-ui-feature
 /pipeline-runner api-endpoint
+/pipeline-runner implement-stories
 /pipeline-runner bugfix
 /pipeline-runner design-refresh
 ```

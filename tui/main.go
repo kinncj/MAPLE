@@ -369,7 +369,7 @@ func resolveTemplateFS() (fs.FS, string) {
 }
 
 // runResumeSession reads .claude/state/sessions.json and launches the pinned
-// session for the given harness. If harness is "", it prefers claude then opencode.
+// session for the given harness. If harness is "", it prefers detected harness order.
 func runResumeSession(harness string) error {
 	data, err := os.ReadFile(".claude/state/sessions.json")
 	if err != nil {
@@ -384,7 +384,7 @@ func runResumeSession(harness string) error {
 	}
 
 	if harness == "" {
-		for _, pref := range []string{"claude", "opencode", "copilot"} {
+		for _, pref := range []string{"claude", "copilot", "opencode", "cursor"} {
 			if sessions[pref] != "" {
 				harness = pref
 				break
@@ -417,8 +417,14 @@ func runResumeSession(harness string) error {
 		args = []string{"opencode", "--session", id}
 	case "copilot":
 		args = []string{"copilot", "--resume=" + id}
+	case "cursor":
+		cursorBin := "cursor-agent"
+		if _, err := exec.LookPath(cursorBin); err != nil {
+			cursorBin = "cursor"
+		}
+		args = []string{cursorBin}
 	default:
-		return fmt.Errorf("unknown harness %q — supported: claude, opencode, copilot", harness)
+		return fmt.Errorf("unknown harness %q — supported: claude, copilot, opencode, cursor", harness)
 	}
 
 	short := id

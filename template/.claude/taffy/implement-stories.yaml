@@ -1,0 +1,18 @@
+name: implement-stories
+description: "Implement pre-written stories via orchestrator 8-phase + Karpathy (no spec-kit rerun)"
+version: "1.0"
+tags: [implementation, orchestrator, gherkin]
+
+stages:
+  - name: standard-8-phase
+    pipeline: standard
+    description: "Run the full 8-phase SDLC pipeline (DISCOVER → FINAL GATE) over existing stories"
+    gate: auto
+    when: always
+
+  - name: a11y-audit
+    agent: a11y-auditor
+    description: "WCAG 2.2 AA accessibility audit for UI stories"
+    gate: auto
+    when: ui:true
+    depends_on: [standard-8-phase]

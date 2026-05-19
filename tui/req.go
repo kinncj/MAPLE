@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,14 +23,10 @@ import (
 // gh copilot (explain/suggest) is excluded — it only handles shell commands.
 func availableAITools(tools Tools) []aiOption {
 	var opts []aiOption
-	if tools.Claude != "" {
-		opts = append(opts, aiOption{"Claude Code", "claude", tools.Claude})
-	}
-	if tools.Copilot != "" {
-		opts = append(opts, aiOption{"GitHub Copilot", "copilot", tools.Copilot})
-	}
-	if tools.OpenCode != "" {
-		opts = append(opts, aiOption{"OpenCode", "opencode", tools.OpenCode})
+	for _, h := range tools.Harnesses() {
+		if h.SupportsReq {
+			opts = append(opts, aiOption{h.ReqLabel, h.Key, h.Bin})
+		}
 	}
 	return opts
 }
@@ -40,7 +37,7 @@ func runReq(tools Tools) error {
 	tools = Detect()
 	opts := availableAITools(tools)
 	if len(opts) == 0 {
-		return fmt.Errorf("no AI tool available — install claude, copilot, or opencode")
+		return fmt.Errorf("no AI tool available — install claude, copilot, opencode, or cursor-agent")
 	}
 	t, _ := detectOmarchyTheme()
 	m := newReqModel(tools, t)
@@ -69,6 +66,7 @@ const (
 	reqStepSending                  // waiting for AI
 	reqStepStories                  // list of converted stories
 	reqStepViewStory                // full content of one story
+	reqStepPickImplementationHarness
 )
 
 type gherkinStory struct {
@@ -100,6 +98,8 @@ type reqModel struct {
 	viewingIdx   int
 	scrollOffset int
 	storyListTop int // Y row where first story item is rendered (for mouse clicks)
+	implReturnTo reqStep
+	implCursor   int
 }
 
 type reqDoneMsg struct {
@@ -261,6 +261,12 @@ func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "q", "esc":
 				return m, tea.Quit
+			case "i":
+				if len(m.stories) > 0 {
+					m.implReturnTo = reqStepStories
+					m.implCursor = m.defaultHarnessCursor()
+					m.step = reqStepPickImplementationHarness
+				}
 			}
 			return m, nil
 
@@ -300,6 +306,34 @@ func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.step = reqStepStories
 			case "q":
 				return m, tea.Quit
+			case "i":
+				if len(m.stories) > 0 {
+					m.implReturnTo = reqStepViewStory
+					m.implCursor = m.defaultHarnessCursor()
+					m.step = reqStepPickImplementationHarness
+				}
+			}
+			return m, nil
+
+		case reqStepPickImplementationHarness:
+			switch msg.String() {
+			case "up", "k":
+				if m.implCursor > 0 {
+					m.implCursor--
+				}
+			case "down", "j":
+				if m.implCursor < len(m.aiOptions)-1 {
+					m.implCursor++
+				}
+			case "enter":
+				if m.implCursor < len(m.aiOptions) {
+					m.step = m.implReturnTo
+					return m, m.launchImplementationCmd(m.aiOptions[m.implCursor])
+				}
+			case "esc":
+				m.step = m.implReturnTo
+			case "q":
+				return m, tea.Quit
 			}
 			return m, nil
 		}
@@ -330,6 +364,13 @@ func (m *reqModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		m.stories = msg.stories
 		m.storyCursor = 0
+		m.step = reqStepStories
+
+	case spawnSucceededMsg:
+		return m, tea.Quit
+
+	case spawnFailedMsg:
+		m.err = fmt.Errorf("could not open a new terminal.\nRun manually:\n%s", strings.Join(msg.args, " "))
 		m.step = reqStepStories
 	}
 
@@ -396,6 +437,9 @@ func (m *reqModel) View() string {
 
 	case reqStepViewStory:
 		return hdr + m.storyDetailView(t)
+
+	case reqStepPickImplementationHarness:
+		return hdr + m.implementationHarnessPickerView(t, cursor)
 	}
 	return ""
 }
@@ -491,7 +535,7 @@ func (m *reqModel) storiesView(t Theme, cursor string) string {
 	}
 
 	sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render(
-		"  j/k Navigate · Enter/Click View · e Edit · R Regenerate · q Quit") + "\n")
+		"  j/k Navigate · Enter/Click View · e Edit · R Regenerate · i Implement via TAFFY · q Quit") + "\n")
 	return sb.String()
 }
 
@@ -529,11 +573,31 @@ func (m *reqModel) storyDetailView(t Theme) string {
 	if lineCount > visible {
 		pct := (m.scrollOffset * 100) / (lineCount - visible)
 		sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).
-			Render(fmt.Sprintf("  (%d%%)  j/k Scroll · gg/G top/bottom · b/Esc Back · q Quit", pct)) + "\n")
+			Render(fmt.Sprintf("  (%d%%)  j/k Scroll · gg/G top/bottom · i Implement · b/Esc Back · q Quit", pct)) + "\n")
 	} else {
 		sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).
-			Render("  j/k Scroll · b/Esc Back · q Quit") + "\n")
+			Render("  j/k Scroll · i Implement · b/Esc Back · q Quit") + "\n")
 	}
+	return sb.String()
+}
+
+func (m *reqModel) implementationHarnessPickerView(t Theme, cursor string) string {
+	var sb strings.Builder
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("Implement generated stories")
+	sb.WriteString("  " + title + "\n")
+	sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  Select harness for /pipeline-runner implement-stories") + "\n")
+	sb.WriteString(lipgloss.NewStyle().Foreground(t.Muted).Render("  "+strings.Repeat("─", 68)) + "\n\n")
+	for i, opt := range m.aiOptions {
+		kind := lipgloss.NewStyle().Foreground(t.Muted).Render("  " + opt.kind)
+		if i == m.implCursor {
+			label := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render(fmt.Sprintf("%-22s", opt.label))
+			sb.WriteString("  " + cursor + " " + label + kind + "\n")
+		} else {
+			label := lipgloss.NewStyle().Foreground(t.Foreground).Render(fmt.Sprintf("%-22s", opt.label))
+			sb.WriteString("     " + label + kind + "\n")
+		}
+	}
+	sb.WriteString("\n" + lipgloss.NewStyle().Foreground(t.Muted).Render("  j/k Navigate · Enter Launch · Esc Back · q Quit") + "\n")
 	return sb.String()
 }
 
@@ -636,6 +700,99 @@ func convertToGherkin(requirements string, ai aiOption) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+func (m *reqModel) defaultHarnessCursor() int {
+	for i, opt := range m.aiOptions {
+		if opt.kind == m.selectedAI.kind {
+			return i
+		}
+	}
+	return 0
+}
+
+func reqTaffyPathForHarness(kind string) string {
+	switch kind {
+	case "opencode":
+		return ".opencode/taffy/implement-stories.yaml"
+	case "cursor":
+		return ".cursor/taffy/implement-stories.yaml"
+	default:
+		return ".claude/taffy/implement-stories.yaml"
+	}
+}
+
+func writeReqImplementationHandoff(stories []gherkinStory) error {
+	type handoffStory struct {
+		Title string `json:"title"`
+		Path  string `json:"path"`
+		UI    bool   `json:"ui"`
+	}
+	var out []handoffStory
+	for _, s := range stories {
+		if strings.TrimSpace(s.savedTo) == "" {
+			continue
+		}
+		out = append(out, handoffStory{Title: s.title, Path: s.savedTo, UI: s.ui})
+	}
+	_ = os.MkdirAll(".claude/state", 0o755)
+	data, err := json.MarshalIndent(map[string]interface{}{
+		"generated_at": time.Now().UTC().Format(time.RFC3339),
+		"stories":      out,
+	}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(".claude/state/gherkin-handoff.json", append(data, '\n'), 0o644)
+}
+
+func (m *reqModel) buildImplementationPrompt() string {
+	var paths []string
+	for _, s := range m.stories {
+		if strings.TrimSpace(s.savedTo) != "" {
+			paths = append(paths, s.savedTo)
+		}
+	}
+	var sb strings.Builder
+	sb.WriteString("/pipeline-runner implement-stories")
+	sb.WriteString("\n\n<maple-gherkin-handoff>\n")
+	sb.WriteString("These stories were generated and approved via `maple req`.\n")
+	sb.WriteString("Implement and test only these story directories:\n")
+	for _, p := range paths {
+		sb.WriteString("- " + p + "\n")
+	}
+	sb.WriteString("Use `.claude/state/gherkin-handoff.json` as the source of truth for targets.\n")
+	sb.WriteString("Do not regenerate or rewrite stories. Do not rerun spec-kit.\n")
+	sb.WriteString("Run orchestrator + delegation to execute implementation and tests for these stories.\n")
+	sb.WriteString("Enforce the full 8-phase pipeline and Karpathy gate.\n")
+	sb.WriteString("</maple-gherkin-handoff>\n")
+	sb.WriteString(`
+<maple-pipeline>
+You were launched from MAPLE req.
+Keep .claude/state/maple.json updated as you work by writing (merge, never overwrite other keys):
+  {"taffy":"pipeline-runner implement-stories","stage":"<current step>","status":"RUNNING","updated_at":"<ISO-8601 timestamp>"}
+Set status to "DONE" when finished, "FAILED" if you cannot complete.
+</maple-pipeline>`)
+	return sb.String()
+}
+
+func (m *reqModel) launchImplementationCmd(ai aiOption) tea.Cmd {
+	return func() tea.Msg {
+		if len(m.stories) == 0 {
+			return reqDoneMsg{err: fmt.Errorf("no generated stories to implement")}
+		}
+		if _, err := os.Stat(reqTaffyPathForHarness(ai.kind)); err != nil {
+			return reqDoneMsg{err: fmt.Errorf("missing implement-stories workflow for %s. run `maple update` and try again", ai.label)}
+		}
+		if err := writeReqImplementationHandoff(m.stories); err != nil {
+			return reqDoneMsg{err: fmt.Errorf("failed to write gherkin handoff: %w", err)}
+		}
+		writeQuickLaunchState("pipeline-runner implement-stories", "starting")
+		cmd := m.buildImplementationPrompt()
+		args := buildLaunchCmd(ai.kind, cmd, loadPinnedSessions())
+		msg := trySpawnCmdForHarness(ai.kind, args)
+		return msg()
+	}
+}
+
 // invokeAI runs the selected AI tool and returns its stdout output.
 // The prompt is passed as a positional argument (not stdin) to avoid inheriting
 // the Bubble Tea raw-mode terminal state in the subprocess.
@@ -652,6 +809,8 @@ func invokeAI(ai aiOption, prompt string) ([]byte, error) {
 	case "opencode":
 		cmd = exec.Command(ai.path, "run")
 		cmd.Stdin = strings.NewReader(prompt)
+	case "cursor":
+		return invokeCursor(ai.path, prompt)
 	default:
 		return nil, fmt.Errorf("unsupported AI tool: %s", ai.kind)
 	}
@@ -665,6 +824,34 @@ func invokeAI(ai aiOption, prompt string) ([]byte, error) {
 		return nil, fmt.Errorf("%s", msg)
 	}
 	return out, nil
+}
+
+func invokeCursor(binPath, prompt string) ([]byte, error) {
+	candidates := []*exec.Cmd{
+		exec.Command(binPath, "-p", prompt),
+		exec.Command(binPath, "--prompt", prompt),
+		exec.Command(binPath, "run", prompt),
+	}
+	stdinRun := exec.Command(binPath, "run")
+	stdinRun.Stdin = strings.NewReader(prompt)
+	candidates = append(candidates, stdinRun)
+
+	var lastErr string
+	for _, cmd := range candidates {
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return out, nil
+		}
+		msg := strings.TrimSpace(string(out))
+		if msg == "" {
+			msg = err.Error()
+		}
+		lastErr = msg
+	}
+	if lastErr == "" {
+		lastErr = "cursor-agent invocation failed"
+	}
+	return nil, fmt.Errorf("%s", lastErr)
 }
 
 func (m *reqModel) convert(requirements string) tea.Cmd {
