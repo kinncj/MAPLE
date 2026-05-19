@@ -1538,7 +1538,9 @@ func (m *dashboardModel) header() string {
 	gherkinCount := 0
 	if entries, err := os.ReadDir("docs/stories"); err == nil {
 		for _, e := range entries {
-			if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			name := e.Name()
+			// Skip template and special files
+			if !e.IsDir() && strings.HasSuffix(name, ".md") && name != "_template.md" && !strings.HasPrefix(name, ".") {
 				gherkinCount++
 			}
 		}
