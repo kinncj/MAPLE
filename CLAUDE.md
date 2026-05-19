@@ -181,7 +181,11 @@ return m, tea.Quit
 
 ### `spawnInNewTerminal` detection order
 
-`$ZELLIJ` → `$TMUX` → `$STY` (screen) → `$WEZTERM_PANE` → `$KITTY_PID` → macOS osascript → Linux emulators → Windows Terminal → `errNoNewTerminal`
+`$ZELLIJ` → `$TMUX` → `$STY` (screen) → `$WEZTERM_PANE` → `$KITTY_PID` → Ghostty (`TERM_PROGRAM=ghostty`/`GHOSTTY_RESOURCES_DIR`) → Alacritty (`TERM=alacritty`/`ALACRITTY_SOCKET`) → macOS iTerm2/Terminal.app via osascript → Linux GNOME Terminal (`--tab`) / Konsole (`--new-tab`) / generic list → Windows Terminal → `errNoNewTerminal`
+
+Ghostty and Alacritty are checked before the OS switch so they work on both macOS and Linux. On macOS, if the binary isn't on PATH (app-bundle install), `open -na AppName --args` is tried as fallback.
+
+The launch script always embeds the resolved full binary path so minimal-PATH shells (e.g. `/bin/sh` on macOS opened via `Terminal.app do script`) can find Homebrew/npm-installed tools.
 
 When `errNoNewTerminal` is returned, `trySpawnCmd` sends `spawnFailedMsg` and the manual-launch modal appears. Never swallow the error silently.
 
