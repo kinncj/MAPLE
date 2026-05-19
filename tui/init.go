@@ -345,6 +345,7 @@ func doInit(tools Tools, fsys fs.FS, force bool) ([]string, error) {
 
 	// Taffy workflows ship inside the template — nothing to install separately.
 	log("✓ taffy workflows ready (.claude/taffy/, .opencode/taffy/, .cursor/taffy/)")
+	log("✓ humanizer skill ready (remove AI-isms from documentation/prose)")
 
 	return logs, nil
 }
