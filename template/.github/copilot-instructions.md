@@ -196,7 +196,7 @@ Insert design sub-pipeline before IMPLEMENT:
 **Canonical design artifact paths:**
 | Artifact | Canonical Path |
 |---|---|
-| Wireframes | `docs/design/wireframes/<story-id>.wireframe.{md,svg,html}` |
+| Wireframes | `docs/design/wireframes/<story-id>.wireframe.{md,html,excalidraw}` — **all three required per run** |
 | Mockups | `docs/design/mockups/<story-id>.mockup.{tsx,html}` |
 | Visual identity | `docs/design/identity/` |
 | Design system | `docs/design/system/components/` |

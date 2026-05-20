@@ -34,7 +34,7 @@
 | 27 | docs | Feature docs, CHANGELOG, Mermaid |
 | 28 | spec-kit | Gherkin story author — writes story file to `docs/stories/`, halts for approval |
 | 29 | ux-researcher | Personas, journey maps, research summaries — feeds wireframe-architect |
-| 30 | wireframe-architect | Low-fidelity wireframes (ASCII/SVG/HTML) — requires human approval |
+| 30 | wireframe-architect | Low-fidelity wireframes (md + html + excalidraw, all three required) — requires human approval |
 | 31 | visual-identity-designer | Brand palette, typography, spacing — outputs `palette.json` + `tokens.json` |
 | 32 | design-system-author | Design token system — writes `tokens.json`, CSS vars, Tailwind config, Mantine theme |
 | 33 | ui-mockup-builder | High-fidelity UI mockups as React code — requires wireframe approval |

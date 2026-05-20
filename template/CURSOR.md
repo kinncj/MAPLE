@@ -84,6 +84,12 @@ When completing code for a story, respect the Gherkin scenarios in the story fil
 - Gherkin/Cucumber scenarios for user-facing behavior (extracted into `tests/features/` at build time).
 - A11y audit required for any component with `ui: true` in story frontmatter.
 
+**Canonical design artifact paths (never deviate):**
+- Wireframes → `docs/design/wireframes/<story-id>.wireframe.{md,html,excalidraw}` — **all three files required every run; `.md` only is incomplete**
+- Mockups → `docs/design/mockups/<story-id>.mockup.{tsx,html}`
+- Visual identity → `docs/design/identity/`
+- **Never write to `docs/wireframes/`, `docs/identity/`, `docs/mockups/`, or any path outside `docs/design/`.**
+
 ---
 
 ## Design Tokens

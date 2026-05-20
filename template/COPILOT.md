@@ -85,7 +85,7 @@ At human-approval gates:
 For design review gates, also keep `.claude/state/design-artifacts.json` updated with previewable artifact paths so the MAPLE review portal reflects progress continuously.
 
 **Canonical design artifact paths (never deviate from these):**
-- Wireframes → `docs/design/wireframes/<story-id>.wireframe.{md,svg,html}`
+- Wireframes → `docs/design/wireframes/<story-id>.wireframe.{md,html,excalidraw}` — **all three files are required every run; producing only `.md` is incomplete**
 - Mockups → `docs/design/mockups/<story-id>.mockup.{tsx,html}`
 - Visual identity → `docs/design/identity/`
 - **Never write to `docs/wireframes/`, `docs/identity/`, `docs/mockups/`, or any path outside `docs/design/`.**

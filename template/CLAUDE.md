@@ -59,7 +59,7 @@ Pipeline rules:
 - A11y audit required after IMPLEMENT for all `ui: true` stories
 
 **Canonical design artifact paths (do not deviate):**
-- Wireframes → `docs/design/wireframes/<story-id>.wireframe.{md,svg,html}`
+- Wireframes → `docs/design/wireframes/<story-id>.wireframe.{md,html,excalidraw}` — **all three files are required every run; producing only `.md` is incomplete**
 - Mockups → `docs/design/mockups/<story-id>.mockup.{tsx,html}`
 - Visual identity → `docs/design/identity/` (palette.json, tokens.json, typography.json, …)
 - Design system components → `docs/design/system/components/`
