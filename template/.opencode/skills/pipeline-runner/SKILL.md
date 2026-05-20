@@ -175,13 +175,21 @@ When a stage has `gate: human-approval`:
 1. Complete stage work (produce artifact).
    - For design review stages (`wireframe`, `visual-identity`, `design-tokens`, `ui-mockup-builder`, `design-refresh`), artifact production is mandatory:
       - create at least one previewable artifact (`.excalidraw`, `.html`, `.svg`, `.png`, `.jpg`, `.jpeg`, `.webp`, or `.md`) under docs/design (or approved artifact dirs), and
-      - for `wireframe`, `ui-mockup-builder`, and `design-refresh`, include at least one `.excalidraw` artifact (required), and
+      - for `wireframe`, `ui-mockup-builder`, and `design-refresh`, all three formats are required: `.md`, `.html`, and `.excalidraw` — a run that produces only `.md` is incomplete, and
       - update `.claude/state/design-artifacts.json` with current stage artifact paths so the review portal can update live.
-   - **Path gate for `wireframe` stage (mandatory before PAUSING):**
+   - **Path + completeness gate for `wireframe` stage (mandatory before PAUSING):**
      ```bash
-     # Verify wireframes are in the canonical location
+     # Verify wireframes are in the canonical location and all three formats exist
      CANONICAL=$(find docs/design/wireframes -name "*.wireframe.*" 2>/dev/null | wc -l | tr -d ' ')
      MISPLACED=$(find docs -name "*.wireframe.*" -not -path "*/docs/design/wireframes/*" 2>/dev/null)
+     MISSING_HTML=$(find docs/design/wireframes -name "*.wireframe.md" 2>/dev/null | while read md; do
+       base="${md%.wireframe.md}"
+       [ ! -f "${base}.wireframe.html" ] && echo "${base}.wireframe.html"
+     done)
+     MISSING_EXCALIDRAW=$(find docs/design/wireframes -name "*.wireframe.md" 2>/dev/null | while read md; do
+       base="${md%.wireframe.md}"
+       [ ! -f "${base}.wireframe.excalidraw" ] && echo "${base}.wireframe.excalidraw"
+     done)
      if [ "$CANONICAL" -eq 0 ]; then
        if [ -n "$MISPLACED" ]; then
          echo "PIPELINE GATE FAILED: wireframes found at wrong path(s): $MISPLACED"
@@ -191,8 +199,16 @@ When a stage has `gate: human-approval`:
        fi
        # set maple.json FAILED and stop
      fi
+     if [ -n "$MISSING_HTML" ]; then
+       echo "PIPELINE GATE FAILED: missing .wireframe.html for: $MISSING_HTML — generate it now."
+       # set maple.json FAILED and stop
+     fi
+     if [ -n "$MISSING_EXCALIDRAW" ]; then
+       echo "PIPELINE GATE FAILED: missing .wireframe.excalidraw for: $MISSING_EXCALIDRAW — generate it now."
+       # set maple.json FAILED and stop
+     fi
      ```
-     If the gate fails, move misplaced files to `docs/design/wireframes/` with the correct `<story-id>.wireframe.md` naming, then re-run the gate check.
+     If the gate fails, produce the missing files before re-running the gate check.
    - If no reviewable artifact exists for a design gate, set `maple.json` to `FAILED` and stop.
 2. Write PAUSED state:
 ```json
