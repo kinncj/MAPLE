@@ -13,7 +13,9 @@ ACTION="${1:-start}"
 PORT="${2:-}"
 PID_FILE=".claude/state/design-portal.pid"
 URL_FILE=".claude/state/design-portal.url"
-SERVE_DIR="docs/design"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PORTAL_PY="$SCRIPT_DIR/design-review-portal.py"
+TOKEN_FILE=".claude/state/design-portal.token"
 
 _stop_existing() {
   if [[ -f "$PID_FILE" ]]; then
@@ -47,20 +49,21 @@ case "$ACTION" in
 
     _stop_existing
     mkdir -p .claude/state
-    mkdir -p "$SERVE_DIR"
 
     URL="http://127.0.0.1:${PORT}"
 
-    if command -v python3 &>/dev/null; then
-      python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$SERVE_DIR" >/dev/null 2>&1 &
-      SERVER_PID=$!
-    elif command -v python &>/dev/null; then
-      (cd "$SERVE_DIR" && python -m SimpleHTTPServer "$PORT" >/dev/null 2>&1) &
-      SERVER_PID=$!
-    else
-      echo "python3 or python is required to run the design review portal" >&2
+    if [[ ! -f "$PORTAL_PY" ]]; then
+      echo "design-review-portal.py not found at $PORTAL_PY" >&2
       exit 1
     fi
+
+    if ! command -v python3 &>/dev/null; then
+      echo "python3 is required to run the design review portal" >&2
+      exit 1
+    fi
+
+    python3 "$PORTAL_PY" --root "$(pwd)" --port "$PORT" --token-file "$TOKEN_FILE" >/dev/null 2>&1 &
+    SERVER_PID=$!
 
     echo "$SERVER_PID" > "$PID_FILE"
     echo "$URL" > "$URL_FILE"
