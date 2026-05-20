@@ -83,3 +83,9 @@ At human-approval gates:
 - process `.claude/state/design-feedback.json` (including `attachments`) before resume when status indicates requested changes or rejection
 
 For design review gates, also keep `.claude/state/design-artifacts.json` updated with previewable artifact paths so the MAPLE review portal reflects progress continuously.
+
+**Canonical design artifact paths (never deviate from these):**
+- Wireframes → `docs/design/wireframes/<story-id>.wireframe.{md,svg,html}`
+- Mockups → `docs/design/mockups/<story-id>.mockup.{tsx,html}`
+- Visual identity → `docs/design/identity/`
+- **Never write to `docs/wireframes/`, `docs/identity/`, `docs/mockups/`, or any path outside `docs/design/`.**

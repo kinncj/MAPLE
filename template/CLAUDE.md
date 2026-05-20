@@ -58,6 +58,14 @@ Pipeline rules:
 - `ui: true` stories require approved wireframe + mockup before IMPLEMENT phase
 - A11y audit required after IMPLEMENT for all `ui: true` stories
 
+**Canonical design artifact paths (do not deviate):**
+- Wireframes → `docs/design/wireframes/<story-id>.wireframe.{md,svg,html}`
+- Mockups → `docs/design/mockups/<story-id>.mockup.{tsx,html}`
+- Visual identity → `docs/design/identity/` (palette.json, tokens.json, typography.json, …)
+- Design system components → `docs/design/system/components/`
+- Research → `docs/design/research/`
+- **Never write design artifacts to `docs/wireframes/`, `docs/identity/`, `docs/mockups/`, or any path outside `docs/design/`.**
+
 ---
 
 ## Communication Style

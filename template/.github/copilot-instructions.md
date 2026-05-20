@@ -192,3 +192,13 @@ Insert design sub-pipeline before IMPLEMENT:
 5. Mockup → **PAUSE for human approval**
 6. Component Scaffold
 7. After IMPLEMENT: A11y audit — no critical/serious WCAG 2.2 AA violations
+
+**Canonical design artifact paths:**
+| Artifact | Canonical Path |
+|---|---|
+| Wireframes | `docs/design/wireframes/<story-id>.wireframe.{md,svg,html}` |
+| Mockups | `docs/design/mockups/<story-id>.mockup.{tsx,html}` |
+| Visual identity | `docs/design/identity/` |
+| Design system | `docs/design/system/components/` |
+
+Never write design artifacts to `docs/wireframes/`, `docs/identity/`, `docs/mockups/`, or any location outside `docs/design/`.

@@ -41,15 +41,21 @@ Use the `wireframe` skill:
 - Do not write application code.
 - Never mark a wireframe `status: approved` yourself. Approval is a human action.
 - If the story is missing acceptance criteria, stop and request them from product-owner before producing wireframes.
+- **Canonical output path is `docs/design/wireframes/` — no exceptions.** Never write to `docs/wireframes/`, `wireframes/`, or any other path. If those directories exist, ignore them.
+- After writing each file, verify it exists at `docs/design/wireframes/<story-id>.wireframe.{md,svg,html}` and run: `find docs -name "*.wireframe.*" -not -path "*/docs/design/wireframes/*"` — if that returns any results, move the misplaced files and update `design-artifacts.json`.
+- Before completing this stage, update `.claude/state/design-artifacts.json` with the list of created artifact paths.
 
 ## Handoff
 
-After producing wireframes:
+After producing wireframes, verify canonical placement, then output:
 ```
 WIREFRAME COMPLETE
 Story:     {story_id}
 Output:    docs/design/wireframes/{story_id}.wireframe.md
 States:    {list of states covered}
 Tab order: {brief description}
+
+Path check: docs/design/wireframes/ contains {N} wireframe files ✓
+design-artifacts.json: updated ✓
 AWAITING HUMAN APPROVAL before mockup can proceed.
 ```

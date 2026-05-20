@@ -177,6 +177,22 @@ When a stage has `gate: human-approval`:
       - create at least one previewable artifact (`.excalidraw`, `.html`, `.svg`, `.png`, `.jpg`, `.jpeg`, `.webp`, or `.md`) under docs/design (or approved artifact dirs), and
       - for `wireframe`, `ui-mockup-builder`, and `design-refresh`, include at least one `.excalidraw` artifact (required), and
       - update `.claude/state/design-artifacts.json` with current stage artifact paths so the review portal can update live.
+   - **Path gate for `wireframe` stage (mandatory before PAUSING):**
+     ```bash
+     # Verify wireframes are in the canonical location
+     CANONICAL=$(find docs/design/wireframes -name "*.wireframe.*" 2>/dev/null | wc -l | tr -d ' ')
+     MISPLACED=$(find docs -name "*.wireframe.*" -not -path "*/docs/design/wireframes/*" 2>/dev/null)
+     if [ "$CANONICAL" -eq 0 ]; then
+       if [ -n "$MISPLACED" ]; then
+         echo "PIPELINE GATE FAILED: wireframes found at wrong path(s): $MISPLACED"
+         echo "Canonical path is docs/design/wireframes/ — move files there before this stage can complete."
+       else
+         echo "PIPELINE GATE FAILED: no wireframe artifacts in docs/design/wireframes/"
+       fi
+       # set maple.json FAILED and stop
+     fi
+     ```
+     If the gate fails, move misplaced files to `docs/design/wireframes/` with the correct `<story-id>.wireframe.md` naming, then re-run the gate check.
    - If no reviewable artifact exists for a design gate, set `maple.json` to `FAILED` and stop.
 2. Write PAUSED state:
 ```json
