@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 )
 
 var version = "dev" // overridden at build time: -ldflags "-X main.version=vX.Y.Z"
@@ -177,8 +179,30 @@ func runInteractive(fsys fs.FS, noAnimate bool) {
 }
 
 func runDashboardLoop(t Theme, noAnimate bool, tools Tools, fsys fs.FS) {
+	port := findFreePort()
+
+	// Start the design portal once for the lifetime of this session.
+	if port > 0 {
+		if _, err := os.Stat("scripts/design-review-portal.sh"); err == nil {
+			_ = exec.Command("bash", "scripts/design-review-portal.sh", "start", fmt.Sprintf("%d", port)).Run()
+		}
+	}
+
+	// Stop portal on clean exit or SIGTERM/SIGINT.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-sigCh
+		stopDesignPortal()
+		os.Exit(0)
+	}()
+	defer func() {
+		signal.Stop(sigCh)
+		stopDesignPortal()
+	}()
+
 	for {
-		action, openTarget, err := runDashboard(t, noAnimate)
+		action, openTarget, err := runDashboard(t, noAnimate, port)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "dashboard: %v\n", err)
 			return

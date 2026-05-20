@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -258,6 +260,8 @@ type dashboardModel struct {
 	pipelineState   pipelineState
 	approvalPending string // non-empty stage name when .claude/state/approval-pending.txt exists
 	portalAutoStage string // last approval stage for which portal auto-start was attempted
+	portalPort      int    // TCP port the design portal listens on (0 = not assigned)
+	portalURL       string // full URL once portal is running
 
 	// Session launcher overlay
 	showLauncher  bool
@@ -293,13 +297,17 @@ type dashboardModel struct {
 	exitAction dashAction
 }
 
-func newDashboard(t Theme, noAnimate bool) *dashboardModel {
+func newDashboard(t Theme, noAnimate bool, port int) *dashboardModel {
 	npx, _ := exec.LookPath("npx")
 	m := &dashboardModel{
 		theme:      t,
 		noAnimate:  noAnimate,
 		fullscreen: -1,
 		npxPath:    npx,
+		portalPort: port,
+	}
+	if port > 0 {
+		m.portalURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 	}
 	m.reload()
 	return m
@@ -351,7 +359,11 @@ func (m *dashboardModel) clampCursor(c *int, n int) {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 func (m *dashboardModel) Init() tea.Cmd {
-	return tea.Batch(loadPRsCmd(), dashTickCmd(), dashNetTickCmd())
+	cmds := []tea.Cmd{loadPRsCmd(), dashTickCmd(), dashNetTickCmd()}
+	if m.portalPort > 0 {
+		cmds = append(cmds, designPortalCmd(false, false, "", m.portalPort))
+	}
+	return tea.Batch(cmds...)
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
@@ -403,7 +415,7 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if autoStage != m.portalAutoStage {
 			m.portalAutoStage = autoStage
-			return m, tea.Batch(dashTickCmd(), designPortalCmd(false, true, autoStage))
+			return m, tea.Batch(dashTickCmd(), designPortalCmd(false, true, autoStage, m.portalPort))
 		}
 		return m, dashTickCmd()
 
@@ -473,7 +485,10 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == "" {
 			u := msg.url
 			if u == "" {
-				u = "http://127.0.0.1:…"
+				u = fmt.Sprintf("http://127.0.0.1:%d", m.portalPort)
+			}
+			if u != "" {
+				m.portalURL = u
 			}
 			if !msg.auto && msg.open {
 				return m, m.setStatus("✓ opened design review portal "+u, false)
@@ -926,7 +941,7 @@ func (m *dashboardModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.setStatus(msg, false)
 			}
 		case "v":
-			return m, designPortalCmd(true, false, m.approvalPending)
+			return m, designPortalCmd(true, false, m.approvalPending, m.portalPort)
 		case "c":
 			_ = os.Remove(".claude/state/maple.json")
 			_ = os.Remove(".claude/state/approval-pending.txt")
@@ -1581,6 +1596,17 @@ func (m *dashboardModel) header() string {
 		name = "—"
 	}
 	info := lipgloss.NewStyle().Foreground(t.Muted).Render("  project: " + name + " · theme: " + t.Name)
+	if m.portalURL != "" {
+		portalSuffix := "  ⬡ " + m.portalURL
+		// truncate so the whole header stays within terminal width
+		maxPortal := m.width - utf8.RuneCountInString(stripANSI(info)) - 4
+		if maxPortal > 10 && utf8.RuneCountInString(portalSuffix) > maxPortal {
+			portalSuffix = portalSuffix[:maxPortal] + "…"
+		}
+		if maxPortal > 10 {
+			info += lipgloss.NewStyle().Foreground(t.Accent).Render(portalSuffix)
+		}
+	}
 
 	gherkinCount := countGherkinStories()
 	taffyWorkflowCount := countTaffyWorkflows()
@@ -2018,17 +2044,18 @@ func rtkInitCmd(h rtkHarness) tea.Cmd {
 	}
 }
 
-func designPortalCmd(open, auto bool, stage string) tea.Cmd {
+func designPortalCmd(open, auto bool, stage string, port int) tea.Cmd {
 	return func() tea.Msg {
 		script := "scripts/design-review-portal.sh"
 		if _, err := os.Stat(script); err != nil {
 			return designPortalResultMsg{err: "scripts/design-review-portal.sh not found", open: open, auto: auto, stage: stage}
 		}
-		action := "start"
+		var cmd *exec.Cmd
 		if open {
-			action = "open"
+			cmd = exec.Command("bash", script, "open")
+		} else {
+			cmd = exec.Command("bash", script, "start", strconv.Itoa(port))
 		}
-		cmd := exec.Command("bash", script, action)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			msg := strings.TrimSpace(string(out))
@@ -2042,19 +2069,52 @@ func designPortalCmd(open, auto bool, stage string) tea.Cmd {
 	}
 }
 
+// ─── Design portal helpers ────────────────────────────────────────────────────
+
+// findFreePort returns an available TCP port in the range 7800–7899.
+// Respects MAPLE_DESIGN_PORT env override. Returns 0 if none found.
+func findFreePort() int {
+	if v := os.Getenv("MAPLE_DESIGN_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			return p
+		}
+	}
+	for port := 7800; port < 7900; port++ {
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		if err == nil {
+			ln.Close()
+			return port
+		}
+	}
+	return 0
+}
+
+// stopDesignPortal runs the portal stop action, ignoring errors.
+func stopDesignPortal() {
+	if _, err := os.Stat("scripts/design-review-portal.sh"); err == nil {
+		_ = exec.Command("bash", "scripts/design-review-portal.sh", "stop").Run()
+	}
+}
+
+// activeDesignPortalURL reads the URL from .claude/state/design-portal.url if present.
+func activeDesignPortalURL() string {
+	b, err := os.ReadFile(".claude/state/design-portal.url")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 // runDashboard runs the dashboard and returns the exit action and any open
 // target command (used when dashActionOpenAgent is returned).
-func runDashboard(t Theme, noAnimate bool) (dashAction, []string, error) {
-	m := newDashboard(t, noAnimate)
+func runDashboard(t Theme, noAnimate bool, port int) (dashAction, []string, error) {
+	m := newDashboard(t, noAnimate, port)
 	writeRecoveryMarker("running")
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, err := p.Run()
 	writeRecoveryMarker("exited")
-	if script := "scripts/design-review-portal.sh"; func() bool { _, e := os.Stat(script); return e == nil }() {
-		_ = exec.Command("bash", script, "stop").Run()
-	}
 	if err != nil {
 		return dashActionNone, nil, err
 	}
@@ -2161,7 +2221,15 @@ While this TAFFY run is active, never go silent:
 	if kind == "taffy" {
 		governance = governanceBootstrapBlock(harness)
 	}
-	return cmd + governance + taffyContext + uiOverride + tracking + progress
+	portalBlock := ""
+	if u := activeDesignPortalURL(); u != "" {
+		portalBlock = "\n\n<maple-design-portal>\n" +
+			"The MAPLE design review portal is running at: " + u + "\n" +
+			"Browse docs/design/ artifacts there to reference approved wireframes, mockups, and identity tokens.\n" +
+			"Wireframes are at: " + u + "/wireframes/\n" +
+			"</maple-design-portal>"
+	}
+	return cmd + governance + taffyContext + uiOverride + tracking + progress + portalBlock
 }
 
 func writeRecoveryMarker(state string) {

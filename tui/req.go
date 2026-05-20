@@ -806,6 +806,13 @@ Never go silent during this TAFFY implementation run:
 - If required test or gherkin artifacts are missing, set status FAILED and report missing paths.
 - If generated runtime code imports docs/, .github/, or .claude/ files by path, set status FAILED and report offending import paths.
 </maple-progress>`)
+	if u := activeDesignPortalURL(); u != "" {
+		sb.WriteString("\n<maple-design-portal>\n")
+		sb.WriteString("The MAPLE design review portal is running at: " + u + "\n")
+		sb.WriteString("Browse docs/design/ artifacts there to reference approved wireframes, mockups, and identity tokens.\n")
+		sb.WriteString("Wireframes are at: " + u + "/wireframes/\n")
+		sb.WriteString("</maple-design-portal>\n")
+	}
 	return sb.String()
 }
 
