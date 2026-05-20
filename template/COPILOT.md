@@ -1,5 +1,20 @@
 # COPILOT.md — MAPLE Runtime Contract
 
+## Session Start Protocol (mandatory)
+
+Before responding to any implementation request, check:
+
+```bash
+python3 -c "import json; s=json.load(open('.claude/state/maple.json')); print(s.get('status',''))" 2>/dev/null || echo "none"
+```
+
+- **`RUNNING` or `PAUSED`** — pipeline is active. Continue within it.
+- **anything else** — route through `/pipeline-runner` before writing to `app/` or `tests/`.
+
+Never write implementation code outside a running pipeline stage.
+
+---
+
 ## Scope
 
 This file defines mandatory runtime behavior for Copilot harness executions launched by MAPLE (especially TAFFY and `/pipeline-runner` flows).

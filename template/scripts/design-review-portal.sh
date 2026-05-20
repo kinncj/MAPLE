@@ -2,19 +2,18 @@
 set -euo pipefail
 
 ACTION="${1:-start}"
-PORT="${MAPLE_DESIGN_PORT:-4173}"
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_DIR="$ROOT/.claude/state"
 PID_FILE="$STATE_DIR/design-review-portal.pid"
+PORT_FILE="$STATE_DIR/design-review-portal.port"
 LOG_FILE="$STATE_DIR/design-review-portal.log"
 TOKEN_FILE="$STATE_DIR/design-review-portal.token"
 SERVER_SCRIPT="$ROOT/scripts/design-review-portal.py"
 if [ ! -f "$SERVER_SCRIPT" ]; then
   SERVER_SCRIPT="$SCRIPT_DIR/design-review-portal.py"
 fi
-URL="http://127.0.0.1:$PORT"
 
 mkdir -p "$STATE_DIR"
 
@@ -37,6 +36,22 @@ is_running() {
   [ -z "$pid" ] && return 1
   kill -0 "$pid" 2>/dev/null
 }
+
+find_free_port() {
+  if [ -n "${MAPLE_DESIGN_PORT:-}" ] && [ "${MAPLE_DESIGN_PORT:-0}" -gt 0 ] 2>/dev/null; then
+    echo "$MAPLE_DESIGN_PORT"
+    return
+  fi
+  python3 -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); p=s.getsockname()[1]; s.close(); print(p)"
+}
+
+# Use the port the running server is already on; find a free one otherwise
+if is_running && [ -f "$PORT_FILE" ]; then
+  PORT="$(cat "$PORT_FILE" 2>/dev/null || find_free_port)"
+else
+  PORT="$(find_free_port)"
+fi
+URL="http://127.0.0.1:$PORT"
 
 wait_healthy() {
   local i
@@ -72,12 +87,11 @@ start_server() {
   fi
   ensure_token
   if is_running; then
+    echo "$URL"
     return 0
   fi
 
-  if [ -f "$PID_FILE" ]; then
-    rm -f "$PID_FILE"
-  fi
+  rm -f "$PID_FILE"
 
   nohup python3 "$SERVER_SCRIPT" \
     --root "$ROOT" \
@@ -86,22 +100,24 @@ start_server() {
     >>"$LOG_FILE" 2>&1 &
   local pid="$!"
   echo "$pid" > "$PID_FILE"
+  echo "$PORT" > "$PORT_FILE"
 
   if ! wait_healthy; then
     echo "design-review portal failed to start (see $LOG_FILE)" >&2
     exit 1
   fi
+  echo "$URL"
 }
 
 stop_server() {
   if ! is_running; then
-    rm -f "$PID_FILE"
+    rm -f "$PID_FILE" "$PORT_FILE"
     return 0
   fi
   local pid
   pid="$(cat "$PID_FILE")"
   kill "$pid" >/dev/null 2>&1 || true
-  rm -f "$PID_FILE"
+  rm -f "$PID_FILE" "$PORT_FILE"
 }
 
 status_server() {
@@ -133,3 +149,4 @@ case "$ACTION" in
     exit 2
     ;;
 esac
+

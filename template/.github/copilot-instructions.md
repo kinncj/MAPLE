@@ -1,5 +1,27 @@
 # Copilot CLI Instructions — MAPLE
 
+## Session Start Protocol (mandatory)
+
+Before responding to any implementation request, check:
+
+```bash
+python3 -c "import json; s=json.load(open('.claude/state/maple.json')); print(s.get('status',''))" 2>/dev/null || echo "none"
+```
+
+- **`RUNNING` or `PAUSED`** — pipeline is active. Continue within it.
+- **anything else** — no pipeline active. Route through `/pipeline-runner` before writing to `app/` or `tests/`:
+
+```
+/pipeline-runner implement-stories   — implement existing approved stories
+/pipeline-runner new-ui-feature      — full UI pipeline with design gates
+/pipeline-runner api-endpoint        — API feature pipeline
+/pipeline-runner bugfix              — reproduce → fix → validate
+```
+
+Never write implementation code outside a running pipeline stage.
+
+---
+
 ## Agent System
 
 Default agent: `@orchestrator`. It never writes code — delegates everything to specialist agents.

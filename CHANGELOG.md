@@ -7,6 +7,21 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 <!-- Agents append entries here using: gh issue comment + docs agent -->
 
+## [4.13.0] — 2026-05-20
+
+### Added
+- **`implement-stories` design gates**: `implement-stories.yaml` now includes `wireframe → visual-identity → design-tokens → ui-mockup-builder` stages (all `when: ui:true`, human-approval gates) before `standard-8-phase`, matching `new-ui-feature.yaml`. Synced to `.opencode` and `.cursor` mirrors. Fixes silent skip of design review for `ui: true` stories run via MAPLE req handoff.
+- **Pipeline write guard (Claude Code)**: new `PreToolUse[Write/Edit]` hook (`pre-write.sh`) hard-blocks AI writes to `app/` or `tests/` when no MAPLE pipeline is active. Surfaces the correct `/pipeline-runner` command to start.
+- **Session Start Protocol**: all harness root markdowns (`CLAUDE.md`, `COPILOT.md`, `copilot-instructions.md`) now open with an explicit mandatory pipeline-check step, making the orchestrator-first contract visible at the top of every session.
+- **Cursor pipeline rules**: two new rules in `.cursor/rules/` — `pipeline-gate.mdc` (`alwaysApply: true`, injected into every conversation) and `impl-files.mdc` (glob-scoped to `app/**` + `tests/**`, fires when those files enter context).
+- **OpenCode orchestrator agent**: `orchestrator.md` gains `mode: primary` and `permission: edit: deny`, making it a selectable primary agent in the Tab-cycle and enforcing at the runtime level that it never writes files.
+- **Design portal dynamic ports**: portal no longer binds to fixed port 4173. Uses `MAPLE_DESIGN_PORT` if set; otherwise asks the OS for a free port. Chosen port written to `.claude/state/design-review-portal.port`.
+- **Design portal stop on maple quit**: `runDashboard` calls `design-review-portal.sh stop` when the TUI exits, so the portal process does not outlive the maple session.
+- **Portal URL in status bar**: the URL (with actual port) is now shown in the status bar when the portal starts or opens.
+
+### Changed
+- `schema.yaml`: skipped stages (due to `when:` guard) are now explicitly documented as dependency-satisfied for `depends_on` resolution.
+
 ## [4.12.15] — 2026-05-19
 
 ### Fixed

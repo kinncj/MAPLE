@@ -17,7 +17,9 @@
 #                           auto: continue immediately after stage completes
 #   when         string   — always | ui:true | ui:false
 #                           guards this stage based on story frontmatter
-#   depends_on   [string] — stage names that must complete before this one starts
+#   depends_on   [string] — stage names that must complete before this one starts.
+#                           Stages that were skipped due to a `when:` guard are
+#                           treated as dependency-satisfied (equivalent to DONE).
 #   pipeline     string   — standard (run the full 8-phase pipeline for the current story)
 #
 # State tracking:

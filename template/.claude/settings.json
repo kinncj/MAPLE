@@ -37,6 +37,24 @@
             "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -f \"$ROOT/.claude/hooks/pre-bash.sh\" ]; then cd \"$ROOT\" && bash .claude/hooks/pre-bash.sh; fi'"
           }
         ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -f \"$ROOT/.claude/hooks/pre-write.sh\" ]; then cd \"$ROOT\" && bash .claude/hooks/pre-write.sh; fi'"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); if [ -f \"$ROOT/.claude/hooks/pre-write.sh\" ]; then cd \"$ROOT\" && bash .claude/hooks/pre-write.sh; fi'"
+          }
+        ]
       }
     ],
     "PostToolUse": [

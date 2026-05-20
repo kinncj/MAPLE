@@ -129,6 +129,7 @@ type designPortalResultMsg struct {
 	open  bool
 	auto  bool
 	stage string
+	url   string
 }
 
 const dashTickInterval = 5 * time.Second
@@ -470,11 +471,15 @@ func (m *dashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case designPortalResultMsg:
 		if msg.err == "" {
+			u := msg.url
+			if u == "" {
+				u = "http://127.0.0.1:…"
+			}
 			if !msg.auto && msg.open {
-				return m, m.setStatus("✓ opened design review portal", false)
+				return m, m.setStatus("✓ opened design review portal "+u, false)
 			}
 			if msg.auto {
-				return m, m.setStatus("✓ design review portal ready for stage "+msg.stage, false)
+				return m, m.setStatus("✓ design review portal ready  "+u, false)
 			}
 			return m, nil
 		}
@@ -2032,7 +2037,8 @@ func designPortalCmd(open, auto bool, stage string) tea.Cmd {
 			}
 			return designPortalResultMsg{err: msg, open: open, auto: auto, stage: stage}
 		}
-		return designPortalResultMsg{open: open, auto: auto, stage: stage}
+		url := strings.TrimSpace(string(out))
+		return designPortalResultMsg{open: open, auto: auto, stage: stage, url: url}
 	}
 }
 
@@ -2046,6 +2052,9 @@ func runDashboard(t Theme, noAnimate bool) (dashAction, []string, error) {
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, err := p.Run()
 	writeRecoveryMarker("exited")
+	if script := "scripts/design-review-portal.sh"; func() bool { _, e := os.Stat(script); return e == nil }() {
+		_ = exec.Command("bash", script, "stop").Run()
+	}
 	if err != nil {
 		return dashActionNone, nil, err
 	}
