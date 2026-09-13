@@ -4,6 +4,13 @@
 # Receives tool input+response as JSON on stdin.
 # stdout is shown to Claude as context. Exit code is informational only.
 
+# ── TUI refresh signal ────────────────────────────────────────────────────────
+# Touch the sentinel the maple TUI polls (see app/internal/tui/dashboard) so the
+# dashboard reflects this change in well under a second instead of waiting out its
+# local tick. settings.json cd's to the repo root before running this hook, so the
+# relative path is the same one the TUI stats. Best-effort: never block the hook.
+mkdir -p .claude/state 2>/dev/null && touch .claude/state/.tui-refresh 2>/dev/null
+
 INPUT=$(cat)
 FILE=$(python3 -c "
 import sys, json

@@ -1343,3 +1343,67 @@ func TestFullscreenSwitchDToL(t *testing.T) {
 		t.Error("l while Design is open should switch to Logs")
 	}
 }
+
+// countingStore counts dashboard reloads by counting the Stories() reads reload() does.
+type countingStore struct {
+	fakeStore
+	reloads *int
+}
+
+func (c countingStore) Stories() []state.Story { *c.reloads++; return c.fakeStore.Stories() }
+
+// writeSentinel creates .claude/state/.tui-refresh the way a PostToolUse hook would.
+func writeSentinel(t *testing.T) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(refreshSentinel), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(refreshSentinel, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestSentinelTriggersReload proves a harness touching .claude/state/.tui-refresh makes
+// the dashboard reload on the next sentinel poll, instead of waiting out tickInterval.
+func TestSentinelTriggersReload(t *testing.T) {
+	t.Chdir(t.TempDir())
+	reloads := 0
+	m := sized(t, mustNew(t, countingStore{fakeStore{n: 1}, &reloads}))
+
+	// No sentinel on disk: polling must not reload.
+	nm, _ := m.Update(sentinelMsg{})
+	m = nm.(Model)
+	before := reloads
+	nm, _ = m.Update(sentinelMsg{})
+	m = nm.(Model)
+	if reloads != before {
+		t.Fatalf("absent sentinel must not reload, got %d extra", reloads-before)
+	}
+
+	// A harness touches it — the next poll reloads exactly once.
+	writeSentinel(t)
+	nm, _ = m.Update(sentinelMsg{})
+	m = nm.(Model)
+	if reloads != before+1 {
+		t.Fatalf("touched sentinel should reload once, got %d extra", reloads-before)
+	}
+
+	// Untouched since: no busy-reload loop.
+	nm, _ = m.Update(sentinelMsg{})
+	if reloads != before+1 {
+		t.Errorf("unchanged sentinel must not reload again, got %d extra", reloads-before)
+	}
+}
+
+// TestStaleSentinelIsNotASignal proves a sentinel left behind by an earlier session only
+// establishes the baseline: it must not fire a reload the first time the TUI sees it.
+func TestStaleSentinelIsNotASignal(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeSentinel(t)
+	reloads := 0
+	m := sized(t, mustNew(t, countingStore{fakeStore{n: 1}, &reloads}))
+	before := reloads
+	if _, _ = m.Update(sentinelMsg{}); reloads != before {
+		t.Errorf("stale sentinel must not reload, got %d extra", reloads-before)
+	}
+}

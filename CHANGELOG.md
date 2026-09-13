@@ -9,6 +9,9 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 
 ## [Unreleased]
 
+### Added
+- **Near-instant TUI refresh from harness hooks** (#15): the `PostToolUse` hooks (`post-write.sh`, `post-bash.sh`) touch `.claude/state/.tui-refresh`, and the dashboard polls that sentinel every 400ms, reloading the moment a harness writes state instead of waiting out the 2s local tick. The 2s tick and the 60s network tick are unchanged, so the gate-clear nudge keeps its cadence; a sentinel left over from a previous session only sets the baseline and never fires a spurious reload. No new dependency — a `stat` does the work `fsnotify` would.
+
 ### Fixed
 - **Subprocess calls now time out**: every external CLI call (`gh`, `npx`, the AI harnesses, `rtk`, `curl|sh`, `cargo`, `tar`, design portal, lefthook) routes through a shared `runWithTimeout` helper with a class-appropriate deadline (AI 120s, network 60s, install 300s, `gh auth status` 10s at boot). A hung child no longer blocks forever.
 - **`maple req` no longer locks out keys while sending**: the `reqStepSending` state now handles `ctrl+c`/`esc`, cancelling the in-flight AI call and exiting cleanly instead of swallowing every keypress until the terminal is killed.
