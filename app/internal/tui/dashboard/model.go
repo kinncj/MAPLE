@@ -60,6 +60,7 @@ type Store interface {
 	ProjectName() string
 	TaffyCount() int
 	PipelineStatus() string
+	RefreshSignal() string
 	Pipeline() state.Pipeline
 	MergeMapleJSON(map[string]any) error
 	ClearPipeline() error
@@ -120,10 +121,10 @@ type Model struct {
 	gitFiles     []state.GitFile
 	gitCursor    int
 	detailKind   string
-	storyPath    string    // Story.md path of the open story detail (for `i` implement)
-	lastGate     string    // last-seen pending approval stage, to detect gate-clear → nudge
-	sentinelAt   time.Time // mtime of refreshSentinel when we last acted on it
-	sentinelSeen bool      // whether sentinelAt holds a real baseline yet
+	storyPath    string // Story.md path of the open story detail (for `i` implement)
+	lastGate     string // last-seen pending approval stage, to detect gate-clear → nudge
+	refreshSig   string // last-seen harness refresh signal
+	sentinelSeen bool
 	status       string
 	version      string
 	portalURL    string
@@ -799,8 +800,8 @@ func itoa(n int) string {
 type splashDoneMsg struct{}
 
 // tickMsg drives the local file-state refresh; netTickMsg drives the slower network
-// (gh PR) refresh; sentinelMsg polls the harness refresh sentinel for an out-of-band
-// refresh; prsLoadedMsg carries the async PR result back to the model.
+// (gh PR) refresh; sentinelMsg polls the harness refresh signal; prsLoadedMsg carries
+// the async PR result back to the model.
 type tickMsg struct{}
 type netTickMsg struct{}
 type sentinelMsg struct{}
@@ -855,17 +856,9 @@ func (m *Model) runTestCmd(t state.Test) tea.Cmd {
 const (
 	tickInterval    = 2 * time.Second
 	netTickInterval = 60 * time.Second
-	// sentinelInterval is how often we stat refreshSentinel. A stat is cheap enough to
-	// run sub-second; reload() is not, which is why the sentinel gets its own fast tick
-	// instead of speeding up tickMsg — that one always reloads and also drives the
-	// gate-clear nudge, so its cadence is load-bearing.
+	// Separate from tickMsg, which always reloads and drives the gate-clear nudge.
 	sentinelInterval = 400 * time.Millisecond
 )
-
-// refreshSentinel is touched by harness PostToolUse hooks (Claude Code, OpenCode,
-// Copilot) to ask for an immediate refresh instead of waiting out tickInterval.
-// Path is cwd-relative, like every other .claude/state read in the TUI.
-const refreshSentinel = ".claude/state/.tui-refresh"
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(tickInterval, func(time.Time) tea.Msg { return tickMsg{} })
@@ -877,26 +870,12 @@ func sentinelCmd() tea.Cmd {
 	return tea.Tick(sentinelInterval, func(time.Time) tea.Msg { return sentinelMsg{} })
 }
 
-// sentinelTouched reports whether a harness touched refreshSentinel since we last
-// looked, and records the new mtime. The first observation only establishes a
-// baseline: a file left behind by an earlier session is not a fresh signal. When the
-// file is absent the baseline is already correct, so the first touch after that counts.
+// The first observation only takes a baseline: a signal left by an earlier session is stale.
 func (m *Model) sentinelTouched() bool {
-	st, err := os.Stat(refreshSentinel)
-	if err != nil {
-		m.sentinelSeen = true
-		return false
-	}
-	mt := st.ModTime()
-	if !m.sentinelSeen {
-		m.sentinelSeen, m.sentinelAt = true, mt
-		return false
-	}
-	if !mt.After(m.sentinelAt) {
-		return false
-	}
-	m.sentinelAt = mt
-	return true
+	sig := m.store.RefreshSignal()
+	changed := m.sentinelSeen && sig != "" && sig != m.refreshSig
+	m.sentinelSeen, m.refreshSig = true, sig
+	return changed
 }
 
 // loadPRsCmd fetches pull requests off the render path (gh is slow / network-bound).
@@ -936,8 +915,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tickCmd()
 	case sentinelMsg:
-		// A harness (PostToolUse hook) touched .claude/state/.tui-refresh: reload now
-		// rather than waiting out the remainder of tickInterval.
 		if !m.splash && m.sentinelTouched() {
 			m.reload()
 		}

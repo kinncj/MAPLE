@@ -14,7 +14,17 @@ import (
 )
 
 // fakeStore returns fixed project state for deterministic dashboard tests.
-type fakeStore struct{ n int }
+type fakeStore struct {
+	n   int
+	sig *string // harness refresh signal, when a test drives it
+}
+
+func (f fakeStore) RefreshSignal() string {
+	if f.sig == nil {
+		return ""
+	}
+	return *f.sig
+}
 
 func (f fakeStore) Stories() []state.Story {
 	out := make([]state.Story, f.n)
@@ -1352,58 +1362,40 @@ type countingStore struct {
 
 func (c countingStore) Stories() []state.Story { *c.reloads++; return c.fakeStore.Stories() }
 
-// writeSentinel creates .claude/state/.tui-refresh the way a PostToolUse hook would.
-func writeSentinel(t *testing.T) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(refreshSentinel), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(refreshSentinel, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// TestSentinelTriggersReload proves a harness touching .claude/state/.tui-refresh makes
-// the dashboard reload on the next sentinel poll, instead of waiting out tickInterval.
 func TestSentinelTriggersReload(t *testing.T) {
-	t.Chdir(t.TempDir())
-	reloads := 0
-	m := sized(t, mustNew(t, countingStore{fakeStore{n: 1}, &reloads}))
+	sig, reloads := "", 0
+	m := sized(t, mustNew(t, countingStore{fakeStore{n: 1, sig: &sig}, &reloads}))
 
-	// No sentinel on disk: polling must not reload.
+	// No signal yet: polling must not reload.
 	nm, _ := m.Update(sentinelMsg{})
 	m = nm.(Model)
 	before := reloads
 	nm, _ = m.Update(sentinelMsg{})
 	m = nm.(Model)
 	if reloads != before {
-		t.Fatalf("absent sentinel must not reload, got %d extra", reloads-before)
+		t.Fatalf("absent signal must not reload, got %d extra", reloads-before)
 	}
 
-	// A harness touches it — the next poll reloads exactly once.
-	writeSentinel(t)
+	// A hook fires — the next poll reloads exactly once.
+	sig = "1750000000000000000:4242"
 	nm, _ = m.Update(sentinelMsg{})
 	m = nm.(Model)
 	if reloads != before+1 {
-		t.Fatalf("touched sentinel should reload once, got %d extra", reloads-before)
+		t.Fatalf("new signal should reload once, got %d extra", reloads-before)
 	}
 
-	// Untouched since: no busy-reload loop.
+	// Unchanged since: no busy-reload loop.
 	nm, _ = m.Update(sentinelMsg{})
 	if reloads != before+1 {
-		t.Errorf("unchanged sentinel must not reload again, got %d extra", reloads-before)
+		t.Errorf("unchanged signal must not reload again, got %d extra", reloads-before)
 	}
 }
 
-// TestStaleSentinelIsNotASignal proves a sentinel left behind by an earlier session only
-// establishes the baseline: it must not fire a reload the first time the TUI sees it.
 func TestStaleSentinelIsNotASignal(t *testing.T) {
-	t.Chdir(t.TempDir())
-	writeSentinel(t)
-	reloads := 0
-	m := sized(t, mustNew(t, countingStore{fakeStore{n: 1}, &reloads}))
+	sig, reloads := "1750000000000000000:stale", 0
+	m := sized(t, mustNew(t, countingStore{fakeStore{n: 1, sig: &sig}, &reloads}))
 	before := reloads
 	if _, _ = m.Update(sentinelMsg{}); reloads != before {
-		t.Errorf("stale sentinel must not reload, got %d extra", reloads-before)
+		t.Errorf("signal left by an earlier session must not reload, got %d extra", reloads-before)
 	}
 }

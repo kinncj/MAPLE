@@ -3,12 +3,8 @@
 # PostToolUse[Bash] — runs after every shell command Claude executes.
 # Surfaces pass/fail signals and syncs TDD/phase status to GitHub Issues.
 
-# ── TUI refresh signal ────────────────────────────────────────────────────────
-# Touch the sentinel the maple TUI polls (see app/internal/tui/dashboard) so the
-# dashboard reflects this change in well under a second instead of waiting out its
-# local tick. settings.json cd's to the repo root before running this hook, so the
-# relative path is the same one the TUI stats. Best-effort: never block the hook.
-mkdir -p .claude/state 2>/dev/null && touch .claude/state/.tui-refresh 2>/dev/null
+# Signals the TUI to refresh now instead of waiting out its 2s tick. Best-effort.
+mkdir -p .claude/state 2>/dev/null && echo $RANDOM > .claude/state/.tui-refresh 2>/dev/null
 
 INPUT=$(cat)
 
