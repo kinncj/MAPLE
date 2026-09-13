@@ -93,6 +93,36 @@ OC_CMD_COUNT=$(find "$TEMPLATE/.opencode/commands" -name "*.md" | wc -l | tr -d 
 assert_count_gte "Claude Code command count" "$CLAUDE_CMD_COUNT" 5
 assert_count_gte "OpenCode command count"    "$OC_CMD_COUNT"    5
 
+# TUI refresh signal — both harnesses must write the same sentinel
+SENTINEL=".claude/state/.tui-refresh"
+for f in .claude/hooks/post-write.sh .claude/hooks/post-bash.sh .opencode/plugins/tui-refresh.js; do
+  if [[ -f "$TEMPLATE/$f" ]] && grep -q "$SENTINEL" "$TEMPLATE/$f"; then
+    ok "$f signals $SENTINEL"
+  else
+    fail "$f does not signal $SENTINEL"
+  fi
+done
+
+# The OpenCode plugin must run and write a signal that changes per call
+if command -v node >/dev/null 2>&1; then
+  PLUGIN_TMP="$(mktemp -d)"
+  if node --input-type=module -e "
+    const { readFileSync } = await import('node:fs')
+    const { TuiRefresh } = await import('file://$TEMPLATE/.opencode/plugins/tui-refresh.js')
+    const hooks = await TuiRefresh({ directory: '$PLUGIN_TMP' })
+    const sentinel = '$PLUGIN_TMP/.claude/state/.tui-refresh'
+    await hooks['tool.execute.after']()
+    const first = readFileSync(sentinel, 'utf8')
+    await hooks['tool.execute.after']()
+    if (readFileSync(sentinel, 'utf8') === first) process.exit(1)
+  " >/dev/null 2>&1; then
+    ok "OpenCode plugin writes a signal that changes per call"
+  else
+    fail "OpenCode plugin did not write a changing signal"
+  fi
+  rm -rf "$PLUGIN_TMP"
+fi
+
 # ─── summary ──────────────────────────────────────────────────────────────────
 printf "\n  ────────────────────────────────────────\n"
 printf "  \033[1;32m%d passed\033[0m  ·  " "$PASS"
