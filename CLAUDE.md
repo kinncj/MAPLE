@@ -291,7 +291,7 @@ Communication goes through files in `.claude/state/` plus a control socket:
 | `maple-alive` | TUI (2s heartbeat) | portal | Connectivity fallback |
 | `maple-sock.addr` + `maple.sock` | portal | TUI (`portalsock`) | Control socket: live connectivity + `maple emit` events |
 | `rtk-harnesses.json` | TUI (`R` overlay) | — | Which harnesses have rtk wired |
-| `.tui-refresh` | Claude Code `PostToolUse` hooks + OpenCode `tool.execute.after` plugin | TUI (400ms poll) | Refresh-now signal — content changes per write |
+| `.tui-refresh` | All three harnesses (Claude Code `PostToolUse`, OpenCode `tool.execute.after`, Copilot `toolCall`) | TUI (400ms poll) | Refresh-now signal — content changes per write |
 
 ---
 

@@ -10,7 +10,7 @@ and this project adheres to [Conventional Commits](https://www.conventionalcommi
 ## [Unreleased]
 
 ### Added
-- **Near-instant TUI refresh from harness hooks** (#15): the Claude Code `PostToolUse` hooks and the OpenCode `tool.execute.after` plugin write `.claude/state/.tui-refresh`, and the dashboard polls `Store.RefreshSignal()` every 400ms, reloading the moment a harness writes state instead of waiting out the 2s local tick. The 2s tick and the 60s network tick are unchanged, so the gate-clear nudge keeps its cadence. No new dependency — a read does the work `fsnotify` would.
+- **Near-instant TUI refresh from harness hooks** (#15): all three harnesses write `.claude/state/.tui-refresh` (Claude Code `PostToolUse` hooks, an OpenCode `tool.execute.after` plugin, a Copilot `toolCall` hook filtered to the after phase), and the dashboard polls `Store.RefreshSignal()` every 400ms, reloading the moment a harness writes state instead of waiting out the 2s local tick. The 2s tick and the 60s network tick are unchanged, so the gate-clear nudge keeps its cadence. No new dependency — a read does the work `fsnotify` would.
 
 ### Fixed
 - **Subprocess calls now time out**: every external CLI call (`gh`, `npx`, the AI harnesses, `rtk`, `curl|sh`, `cargo`, `tar`, design portal, lefthook) routes through a shared `runWithTimeout` helper with a class-appropriate deadline (AI 120s, network 60s, install 300s, `gh auth status` 10s at boot). A hung child no longer blocks forever.

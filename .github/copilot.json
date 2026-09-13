@@ -1,0 +1,8 @@
+{
+  "hooks": {
+    "toolCall": {
+      "command": "bash .github/copilot/hooks/tool-call.sh",
+      "shell": "bash"
+    }
+  }
+}
