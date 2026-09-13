@@ -93,6 +93,61 @@ OC_CMD_COUNT=$(find "$TEMPLATE/.opencode/commands" -name "*.md" | wc -l | tr -d 
 assert_count_gte "Claude Code command count" "$CLAUDE_CMD_COUNT" 5
 assert_count_gte "OpenCode command count"    "$OC_CMD_COUNT"    5
 
+# TUI refresh signal — both harnesses must write the same sentinel
+SENTINEL=".claude/state/.tui-refresh"
+for f in .claude/hooks/post-write.sh .claude/hooks/post-bash.sh .opencode/plugins/tui-refresh.js .github/copilot/hooks/tool-call.sh; do
+  if [[ -f "$TEMPLATE/$f" ]] && grep -q "$SENTINEL" "$TEMPLATE/$f"; then
+    ok "$f signals $SENTINEL"
+  else
+    fail "$f does not signal $SENTINEL"
+  fi
+done
+
+# The OpenCode plugin must run and write a signal that changes per call
+if command -v node >/dev/null 2>&1; then
+  PLUGIN_TMP="$(mktemp -d)"
+  if node --input-type=module -e "
+    const { readFileSync } = await import('node:fs')
+    const { TuiRefresh } = await import('file://$TEMPLATE/.opencode/plugins/tui-refresh.js')
+    const hooks = await TuiRefresh({ directory: '$PLUGIN_TMP' })
+    const sentinel = '$PLUGIN_TMP/.claude/state/.tui-refresh'
+    await hooks['tool.execute.after']()
+    const first = readFileSync(sentinel, 'utf8')
+    await hooks['tool.execute.after']()
+    if (readFileSync(sentinel, 'utf8') === first) process.exit(1)
+  " >/dev/null 2>&1; then
+    ok "OpenCode plugin writes a signal that changes per call"
+  else
+    fail "OpenCode plugin did not write a changing signal"
+  fi
+  rm -rf "$PLUGIN_TMP"
+fi
+
+# The Copilot hook must be registered, and fire on the after phase only
+if grep -q '"toolCall"' "$TEMPLATE/.github/copilot.json" 2>/dev/null; then
+  ok ".github/copilot.json registers the toolCall hook"
+else
+  fail ".github/copilot.json does not register the toolCall hook"
+fi
+
+COPILOT_TMP="$(mktemp -d)"
+run_copilot_hook() {
+  (cd "$COPILOT_TMP" && printf '%s' "$1" | bash "$TEMPLATE/.github/copilot/hooks/tool-call.sh" >/dev/null 2>&1) || true
+}
+run_copilot_hook '{"event":"toolCall","phase":"before","toolName":"bash"}'
+if [[ -f "$COPILOT_TMP/$SENTINEL" ]]; then
+  fail "Copilot hook signalled on the before phase"
+else
+  ok "Copilot hook stays quiet on the before phase"
+fi
+run_copilot_hook '{"event":"toolCall","phase":"after","toolName":"bash"}'
+if [[ -f "$COPILOT_TMP/$SENTINEL" ]]; then
+  ok "Copilot hook signals on the after phase"
+else
+  fail "Copilot hook did not signal on the after phase"
+fi
+rm -rf "$COPILOT_TMP"
+
 # ─── summary ──────────────────────────────────────────────────────────────────
 printf "\n  ────────────────────────────────────────\n"
 printf "  \033[1;32m%d passed\033[0m  ·  " "$PASS"

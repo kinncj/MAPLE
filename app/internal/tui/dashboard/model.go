@@ -60,6 +60,7 @@ type Store interface {
 	ProjectName() string
 	TaffyCount() int
 	PipelineStatus() string
+	RefreshSignal() string
 	Pipeline() state.Pipeline
 	MergeMapleJSON(map[string]any) error
 	ClearPipeline() error
@@ -122,6 +123,8 @@ type Model struct {
 	detailKind   string
 	storyPath    string // Story.md path of the open story detail (for `i` implement)
 	lastGate     string // last-seen pending approval stage, to detect gate-clear → nudge
+	refreshSig   string // last-seen harness refresh signal
+	sentinelSeen bool
 	status       string
 	version      string
 	portalURL    string
@@ -797,9 +800,11 @@ func itoa(n int) string {
 type splashDoneMsg struct{}
 
 // tickMsg drives the local file-state refresh; netTickMsg drives the slower network
-// (gh PR) refresh; prsLoadedMsg carries the async PR result back to the model.
+// (gh PR) refresh; sentinelMsg polls the harness refresh signal; prsLoadedMsg carries
+// the async PR result back to the model.
 type tickMsg struct{}
 type netTickMsg struct{}
+type sentinelMsg struct{}
 type prsLoadedMsg struct{ prs []state.PullRequest }
 type prDetailMsg struct {
 	number int
@@ -851,6 +856,8 @@ func (m *Model) runTestCmd(t state.Test) tea.Cmd {
 const (
 	tickInterval    = 2 * time.Second
 	netTickInterval = 60 * time.Second
+	// Separate from tickMsg, which always reloads and drives the gate-clear nudge.
+	sentinelInterval = 400 * time.Millisecond
 )
 
 func tickCmd() tea.Cmd {
@@ -858,6 +865,17 @@ func tickCmd() tea.Cmd {
 }
 func netTickCmd() tea.Cmd {
 	return tea.Tick(netTickInterval, func(time.Time) tea.Msg { return netTickMsg{} })
+}
+func sentinelCmd() tea.Cmd {
+	return tea.Tick(sentinelInterval, func(time.Time) tea.Msg { return sentinelMsg{} })
+}
+
+// The first observation only takes a baseline: a signal left by an earlier session is stale.
+func (m *Model) sentinelTouched() bool {
+	sig := m.store.RefreshSignal()
+	changed := m.sentinelSeen && sig != "" && sig != m.refreshSig
+	m.sentinelSeen, m.refreshSig = true, sig
+	return changed
 }
 
 // loadPRsCmd fetches pull requests off the render path (gh is slow / network-bound).
@@ -873,6 +891,7 @@ func (m Model) Init() tea.Cmd {
 		tea.Tick(1400*time.Millisecond, func(time.Time) tea.Msg { return splashDoneMsg{} }),
 		tickCmd(),
 		netTickCmd(),
+		sentinelCmd(),
 		m.loadPRsCmd(),
 	)
 }
@@ -895,6 +914,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.reload()
 		}
 		return m, tickCmd()
+	case sentinelMsg:
+		if !m.splash && m.sentinelTouched() {
+			m.reload()
+		}
+		return m, sentinelCmd()
 	case netTickMsg:
 		return m, tea.Batch(m.loadPRsCmd(), netTickCmd())
 	case prsLoadedMsg:

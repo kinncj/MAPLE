@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -41,6 +42,21 @@ func (s *FS) TaffyCount() int {
 		n++
 	}
 	return n
+}
+
+// RefreshSignal changes whenever a harness hook writes .claude/state/.tui-refresh, "" when
+// absent. Content is in the signal because mtime is 1s-granular on some filesystems.
+func (s *FS) RefreshSignal() string {
+	path := filepath.Join(s.Root, ".claude", "state", ".tui-refresh")
+	fi, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strconv.FormatInt(fi.ModTime().UnixNano(), 10) + ":" + strings.TrimSpace(string(data))
 }
 
 // PipelineStatus reads status from .claude/state/maple.json, or "" if absent.

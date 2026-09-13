@@ -3,6 +3,9 @@
 # PostToolUse[Bash] — runs after every shell command Claude executes.
 # Surfaces pass/fail signals and syncs TDD/phase status to GitHub Issues.
 
+# Signals the TUI to refresh now instead of waiting out its 2s tick. Best-effort.
+mkdir -p .claude/state 2>/dev/null && echo $RANDOM > .claude/state/.tui-refresh 2>/dev/null
+
 INPUT=$(cat)
 
 COMMAND=$(python3 -c "

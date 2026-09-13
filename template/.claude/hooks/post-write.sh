@@ -4,6 +4,9 @@
 # Receives tool input+response as JSON on stdin.
 # stdout is shown to Claude as context. Exit code is informational only.
 
+# Signals the TUI to refresh now instead of waiting out its 2s tick. Best-effort.
+mkdir -p .claude/state 2>/dev/null && echo $RANDOM > .claude/state/.tui-refresh 2>/dev/null
+
 INPUT=$(cat)
 FILE=$(python3 -c "
 import sys, json

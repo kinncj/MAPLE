@@ -46,6 +46,7 @@ test-results/
 .claude/logs/
 .claude/pending-sync.jsonl
 .claude/state/maple.json
+.claude/state/.tui-refresh
 
 # MAPLE CLI state (if maple is installed inside the project)
 .maple.json

@@ -14,7 +14,17 @@ import (
 )
 
 // fakeStore returns fixed project state for deterministic dashboard tests.
-type fakeStore struct{ n int }
+type fakeStore struct {
+	n   int
+	sig *string // harness refresh signal, when a test drives it
+}
+
+func (f fakeStore) RefreshSignal() string {
+	if f.sig == nil {
+		return ""
+	}
+	return *f.sig
+}
 
 func (f fakeStore) Stories() []state.Story {
 	out := make([]state.Story, f.n)
@@ -1341,5 +1351,51 @@ func TestFullscreenSwitchDToL(t *testing.T) {
 	nm, _ = nm.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
 	if nm.(Model).fullscreen != fsLogs {
 		t.Error("l while Design is open should switch to Logs")
+	}
+}
+
+// countingStore counts dashboard reloads by counting the Stories() reads reload() does.
+type countingStore struct {
+	fakeStore
+	reloads *int
+}
+
+func (c countingStore) Stories() []state.Story { *c.reloads++; return c.fakeStore.Stories() }
+
+func TestSentinelTriggersReload(t *testing.T) {
+	sig, reloads := "", 0
+	m := sized(t, mustNew(t, countingStore{fakeStore{n: 1, sig: &sig}, &reloads}))
+
+	// No signal yet: polling must not reload.
+	nm, _ := m.Update(sentinelMsg{})
+	m = nm.(Model)
+	before := reloads
+	nm, _ = m.Update(sentinelMsg{})
+	m = nm.(Model)
+	if reloads != before {
+		t.Fatalf("absent signal must not reload, got %d extra", reloads-before)
+	}
+
+	// A hook fires — the next poll reloads exactly once.
+	sig = "1750000000000000000:4242"
+	nm, _ = m.Update(sentinelMsg{})
+	m = nm.(Model)
+	if reloads != before+1 {
+		t.Fatalf("new signal should reload once, got %d extra", reloads-before)
+	}
+
+	// Unchanged since: no busy-reload loop.
+	nm, _ = m.Update(sentinelMsg{})
+	if reloads != before+1 {
+		t.Errorf("unchanged signal must not reload again, got %d extra", reloads-before)
+	}
+}
+
+func TestStaleSentinelIsNotASignal(t *testing.T) {
+	sig, reloads := "1750000000000000000:stale", 0
+	m := sized(t, mustNew(t, countingStore{fakeStore{n: 1, sig: &sig}, &reloads}))
+	before := reloads
+	if _, _ = m.Update(sentinelMsg{}); reloads != before {
+		t.Errorf("signal left by an earlier session must not reload, got %d extra", reloads-before)
 	}
 }

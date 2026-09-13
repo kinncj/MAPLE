@@ -183,12 +183,16 @@ unit-tested against fake stores. Side-effecting deps (`execFn`, `openFn`, `lookP
 `notifyContinue`) are injectable package vars/fields so tests never touch a real
 terminal/browser/multiplexer.
 
-### Real-time refresh: 2s local tick + 60s async net tick
+### Real-time refresh: 400ms sentinel poll + 2s local tick + 60s async net tick
 
 `Init` starts `tickMsg` (every 2s → `reload()` local file state, preserving pane selection via
 `pane.SetSource`) and `netTickMsg` (every 60s → async `gh` PR load → `prsLoadedMsg`). The
 header/footer read pipeline status live per render, so status/approvals update without a
-keypress. Adding a file-based state field means refreshing it in `reload()`.
+keypress. `sentinelMsg` (every 400ms) reads `Store.RefreshSignal()` and only calls
+`reload()` when a harness PostToolUse hook wrote `.claude/state/.tui-refresh` — a cheap
+read guarding the expensive one, so hook-driven updates land sub-second without changing
+the 2s cadence the gate-clear nudge depends on. Adding a file-based state field means
+refreshing it in `reload()`.
 
 ### Harness launch: split pane in a multiplexer, else in-terminal — never a lost maple
 
@@ -287,6 +291,7 @@ Communication goes through files in `.claude/state/` plus a control socket:
 | `maple-alive` | TUI (2s heartbeat) | portal | Connectivity fallback |
 | `maple-sock.addr` + `maple.sock` | portal | TUI (`portalsock`) | Control socket: live connectivity + `maple emit` events |
 | `rtk-harnesses.json` | TUI (`R` overlay) | — | Which harnesses have rtk wired |
+| `.tui-refresh` | All three harnesses (Claude Code `PostToolUse`, OpenCode `tool.execute.after`, Copilot `toolCall`) | TUI (400ms poll) | Refresh-now signal — content changes per write |
 
 ---
 
